@@ -9,5 +9,6 @@ for [download](http://www.stsci.edu/~valenti/sme.html).
 In 2018, we began began reimplmenting the IDL part of SME in python 3,
 adopting an object oriented paradigm and continuous itegration practices
 (code repository, build automation, self-testing, frequent builds).
-** This project is very far from completion, so unless you want to help
-the python development effort, use the IDL version. **
+
+**This project is very far from completion, so unless you want to help
+the python development effort, use the IDL version.**
