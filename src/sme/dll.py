@@ -1,5 +1,7 @@
 from ctypes import CDLL, POINTER, Structure, pointer, byref, \
         c_short, c_int, c_double, c_char_p
+from pathlib import Path
+
 
 class Array2D:
     class Type:
@@ -41,8 +43,9 @@ class IdlStringArray:
 
 class LibSme:
     def __init__(self, file):
+        self.path = Path(__file__).parent.joinpath('dll')
         self.file = file
-        self.lib = CDLL(file)
+        self.lib = CDLL(str(self.path.joinpath(file)))
         self._wfirst = None
         self._wlast = None
         self._vw_scale = None
