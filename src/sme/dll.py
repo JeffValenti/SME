@@ -44,6 +44,9 @@ class IdlStringArray:
 class LibSme:
     def __init__(self, file):
         self.path = Path(__file__).parent.joinpath('dll')
+        assert self.path.is_dir()
+        print(__file__)
+        print(self.path)
         self.file = file
         self.lib = CDLL(str(self.path.joinpath(file)))
         self._wfirst = None
