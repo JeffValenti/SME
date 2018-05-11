@@ -51,7 +51,7 @@ class LibSme:
         f2 = d2.joinpath(file)
         print(r1,d1,f1)
         print(r2,d2,f2)
-        assert Path('/home/travis/virtualenv/python3.5.5./lib/python3.5/site-packages/sme/dll').is_dir()
+        assert Path('/home/travis/virtualenv/python3.5.5./lib/python3.5/site-packages/SME/dll').is_dir()
         assert d2.is_dir()
         assert f2.is_file()
         assert path.isdir(d1)
