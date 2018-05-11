@@ -57,9 +57,3 @@ class LineList:
     def add(self, species, wlcent, excit, gflog, gamrad, gamqst, gamvw):
         line = Line(species, wlcent, excit, gflog, gamrad, gamqst, gamvw)
         self._lines.append(line)
-
-linelist = LineList()
-linelist.add('Fe 1', 5502.9931, 0.9582, -3.047, 7.19, -6.22, 239.249)
-linelist.add('Cr 2', 5503.5955, 4.1682, -2.117, 8.37, -6.49, 195.248)
-linelist.add('Mn 1', 5504.0000, 2.0000, -3.000, 8.00, -6.50, 200.247)
-print(linelist)
