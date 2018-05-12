@@ -4,7 +4,7 @@ from sme.vald import LineList
 from math import log10
 
 def test_basic():
-    libsme = LibSme('sme_synth.so.linux.x86_64.64')
+    libsme = LibSme('sme_synth.so.darwin.x86_64.64')
     print(libsme.SMELibraryVersion())
     libsme.InputWaveRange(5000, 6000)
     libsme.SetVWscale(2.5)
