@@ -43,11 +43,7 @@ class IdlStringArray:
 
 class LibSme:
     def __init__(self, file):
-        print(__file__)
-        for root,dirs,files in os.walk(os.path.dirname(__file__)):
-            print(root,dirs,files)
         self.root = Path(__file__).parent.joinpath('dll')
-        assert self.root.is_dir()
         self.lib = CDLL(str(self.root.joinpath(file)))
         self._wfirst = None
         self._wlast = None
