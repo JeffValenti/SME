@@ -1,1 +1,1 @@
-recursive-include dll *
+graft src
