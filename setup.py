@@ -9,6 +9,6 @@ setup(
         author='Jeff A. Valenti',
         author_email='valenti@stsci.edu',
         package_dir={'': 'src'},
-        packages=['sme']
+        packages=['sme'],
         include_package_data=True
         )
