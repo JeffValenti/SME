@@ -1,7 +1,7 @@
 from ctypes import CDLL, POINTER, Structure, pointer, byref, \
         c_short, c_int, c_double, c_char_p
 from pathlib import Path
-import os
+from platform import system, machine, architecture
 
 class Array2D:
     class Type:
@@ -43,13 +43,17 @@ class IdlStringArray:
 
 class LibSme:
     def __init__(self, file):
-        self.root = Path(__file__).parent.joinpath('dll')
-        self.lib = CDLL(str(self.root.joinpath(file)))
+        self._file = self.libfile()
+        self.lib = CDLL(str(self._file))
         self._wfirst = None
         self._wlast = None
         self._vw_scale = None
         self._H2broad = None
         self._linelist = None
+
+    @property
+    def file(self):
+        return self._file
 
     @property
     def wfirst(self):
@@ -70,6 +74,17 @@ class LibSme:
     @property
     def linelist(self):
         return self._linelist
+
+    def libfile(self):
+        """Return absolute path to SME library file for the current platform.
+        """
+        dir = Path(__file__).parent.joinpath('dll')
+        file = '.'.join([
+                'sme_synth.so',
+                system().lower(),
+                machine(),
+                architecture()[0][0:2]])
+        return dir.joinpath(file)
 
     def SMELibraryVersion(self):
         self.lib.SMELibraryVersion.restype = c_char_p
