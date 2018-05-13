@@ -2,7 +2,10 @@ language: c
 
 os: osx
 
-sudo: false
+sudo: required
+
+before_install:
+  - brew update
 
 install:
   # See https://conda.io/docs/user-guide/tasks/use-conda-with-travis-ci.html
