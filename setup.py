@@ -8,7 +8,7 @@ setup(
         description='Spectroscopy Made Easy',
         author='Jeff A. Valenti',
         author_email='valenti@stsci.edu',
-        package_dir={'': 'src'},
         packages=['sme'],
-        include_package_data=True
+        package_dir={'sme': 'src/sme'},
+        package_data={'sme': ['dll/sme_synth.so.*']}
         )
