@@ -1,16 +1,25 @@
 language: c
 
-os: osx
+os:
+  - linux
 
 sudo: required
 
 before_install:
-  - brew update
 
 install:
-  # See https://conda.io/docs/user-guide/tasks/use-conda-with-travis-ci.html
-  # linux: - sudo apt-get update
-  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - |
+    case $TRAVIS_OS_NAME in
+      "linux" )
+        MINICONDA_REPO = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+        sudo apt-get update
+        ;;
+      "osx" )
+        MINICONDA_REPO = https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
+        brew update
+        ;;
+    esac
+  - wget $MINICONDA_REPO -O miniconda.sh
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
   - hash -r
@@ -23,3 +32,7 @@ install:
 
 script:
   - pytest
+
+# https://conda.io/docs/user-guide/tasks/use-conda-with-travis-ci.html
+# https://www.jeffgeerling.com/blog/2017/bash-logic-structures-and-conditionals-if-case-loops-etc-travis-ci
+# https://docs.travis-ci.com/user/installing-dependencies/#Installing-Dependencies-on-Multiple-Operating-Systems
