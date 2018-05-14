@@ -11,11 +11,11 @@ install:
   - |
     case $TRAVIS_OS_NAME in
       "linux" )
-        MINICONDA_REPO = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+        MINICONDA_REPO="https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh"
         sudo apt-get update
         ;;
       "osx" )
-        MINICONDA_REPO = https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
+        MINICONDA_REPO="https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh"
         brew update
         ;;
     esac
