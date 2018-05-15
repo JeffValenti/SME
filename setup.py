@@ -10,5 +10,5 @@ setup(
         author_email='valenti@stsci.edu',
         packages=['sme'],
         package_dir={'sme': 'src/sme'},
-        package_data={'sme': ['dll/sme_synth.so.*']}
+        package_data={'sme': ['dll/sme_synth.so.*', 'dll/intel64_lin/*']}
         )
