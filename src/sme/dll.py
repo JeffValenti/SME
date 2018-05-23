@@ -42,8 +42,11 @@ class IdlStringArray:
         self.pointer = pointer(self.data)
 
 class LibSme:
-    def __init__(self, file):
-        self._file = self.libfile()
+    def __init__(self, file=None):
+        if file:
+            self._file = file
+        else:
+            self._file = self.libfile()
         self.lib = CDLL(str(self._file))
         self._wfirst = None
         self._wlast = None
