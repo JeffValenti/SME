@@ -39,3 +39,4 @@ script:
 # https://www.jeffgeerling.com/blog/2017/bash-logic-structures-and-conditionals-if-case-loops-etc-travis-ci
 # https://docs.travis-ci.com/user/installing-dependencies/#Installing-Dependencies-on-Multiple-Operating-Systems
 # https://github.com/travis-ci/travis-ci/issues/9454
+# https://github.com/travis-ci/travis-ci/issues/9815
