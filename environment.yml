@@ -1,0 +1,10 @@
+name: sme
+channels:
+  - defaults
+dependencies:
+  - astropy
+  - cython
+  - python
+  - scipy
+  - pip:
+    - tox
