@@ -1,5 +1,5 @@
-import pytest
 from sme.vald import Line, LineList
+
 
 species = 'Fe 1'
 wlcent = 5502.9931
@@ -9,6 +9,7 @@ gamrad = 7.19
 gamqst = -6.22
 gamvw = 239.249
 linedata = [species, wlcent, excit, gflog, gamrad, gamqst, gamvw]
+
 
 def test_line_init():
     """Test that property values equal line data passed to __init__().
@@ -23,6 +24,7 @@ def test_line_init():
     assert line.gamqst == gamqst
     assert line.gamvw == gamvw
 
+
 def test_linelist_add_and_len():
     """Test that len() returns the number of lines (including 0) in list.
     """
@@ -32,6 +34,7 @@ def test_linelist_add_and_len():
     for iline in range(3):
         assert len(linelist) == iline
         linelist.add(*linedata)
+
 
 def test_linelist_properties():
     """Test that properties are lists with one item per line.

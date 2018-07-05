@@ -3,6 +3,7 @@ from ctypes import CDLL, POINTER, Structure, pointer, byref, \
 from pathlib import Path
 from platform import system, machine, architecture
 
+
 class Array2D:
     class Type:
         """
@@ -11,6 +12,7 @@ class Array2D:
         """
         def __init__(self, ctype, n, m):
             self.type = ctype * n * m
+
     def __init__(self, ctype, n, m):
         self.n = n
         self.m = m
@@ -19,20 +21,25 @@ class Array2D:
         self.data = datatype()
         self.pointer = pointer(self.data)
 
+
 class IdlString(Structure):
     _fields_ = [
-            ('len', c_int),
-            ('type', c_short),
-            ('bytes', c_char_p)]
+        ('len', c_int),
+        ('type', c_short),
+        ('bytes', c_char_p)
+        ]
+
     def __init__(self, bytes):
         self.len = c_int(len(bytes))
         self.type = c_short(0)
         self.bytes = bytes
 
+
 class IdlStringArray:
     class Type:
         def __init__(self, n):
             self.type = IdlString * n
+
     def __init__(self, strlist):
         self.n = len(strlist)
         datatype = self.Type(self.n).type
@@ -40,6 +47,7 @@ class IdlStringArray:
         self.data[:] = [IdlString(s.encode('utf-8')) for s in strlist]
         self.type = POINTER(datatype)
         self.pointer = pointer(self.data)
+
 
 class LibSme:
     def __init__(self, file=None):
@@ -83,10 +91,11 @@ class LibSme:
         """
         dir = Path(__file__).parent.joinpath('dll')
         file = '.'.join([
-                'sme_synth.so',
-                system().lower(),
-                machine(),
-                architecture()[0][0:2]])
+            'sme_synth.so',
+            system().lower(),
+            machine(),
+            architecture()[0][0:2]
+            ])
         return dir.joinpath(file)
 
     def SMELibraryVersion(self):
@@ -95,20 +104,25 @@ class LibSme:
 
     def InputWaveRange(self, wfirst, wlast):
         libfunc = self.lib.InputWaveRange
+
         class Args(Structure):
             _fields_ = [
-                    ('wfirst', POINTER(c_double)),
-                    ('wlast', POINTER(c_double))]
+                ('wfirst', POINTER(c_double)),
+                ('wlast', POINTER(c_double))]
+
             def __init__(self, wfirst, wlast):
                 self.wfirst = pointer(c_double(wfirst))
                 self.wlast = pointer(c_double(wlast))
+
         argv = Args(wfirst, wlast)
         argc = len(argv._fields_)
         libfunc.argtypes = [c_int, *[POINTER(f[1]) for f in argv._fields_]]
         libfunc.restype = c_char_p
-        error = libfunc(argc,
-                byref(argv.wfirst),
-                byref(argv.wlast)).decode('utf-8')
+        error = libfunc(
+            argc,
+            byref(argv.wfirst),
+            byref(argv.wlast)
+            ).decode('utf-8')
         if error != '':
             raise ValueError(error)
         self._wfirst = wfirst
@@ -138,11 +152,14 @@ class LibSme:
         libfunc = self.lib.InputLineList
         nlines = len(linelist)
         m = 8
+
         class Args(Structure):
             _fields_ = [
-                    ('nlines', POINTER(c_int)),
-                    ('species', POINTER(IdlString * nlines)),
-                    ('atomic', POINTER(c_double * nlines * m))]
+                ('nlines', POINTER(c_int)),
+                ('species', POINTER(IdlString * nlines)),
+                ('atomic', POINTER(c_double * nlines * m))
+                ]
+
             def __init__(self, linelist):
                 self._nlines = c_int(nlines)
                 self._species = IdlStringArray(linelist.species)
@@ -156,14 +173,17 @@ class LibSme:
                 self.nlines = pointer(self._nlines)
                 self.species = pointer(self._species.data)
                 self.atomic = pointer(self._atomic.data)
+
         argv = Args(linelist)
         argc = len(argv._fields_)
         libfunc.argtypes = [c_int, *[POINTER(f[1]) for f in argv._fields_]]
         libfunc.restype = c_char_p
-        error = libfunc(argc,
-                byref(argv.nlines),
-                byref(argv.species),
-                byref(argv.atomic)).decode('utf-8')
+        error = libfunc(
+            argc,
+            byref(argv.nlines),
+            byref(argv.species),
+            byref(argv.atomic)
+            ).decode('utf-8')
         if error != '':
             raise ValueError(error)
         self._linelist = linelist
@@ -177,22 +197,28 @@ class LibSme:
         assert self._linelist is not None
         nlines = len(self._linelist)
         m = 6
+
         class Args(Structure):
             _fields_ = [
-                    ('nlines', POINTER(c_int)),
-                    ('atomic', POINTER(c_double * m * nlines))]
+                ('nlines', POINTER(c_int)),
+                ('atomic', POINTER(c_double * m * nlines))
+                ]
+
             def __init__(self):
                 self._nlines = c_int(nlines)
                 self._atomic = Array2D(c_double, m, nlines)
                 self.nlines = pointer(self._nlines)
                 self.atomic = pointer(self._atomic.data)
+
         argv = Args()
         argc = len(argv._fields_)
         libfunc.argtypes = [c_int, *[POINTER(f[1]) for f in argv._fields_]]
         libfunc.restype = c_char_p
-        error = libfunc(argc,
-                byref(argv.nlines),
-                byref(argv.atomic)).decode('utf-8')
+        error = libfunc(
+            argc,
+            byref(argv.nlines),
+            byref(argv.atomic)
+            ).decode('utf-8')
         if error != '':
             raise ValueError(error)
         return argv._atomic.data
@@ -201,12 +227,15 @@ class LibSme:
         libfunc = self.lib.UpdateLineList
         nlines = len(linelist)
         m = 8
+
         class Args(Structure):
             _fields_ = [
-                    ('nlines', POINTER(c_int)),
-                    ('species', POINTER(IdlString * nlines)),
-                    ('atomic', POINTER(c_double * nlines * m)),
-                    ('index', POINTER(c_int * nlines))]
+                ('nlines', POINTER(c_int)),
+                ('species', POINTER(IdlString * nlines)),
+                ('atomic', POINTER(c_double * nlines * m)),
+                ('index', POINTER(c_int * nlines))
+                ]
+
             def __init__(self, linelist):
                 self._nlines = c_int(nlines)
                 self._species = IdlStringArray(linelist.species)
@@ -220,14 +249,17 @@ class LibSme:
                 self.nlines = pointer(self._nlines)
                 self.species = pointer(self._species.data)
                 self.atomic = pointer(self._atomic.data)
+
         argv = Args(linelist)
         argc = len(argv._fields_)
         libfunc.argtypes = [c_int, *[POINTER(f[1]) for f in argv._fields_]]
         libfunc.restype = c_char_p
-        error = libfunc(argc,
-                byref(argv.nlines),
-                byref(argv.species),
-                byref(argv.atomic)).decode('utf-8')
+        error = libfunc(
+            argc,
+            byref(argv.nlines),
+            byref(argv.species),
+            byref(argv.atomic)
+            ).decode('utf-8')
         if error != '':
             raise ValueError(error)
         self._linelist = linelist

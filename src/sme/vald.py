@@ -10,8 +10,16 @@ class Line:
 
     def __str__(self):
         return "'{}',{:10.4f},{:7.4f},{:7.3f},{:5.2f},{:6.2f},{:8.3f}". \
-                format(self.species, self.wlcent, self.excit, self.gflog, \
-                self.gamrad, self.gamqst, self.gamvw)
+            format(
+                self.species,
+                self.wlcent,
+                self.excit,
+                self.gflog,
+                self.gamrad,
+                self.gamqst,
+                self.gamvw
+                )
+
 
 class LineList:
     def __init__(self):

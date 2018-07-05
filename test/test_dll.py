@@ -1,7 +1,7 @@
-import pytest
 from sme.dll import LibSme
 from sme.vald import LineList
 from math import log10
+
 
 def test_basic():
     libsme = LibSme()
@@ -18,8 +18,13 @@ def test_basic():
     libsme.InputLineList(linelist)
     outlist = libsme.OutputLineList()
 
-    print(libsme.file, libsme.wfirst, libsme.wlast, libsme.vw_scale,
-            libsme.H2broad)
+    print(
+        libsme.file,
+        libsme.wfirst,
+        libsme.wlast,
+        libsme.vw_scale,
+        libsme.H2broad
+        )
     print(libsme.linelist)
     fmt = "  Out: {0:10.4f},{2:7.4f},{1:7.3f},{3:5.2f},{4:6.2f},{5:8.3f}"
     for i in range(len(linelist)):

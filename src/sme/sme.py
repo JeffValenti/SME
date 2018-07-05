@@ -1,6 +1,7 @@
 from scipy.io import readsav
 from abund import Abund
 
+
 class Param:
     """Handle model parameters for a Spectroscopy Made Easy (SME) job.
     """
@@ -52,10 +53,19 @@ class Param:
 
     def summary(self):
         fmt = 'Teff={} K,  logg={:.3f},  [M/H]={:.3f},  ' \
-                'Vmic={:.2f},  Vmac={:.2f},  Vsini={:.1f}'
-        print(fmt.format(self._teff, self._logg, self._monh, \
-               self._vmic, self._vmac, self._vsini))
+            'Vmic={:.2f},  Vmac={:.2f},  Vsini={:.1f}'
+        print(
+            fmt.format(
+                self._teff,
+                self._logg,
+                self._monh,
+                self._vmic,
+                self._vmac,
+                self._vsini
+                )
+            )
         self._abund.print()
+
 
 def idlfile(file):
     """Read parameters and any results from an IDL save file created by
