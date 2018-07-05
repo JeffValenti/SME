@@ -4,6 +4,7 @@ channels:
 dependencies:
   - astropy
   - cython
+  - flake8
   - python
   - scipy
   - pip:
