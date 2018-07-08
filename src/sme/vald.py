@@ -1,4 +1,6 @@
 class Line:
+    """Atomic data for a single spectral line.
+    """
     def __init__(self, species, wlcent, excit, gflog, gamrad, gamqst, gamvw):
         self.species = species
         self.wlcent = wlcent
@@ -22,6 +24,8 @@ class Line:
 
 
 class LineList:
+    """Atomic data for a list of spectral lines.
+    """
     def __init__(self):
         self._lines = []
 
@@ -65,3 +69,16 @@ class LineList:
     def add(self, species, wlcent, excit, gflog, gamrad, gamqst, gamvw):
         line = Line(species, wlcent, excit, gflog, gamrad, gamqst, gamvw)
         self._lines.append(line)
+
+
+class ValdFile:
+    """Atomic data for a list of spectral lines.
+    """
+    def __init__(self, filename):
+        self.read(filename)
+
+    def read(filename):
+        """Read line data file from the VALD extract stellar service.
+        """
+        with open(filename, 'r') as file:
+            lines = file.readlines()
