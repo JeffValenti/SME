@@ -78,7 +78,7 @@ class Abund:
             )
 
     def __str__(self):
-        a = self.get_pattern('H=12')
+        a = list(self.get_pattern('H=12').values())
         a = a[0:2] + [ab+self._monh for ab in a[2:]]
         out = ' [M/H]={:.3f} applied to abundance pattern. ' \
             'Values below are abundances.\n'.format(self._monh)
@@ -238,8 +238,7 @@ class Abund:
                 )
 
     def set_pattern_by_value(self, pattern, type):
-        p = self.empty_pattern()
-        p = self.fromtype(pattern, type)
+        self._pattern = self.fromtype(pattern, type)
 
     def update_pattern(self, updates):
         for key in updates:
