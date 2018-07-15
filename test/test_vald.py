@@ -1,4 +1,5 @@
-from sme.vald import Line, LineList
+from pathlib import Path
+from sme.vald import Line, LineList, ValdFile
 
 
 species = 'Fe 1'
@@ -54,3 +55,10 @@ def test_linelist_properties():
         assert isinstance(prop, list)
         assert len(prop) == 1
         assert prop[0] == linedata[iprop]
+
+
+def test_valdfile():
+    """Test class to read a VALD line data file.
+    """
+    testdir = Path(__file__).parent
+    vf = ValdFile(testdir / 'testcase1.lin')
