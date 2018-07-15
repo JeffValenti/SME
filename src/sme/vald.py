@@ -1,3 +1,7 @@
+from collections import OrderedDict
+from sme.abund import Abund
+
+
 class FileError(Exception):
     """Raise when attempt to read a VALD line data file fails.
     """
@@ -88,6 +92,10 @@ class ValdFile:
         return self._filename
 
     @property
+    def n(self):
+        return self._nlines
+
+    @property
     def linelist(self):
         return self._linelist
 
@@ -95,14 +103,19 @@ class ValdFile:
     def valdatmo(self):
         return self._valdatmo
 
+    @property
+    def abund(self):
+        return self._abund
+
     def read(self, filename):
         """Read line data file from the VALD extract stellar service.
         """
         with open(filename, 'r') as file:
             lines = file.readlines()
         self.parse_header(lines[0])
-        self._linelist = self.parse_linedata(lines[3:3+self._nlines])
-        self._valdatmo = self.parse_valdatmo(lines[3+self._nlines])
+        self._linelist = self.parse_linedata(lines[3:3+self.n])
+        self._valdatmo = self.parse_valdatmo(lines[3+self.n])
+        self._abund = self.parse_abund(lines[4+self.n:22+self.n])
 
     def parse_header(self, line):
         """Parse header line from a VALD line data file.
@@ -130,9 +143,21 @@ class ValdFile:
         return linelist
 
     def parse_valdatmo(self, line):
-        """Read VALD model atmosphere line from a VALD line data file.
+        """Parse VALD model atmosphere line from a VALD line data file.
         """
         lstr = line.strip()
         if lstr[0] != "'" or lstr[-2:] != "',":
             raise FileError(f'error parsing model atmosphere: {lstr}')
         return lstr[1:-2]
+
+    def parse_abund(self, lines):
+        """Parse VALD abundance lines from a VALD line data file.
+        """
+        abstr = ''.join([''.join(line.split()) for line in lines])
+        words = [w[1:-1] for w in abstr.split(',')]
+        if len(words) != 100 or words[99] != 'END':
+            raise FileError(f'error parsing abundances: {abstr}')
+        pattern = [w.split(':') for w in words[:-1]]
+        pattern = OrderedDict([(el, float(ab)) for el, ab in pattern])
+        monh = 0.0
+        return Abund(monh, pattern, type='sme')
