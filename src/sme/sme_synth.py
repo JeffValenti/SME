@@ -19,11 +19,13 @@ def SMELibraryVersion():
     """ Retern SME library version """
     return idl_call_external("SMELibraryVersion")
 
+
 @check_error
 def SetLibraryPath():
     prefix = os.path.dirname(__file__)
     libpath = os.path.join(prefix, "dll") + os.sep
     return idl_call_external("SetLibraryPath", libpath)
+
 
 @check_error
 def InputWaveRange(wfirst, wlast):
@@ -46,6 +48,7 @@ def SetH2broad(h2_flag=True):
         return idl_call_external("SetH2broad")
     else:
         return ClearH2broad()
+
 
 @check_error
 def ClearH2broad():
@@ -175,9 +178,36 @@ def GetNelec():
     raise NotImplementedError()
 
 
-def Transf():
+def Transf(
+    nmu,
+    mu,
+    cint_seg,
+    cintr_seg,
+    nwmax,
+    nw,
+    wint_seg,
+    sint_seg,
+    accrt,
+    accwi,
+    keep_lineop,
+    long_continuum,
+):
     """ """
-    raise NotImplementedError()
+    return idl_call_external(
+        "Transf",
+        nmu,
+        mu,
+        cint_seg,
+        cintr_seg,
+        nwmax,
+        nw,
+        wint_seg,
+        sint_seg,
+        accrt,
+        accwi,
+        keep_lineop,
+        long_continuum,
+    )
 
 
 def CentralDepth():
