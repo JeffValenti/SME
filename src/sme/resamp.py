@@ -6,7 +6,7 @@ def resamp(wold, sold, wnew):
     """
     #Interpolates OR integrates a spectrum onto a new wavelength scale, depending
     #  on whether number of pixels per angstrom increases or decreases. Integration
-    #  is effectively done analytically under a cubic spline fit to old spectrum. 
+    #  is effectively done analytically under a cubic spline fit to old spectrum.
     # wold (input vector) old wavelngth scale.
     # sold (input vector) old spectrum to be binned.
     # wnew (input vector) new wavelength spectrum.
@@ -25,7 +25,6 @@ def resamp(wold, sold, wnew):
     trace = 0  # (0)1: (don't) print trace info
 
     # Verify that wold, sold, and wnew are real*8
-    error = False  # set error flag false
     wold = wold.astype(float)
     sold = sold.astype(float)
     wnew = wnew.astype(float)
@@ -70,7 +69,6 @@ def resamp(wold, sold, wnew):
             w[i] = wnew + dw * (2 * i + 1 / (2 * xfac) - 0.5)  # pixel centers in W
 
         w = w.T  # transpose W before Merging
-        nig = nnew * xfac  # elements in interpolation grid
         w = w.flatten()  # make W into 1-dim vector
         #  Interpolate old spectrum (sold) onto wavelength scale w to make s. Then
         #    sum every xfac pixels in s to make a single pixel in the new spectrum
