@@ -1,5 +1,23 @@
 import numpy as np
-from awlib.bezier import bezier_interp
+
+from scipy.ndimage.filters import convolve
+from .bezier import bezier_interp
+
+def apply_broadening(ipres, x_seg, y_seg, type="gauss", sme=None):
+    # Using the log-linear wavelength grid requires using the first point
+    # for specifying the the width of the instrumental profile
+    hwhm = 0.5 * x_seg[0] / ipres if ipres > 0 else 0
+
+    if sme.iptype == "table":
+        y_seg = tablebroad(x_seg, y_seg, sme.ip_x, sme.ip_y)
+    elif sme.iptype == "gauss":
+        y_seg = gaussbroad(x_seg, y_seg, hwhm)
+    elif sme.iptype == "sinc":
+        y_seg = sincbroad(x_seg, y_seg, hwhm)
+    else:
+        raise AttributeError("Unknown IP type - " + sme.iptype)
+
+    return y_seg
 
 
 def tablebroad(w, s, xip, yip):
@@ -27,12 +45,13 @@ def tablebroad(w, s, xip, yip):
     ip = ip / np.sum(ip)  # ensure unit area
 
     # Pad spectrum ends to minimize impact of Fourier ringing.
-    npad = nip + 2  ## pad pixels on each end
-    snew = np.pad(s, pad_width=npad, mode="edge")  # add lots of end padding
+    snew = convolve(s, ip, mode="nearest")
+    # npad = nip + 2  ## pad pixels on each end
+    # snew = np.pad(s, pad_width=npad, mode="edge")  # add lots of end padding
 
-    # Convolve and trim.
-    snew = np.convolve(snew, ip)  # convolve with gaussian
-    snew = snew[npad : -npad]  # trim to original data/length
+    # # Convolve and trim.
+    # snew = np.convolve(snew, ip)  # convolve with gaussian
+    # snew = snew[npad : -npad]  # trim to original data/length
     return snew  # return convolved spectrum
 
 
@@ -76,12 +95,13 @@ def gaussbroad(w, s, hwhm):
     gpro = gpro / np.sum(gpro)
 
     # Pad spectrum ends to minimize impact of Fourier ringing.
-    npad = nhalf + 2  ## pad pixels on each end
-    spad = np.pad(s, npad, mode="edge")
+    sout = convolve(s, gpro, mode="nearest")
+    # npad = nhalf + 2  ## pad pixels on each end
+    # spad = np.pad(s, npad, mode="edge")
 
-    # Convolve and trim.
-    sout = np.convolve(spad, gpro)  # convolve with gaussian
-    sout = sout[npad : -npad]  # trim to original data/length
+    # # Convolve and trim.
+    # sout = np.convolve(spad, gpro)  # convolve with gaussian
+    # sout = sout[npad : -npad]  # trim to original data/length
     return sout  # return broadened spectrum.
 
 
@@ -133,10 +153,11 @@ def sincbroad(w, s, hwhm):
     sinc = sinc / np.sum(sinc)  # normalize sinc
 
     # Pad spectrum ends to minimize impact of Fourier ringing.
-    npad = nhalf + 2  ## pad pixels on each end
-    spad = np.pad(s, npad, mode="edge")
+    sout = convolve(s, sinc, mode="nearest")
+    # npad = nhalf + 2  ## pad pixels on each end
+    # spad = np.pad(s, npad, mode="edge")
 
-    # Convolve and trim.
-    sout = np.convolve(spad, sinc)  # convolve with gaussian
-    sout = sout[npad:-npad]  # trim to original data/length
+    # # Convolve and trim.
+    # sout = np.convolve(spad, sinc)  # convolve with gaussian
+    # sout = sout[npad:-npad]  # trim to original data/length
     return sout  # return broadened spectrum.
