@@ -60,9 +60,9 @@ def ClearH2broad():
 def InputLineList(atomic, species):
     """ Read in line list """
     nlines = atomic.shape[0]
-    atomic = atomic.astype(float)
-    species = species.astype(str)
-    return idl_call_external("InputLineList", nlines, species, atomic.T)
+    atomic = atomic.T.astype(float, copy=False)
+    species = species.astype(str, copy=False)
+    return idl_call_external("InputLineList", nlines, species, atomic)
 
 
 def OutputLineList(atomic, copy=False):
@@ -78,12 +78,12 @@ def OutputLineList(atomic, copy=False):
 
 
 @check_error
-def UpdateLineList(atomic, species):
+def UpdateLineList(atomic, species, index):
     """ Change line list parameters """
     nlines = atomic.shape[0]
     atomic = atomic.astype(float)
     species = species.astype("S")
-    return idl_call_external("UpdateLineList", nlines, species, atomic.T)
+    return idl_call_external("UpdateLineList", nlines, species, atomic.T, index)
 
 
 @check_error
@@ -92,7 +92,7 @@ def InputModel(teff, grav, vturb, atmo):
     motype = atmo.depth
     depth = atmo[motype]
     ndepth = len(depth)
-    t = atmo.teff
+    t = atmo.temp
     xne = atmo.xne
     xna = atmo.xna
     rho = atmo.rho
@@ -129,7 +129,14 @@ def ResetDepartureCoefficients(n, *args):
 
 @check_error
 def InputAbund(abund, feh):
-    """ Read in abundances """
+    """
+    Pass abundances to radiative transfer code.
+
+    Calculate elemental abundances (abund) from abundance pattern (sme.abund)
+    and metallicity (sme.feh). Metallicity adjustment is not applied to H or He.
+    Renormalize abundances after applying metallicity [added 2012-Mar-08].
+    Introduced limiter in case the proposed step in abundance is too large [2018-Apr-25].
+    """
     # Convert abundances to the right format
     # TODO might be obsolete with new SME structure?
     abund = np.copy(abund)
@@ -159,8 +166,20 @@ def GetOpacity():
 
 @check_error
 def Ionization(ion=0):
-    """ """
-    return idl_call_external("Ionization", ion)
+    """
+    Calculate ionization balance for current atmosphere and abundances.
+    Ionization state is stored in the external library.
+    Set adopt_eos bit mask to 7 = 1 + 2 + 4 to:
+
+      (1) adopt particle number densities from EOS,
+      (2) adopt electron number densities from EOS,
+      (4) and adopt gas densities (g/cm^3) from EOS,
+
+    instead of using values from model atmosphere. Different abundance patterns
+    in the model atmosphere (usually scaled solar) and SME (may be non-solar)
+    can affect line shape, e.g. shape of hydrogen lines.
+    """
+    return idl_call_external("Ionization", ion, inttype="short")
 
 
 def GetDensity():
@@ -179,23 +198,25 @@ def GetNelec():
 
 
 def Transf(
-    nmu,
     mu,
-    cint_seg,
-    cintr_seg,
-    nwmax,
-    nw,
-    wint_seg,
-    sint_seg,
     accrt,
     accwi,
-    keep_lineop,
-    long_continuum,
+    keep_lineop = 0,
+    long_continuum = 1,
+    nwmax = 400000,
 ):
     """ """
-    return idl_call_external(
+    nw = 0
+    nmu = len(mu)
+    # Prepare data:
+    wint_seg = np.zeros((nwmax))
+    sint_seg = np.zeros((nwmax, nmu))  # line+continuum intensities
+    cint_seg = np.zeros((nwmax, nmu))  # all continuum intensities
+    cintr_seg = np.zeros((nmu))        # red continuum intensity
+
+    error = idl_call_external(
         "Transf",
-        nmu,
+        np.int16(nmu),
         mu,
         cint_seg,
         cintr_seg,
@@ -205,10 +226,18 @@ def Transf(
         sint_seg,
         accrt,
         accwi,
-        keep_lineop,
-        long_continuum,
+        np.int16(keep_lineop),
+        np.int16(long_continuum),
     )
+    if error != b"":
+        raise ValueError("Transf (call external): %s" % error.decode())
+    nw = np.count_nonzero(wint_seg)
 
+    wint_seg = wint_seg[:nw]
+    sint_seg = sint_seg[:nw, :].T
+    cint_seg = cint_seg[:nw, :].T
+
+    return nw, wint_seg, sint_seg, cint_seg
 
 def CentralDepth():
     """ """

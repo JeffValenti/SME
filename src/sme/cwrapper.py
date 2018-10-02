@@ -4,12 +4,12 @@ import ctypes as ct
 
 
 class IDL_String(ct.Structure):
-    _fields_ = [("slen", ct.c_uint16), ("stype", ct.c_uint16), ("s", ct.c_char_p)]
+    _fields_ = [("slen", ct.c_int), ("stype", ct.c_ushort), ("s", ct.c_char_p)]
 
 
-def idl_call_external(funcname, *args, restype="str"):
+def idl_call_external(funcname, *args, restype="str", inttype="int"):
     # Load library if that wasn't done yet
-    if not hasattr(idl_call_external, "_lib"):
+    if not hasattr(idl_call_external, "lib"):
         localdir = os.path.dirname(__file__)
         #libfile = "./dll/idl_test.so"
         libfile = "./dll/sme_synth.so.linux.x86_64.64"
@@ -32,11 +32,27 @@ def idl_call_external(funcname, *args, restype="str"):
     staying_alive = [a for a in args]
 
     for i in range(len(args)):
-        if isinstance(args[i], int) or isinstance(args[i], np.integer):
-            staying_alive[i] = np.array(args[i]).ctypes
+        if isinstance(args[i], int):
+            if inttype == "int":
+                staying_alive[i] = np.array(args[i]).astype(ct.c_int, copy=False).ctypes
+            elif inttype == "short":
+                staying_alive[i] = np.array(args[i]).astype(ct.c_short, copy=False).ctypes
+            else:
+                raise ValueError("Integer type must be 'int' or 'short'")
+            args[i] = staying_alive[i].data
+        elif isinstance(args[i], np.integer):
+            # if integers are passed as numpy integers, assume the type was chosen for a reason
+            if np.issubdtype(args[i], np.int64):
+                staying_alive[i] = np.array(args[i]).astype(ct.c_long, copy=False).ctypes
+            if np.issubdtype(args[i], np.int32):
+                staying_alive[i] = np.array(args[i]).astype(ct.c_int, copy=False).ctypes
+            elif np.issubdtype(args[i], np.int16):
+                staying_alive[i] = np.array(args[i]).astype(ct.c_short, copy=False).ctypes
+            else:
+                staying_alive[i] = np.array(args[i]).ctypes
             args[i] = staying_alive[i].data
         if isinstance(args[i], float) or isinstance(args[i], np.floating):
-            staying_alive[i] = np.array(args[i]).ctypes
+            staying_alive[i] = np.array(args[i]).astype(ct.c_double, copy=False).ctypes
             args[i] = staying_alive[i].data
         elif isinstance(args[i], str):
             staying_alive[i] = IDL_String(
