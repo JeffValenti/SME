@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from sme.abund import Abund
+from .abund import Abund
 
 
 class FileError(Exception):

@@ -102,10 +102,17 @@ class Abund:
         type = fromtype.lower()
         if type == 'h=12':
             return patt
-        elem = [el for el, ab in patt.items() if ab]
+
+        if type == "sme":
+            elem = Abund._elem
+            abund = patt
+            patt = {el:ab for el, ab in zip(elem, abund) if ab}
+        else:
+            elem = [el for el, ab in patt.items() if ab]
+            abund = [patt[el] for el in elem]
+
         if elem[0] != 'H':
             raise ValueError('pattern must define abundance of H')
-        abund = [patt[el] for el in elem]
         if type == 'sme':
             abund = [abund[0]] + [10**ab for ab in abund[1:]]
             abund = [ab/abund[0] for ab in abund]
