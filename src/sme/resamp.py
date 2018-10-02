@@ -1,5 +1,5 @@
 import numpy as np
-from awlib.bezier import bezier_interp
+from .bezier import bezier_interp
 
 
 def resamp(wold, sold, wnew):
@@ -25,9 +25,9 @@ def resamp(wold, sold, wnew):
     trace = 0  # (0)1: (don't) print trace info
 
     # Verify that wold, sold, and wnew are real*8
-    wold = wold.astype(float)
-    sold = sold.astype(float)
-    wnew = wnew.astype(float)
+    # wold = wold.astype(float)
+    # sold = sold.astype(float)
+    # wnew = wnew.astype(float)
 
     # Determine spectrum attributes.
     nold = len(wold)  # number of old points
@@ -40,8 +40,8 @@ def resamp(wold, sold, wnew):
     wold_lo = wold[0] - 0.5 * (wold[1] - wold[0])
     wnew_hi = wnew[-1] + 0.5 * (wnew[-1] - wnew[-2])
     wold_hi = wold[-1] + 0.5 * (wold[-1] - wold[-2])
-    if (wnew_lo < wold_lo) or (wnew_hi > wold_hi):
-        raise ValueError("New wavelength scale not subset of old.")
+    # if (wnew_lo < wold_lo) or (wnew_hi > wold_hi):
+    #     raise ValueError("New wavelength scale not subset of old.")
 
     # Select integration or interpolation depending on change in dispersion.
     if psnew < psold:  # pixel scale decreased
@@ -62,8 +62,7 @@ def resamp(wold, sold, wnew):
         #    every xfac pixels in w will exactly fill a pixel in the new wavelength
         #    scale (wnew). Optimized for xfac < nnew.
         dw = 0.5 * (wnew[2:] - wnew[:-2])  # local pixel scale
-        dw = np.concatenate([dw, 2 * dw[-3] - dw[-4]])  # add trailing endpoint first
-        dw = np.concatenate([2 * dw[0] - dw[1], dw])  # add leading endpoint last
+        dw = np.concatenate([[2 * dw[0] - dw[1]], dw, [2 * dw[-3] - dw[-4]]])  # add trailing endpoint first add leading endpoint last
         w = np.zeros((xfac, nnew))  # initialize W as array
         for i in range(xfac):  # loop thru subpixels
             w[i] = wnew + dw * (2 * i + 1 / (2 * xfac) - 0.5)  # pixel centers in W

@@ -1,6 +1,7 @@
 import numpy as np
 
-from awlib.bezier import interpolate as spl_interp
+from scipy.ndimage.filters import convolve
+from .bezier import interpolate as spl_interp
 
 
 def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
@@ -80,51 +81,53 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
     # Make local copies of various input variables, which will be altered below.
     # Force vsini and especially vmac to be scalars. Otherwise mu dependence fails.
 
-    vsini = float(vsini_in[0])  # ensure real number
-    vrt = abs(float(vrt_in[0]))  # ensure real number
+    if np.size(vsini_in) > 1:
+        vsini_in = vsini_in[0]
+    if np.size(vrt_in) > 1:
+        vrt_in = vrt_in[0]
+    vsini = float(vsini_in)  # ensure real number
+    vrt = abs(float(vrt_in))  # ensure real number
 
     # Determine oversampling factor.
-    if len(osamp) == 0:
-        osamp = 0  # make sure variable is defined
-    os = round(osamp > 1)  # force integral value > 0
+    os = round(np.clip(osamp, 1, None))  # force integral value > 1
 
     # Convert input MU to projected radii, R, of annuli for a star of unit radius
-    #  (which is just si!=, rather than cosi!=, of the angle between the outward
-    #  normal and the li!= of sight).
-    rmu = np.sqrt(1.0 - mu ** 2)  # use simple trig identity
+    #  (which is just sine, rather than cosine, of the angle between the outward
+    #  normal and the line of sight).
+    rmu = np.sqrt(1 - mu ** 2)  # use simple trig identity
 
     # Sort the projected radii and corresponding intensity spectra into ascending
-    #  order (i.e. from disk center to the limb), which is ==uivalent to sorting
+    #  order (i.e. from disk center to the limb), which is equivalent to sorting
     #  MU in descending order.
     isort = np.argsort(rmu)  # sorted indicies
     rmu = rmu[isort]  # reorder projected radii
-    nmu = len(mu)  # number of radii
+    nmu = np.size(mu)  # number of radii
     if nmu == 1:
-        vsini = 0.0  # ignore vsini if only 1 mu
+        vsini = 0  # ignore vsini if only 1 mu
 
     # Calculate projected radii for boundaries of disk integration annuli.  The n+1
     #  boundaries are selected such that r(i+1) exactly bisects the area between
     #  rmu(i) and rmu(i+1). The in!=rmost boundary, r(0) is set to 0 (disk center)
     #  and the outermost boundary, r(nmu) is set to 1 (limb).
     if nmu > 1 or vsini != 0:  # really want disk integration
-        r = np.sqrt(
-            0.5 * (rmu[: nmu - 1] ** 2 + rmu[1:nmu] ** 2)
-        )  # area midpoints between rmu
-        r = [0, *r, 1]  # bookend with center and limb
+        r = np.sqrt(0.5 * (rmu[:-1] ** 2 + rmu[1:] ** 2))  # area midpoints between rmu
+        r = np.pad(
+            r, 1, mode="constant", constant_values=(0, 1)
+        )  # [0, *r, 1]  # bookend with center and limb
 
         # Calculate integration weights for each disk integration annulus.  The weight
         #  is just given by the relative area of each annulus, normalized such that
         #  the sum of all weights is unity.  Weights for limb darkening are included
         #  explicitly in the intensity profiles, so they aren't !=eded here.
-        wt = r[1 : nmu + 1] ** 2 - r[:nmu] ** 2  # weights = relative areas
+        wt = r[1 :] ** 2 - r[:-1] ** 2  # weights = relative areas
     else:
-        wt = [1.0]  # single mu value, full weight
+        wt = np.array([1.0])  # single mu value, full weight
 
     # Ge!=rate index vectors for input and oversampled points. Note that the
-    #  oversampled indicies are carefully chosen such that every "os" fi!=ly
+    #  oversampled indicies are carefully chosen such that every "os" finely
     #  sampled points fit exactly into o!= input bin. This makes it simple to
-    #  "integrate" the fi!=ly sampled points at the end of the routi!=.
-    npts = inten.size  ## of points
+    #  "integrate" the fi!=ly sampled points at the end of the routine.
+    npts = inten.shape[1]  ## of points
     xpix = np.arange(npts)  # point indices
     nfine = int(os * npts)  ## of oversampled points
     xfine = (0.5 / os) * (2 * np.arange(nfine) - os + 1)  # oversampled points indices
@@ -135,9 +138,9 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
     flux = np.zeros(nfine)  # init flux vector
     for imu in range(nmu):  # loop thru integration annuli
 
-        # Use external cubic spli!= routi!= (adapted from Numerical Recipes) to make
+        #  Use external cubic spline routine (adapted from Numerical Recipes) to make
         #  an oversampled version of the intensity profile for the current annulus.
-        #  IDL (tensed) spli!= is nice, but *VERY* slow. Note that the spli!= extends
+        #  IDL (tensed) spline is nice, but *VERY* slow. Note that the spline extends
         #  (i.e. extrapolates) a fraction of a point beyond the original endpoints.
         ypix = inten[isort[imu]]  # extract intensity profile
         if os == 1:  # true: no oversampling
@@ -145,24 +148,26 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
         else:  # else: must oversample
             yfine = spl_interp(xpix, ypix, xfine)  # spli!= onto fi!= wavelen>h scale
 
-        # Construct the convolution ker!=l which describes the distribution of
+        # Construct the convolution kernel which describes the distribution of
         #  rotational velocities present in the current annulus. The distribution has
         #  been derived analytically for annuli of arbitrary thick!=ss in a rigidly
         #  rotating star. The ker!=l is constructed in two pieces: o!= piece for
         #  radial velocities less than the maximum velocity along the in!=r edge of
         #  the annulus, and o!= piece for velocities greater than this limit.
         if vsini > 0:  # true: nontrivial case
-            r1 = r[imu]  # in!=r edge of annulus
+            r1 = r[imu]  # inner edge of annulus
             r2 = r[imu + 1]  # outer edge of annulus
             dv = deltav / os  # oversampled velocity spacing
             maxv = vsini * r2  # maximum velocity in annulus
-            nrk = 2 * maxv / dv + 3  ## oversampled ker!=l point
-            v = dv * (np.arange(nrk) - ((nrk - 1) / 2))  # velocity scale for ker!=l
-            rkern = np.zeros(nrk)  # init rotational ker!=l
+            nrk = 2 * int(maxv / dv) + 3  ## oversampled kernel point
+            v = dv * (
+                np.arange(nrk, dtype=float) - ((nrk - 1) / 2)
+            )  # velocity scale for kernel
+            rkern = np.zeros(nrk)  # init rotational kernel
             j1 = np.abs(v) < vsini * r1  # low velocity points
             rkern[j1] = np.sqrt((vsini * r2) ** 2 - v[j1] ** 2) - np.sqrt(
                 (vsini * r1) ** 2 - v[j1] ** 2
-            )  # ge!=rate distribution
+            )  # generate distribution
 
             j2 = (np.abs(v) >= vsini * r1) & (np.abs(v) <= vsini * r2)
             rkern[j2] = np.sqrt((vsini * r2) ** 2 - v[j2] ** 2)  # ge!=rate distribution
@@ -175,7 +180,7 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
             #  be do!= with a routi!= called "externally" from IDL, which efficiently
             #  shifts and adds.
             if nrk > 3:
-                yfine = np.convolve(yfine, rkern)
+                yfine = convolve(yfine, rkern, mode="nearest")
 
         # Calculate projected sigma for radial and tangential velocity distributions.
         muval = mu[isort[imu]]  # current value of mu
@@ -183,10 +188,10 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
         sigr = sigma * muval  # reduce by current mu value
         sigt = sigma * np.sqrt(1.0 - muval ** 2)  # reduce by np.sqrt(1-mu**2)
 
-        # Figure out how many points to use in macroturbulence ker!=l.
+        # Figure out how many points to use in macroturbulence kernel.
         nmk = np.clip(10 * sigma, None, (nfine - 3) / 2)
         # extend ker!=l to 10 sigma
-        nmk = nmk > 3  # pad with at least 3 pixels
+        nmk = int(np.clip(nmk, 3, None))  # pad with at least 3 pixels
 
         # Construct radial macroturbulence ker!=l with a sigma of mu*VRT/np.sqrt(2).
         if sigr > 0:
@@ -217,10 +222,9 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
 
         # Convolve the total flux profiles, again padding the spectrum on both ends to
         #  protect against Fourier ringing.
-        lpad = np.full(nmk, yfine[0])  # padding for the "left" side
-        rpad = np.full(nmk, yfine(nfine - 1))  # padding for the "right" side
-        yfine = np.convolve([lpad, yfine, rpad], mkern)  # add the padding and convolve
-        yfine = yfine[nmk : nmk + nfine]  # trim away padding
+        # ypad = np.pad(yfine, nmk, mode="edge")
+        yfine = convolve(yfine, mkern, mode="nearest")  # add the padding and convolve
+        # yfine = yfine[nmk : -nmk]  # trim away padding
 
         # Add contribution from current annulus to the running total.
         flux = flux + wt[imu] * yfine  # add profile to running total
