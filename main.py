@@ -98,7 +98,7 @@ def sme_func_atmo(sme):
 
     # Handle atmosphere grid or user routine.
     atmo = sme.atmo
-    self = sme_func
+    self = sme_func_atmo
 
     if hasattr(self, "msdi_save"):
         msdi_save = self.msdi_save
@@ -123,16 +123,6 @@ def sme_func_atmo(sme):
 
     sme.atmo = atmo
     return sme
-
-
-# TODO
-# sme_func(wavelength, *parameters):
-#    in:
-#        wavelength = sme.wave
-#        parameters = teff, logg, feh, ...
-#    out:
-#        synthetic spectrum
-
 
 def get_flags(sme):
     tags = np.array(list(sme.names))
@@ -245,7 +235,7 @@ def synthetize_spectrum(
 
 
 def solve(sme, param_names=["teff", "grav", "feh"], wavelength=None):
-    #TODO: get bounds for all parameters. Bounds are given by the precomputed tables
+    # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
     bounds = {"teff": [3500, 7000], "grav": [3, 5], "feh": [-5, 1]}
     flags = get_flags(sme)
     if wavelength is None:
@@ -288,7 +278,22 @@ def solve(sme, param_names=["teff", "grav", "feh"], wavelength=None):
     )
 
     popt = res.x
+    sme.pfree = popt
+    sme.pname = param_names
+    
+    cost = 2 * res.cost
+    # Do Moore-Penrose inverse discarding zero singular values.
+    _, s, VT = np.linalg.svd(res.jac, full_matrices=False)
+    threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
+    s = s[s > threshold]
+    VT = VT[:s.size]
+    pcov = np.dot(VT.T / s**2, VT)
+
+    sme.cov = pcov
     print(res.message)
+
+    for name, value in zip(param_names, popt):
+        print("%s\t%.5f" % (name, value))
 
     return popt
 
@@ -454,8 +459,6 @@ def sme_func_2(sme, setLineList=True, passAtmosphere=True):
 
     return sme
 
-
-# @memory.cache
 def sme_func(
     sme,
     flags={},
@@ -1056,787 +1059,33 @@ def sme_func(
 
     return sme
 
-
-def sme_solve(sme, flags, ipar1, ipar2, ipar3, ptype, dpar, freep_name):
-    # Nonlinear solver, adapted from Bevington, pp. 237-239.
-    # Edit History:
-    # 23-Jun-95 Valenti  Adapted from pisks.pro.
-    # 10-Mar-12 Valenti  Added logic to handle case when the free parameter vsini
-    #                     becomes negative and is changed to a fixed parameter,
-    #                     leaving only one remaining free parameter. IDL was
-    #                     reducing a 2D array to a vector, causing a matrix
-    #                     multiplication to fail and a subsequent code crash.
-    # 03-Apr-12 Valenti  Start next major iteration with _lambda=1e-4 parameters,
-    #                     when they yielded lowest chisq. Code was assuming fit
-    #                     always gets worse for final value of _lambda, but this
-    #                     is not true at _lambda=1e-4 boundary.
-    # 01-Jul-13 Piskunov Introduced two-sided derivatives and zeroing of the fullpder
-    #                     vector at the start of each large iteration.
-    # 05-Jul-13 Piskunov Fixed handling derivative indexing when local variable affect
-    #                     more than one spectral segment (e.g. when segments overlap).
-
-    # common sme_main_common, wave, smod, cmod
-    # common sme_main_flags, f_opro, f_glob, f_gf, f_vw, f_ab, f_NLTE, f_H2broad $
-    #                      , version
-    # common sme_main_solve, npar, ipar1, ipar2, ipar3, dpar, ptype, freep_covar
-    # common sme_main_results, jint, wint, sint, rchi_vec, chi_vec, crms_vec, lrms_vec $
-    #                        , freep_a, freep_unc, freep_med, freep_msig, freep_psig $
-    #                        , freep_name
-    # common debugging_interpolation, depth, t, xne, xna, rho, model_counter
-
-    npar = len(ipar1)
-    smod = sme.smod
-    cmod = sme.cmod
-    uob = sme.uob
-
-    # Program parameters.
-    maxiter = sme.maxiter  # max # major iterations
-
-    # Initializations.
-    chi_vec = np.zeros(maxiter + 1)
-    rchi_vec = np.zeros(maxiter + 1)
-    lrms_vec = np.zeros(maxiter + 1)
-    crms_vec = np.zeros(maxiter + 1)
-
-    # Setup for iterative solution loop.
-    tags = np.array(list(sme.names))
-    if "uob" not in sme:
-        sme.uob = np.ones(len(sme.sob))
-    wt = sme.uob * sme.uob  # init reciprocal fit wts
-    inz = (sme.mob > 0) & (wt != 0)  # indicies of nonzero weights
-    nval = np.count_nonzero(inz)
-    wt = 1 / wt[inz]  # keep valid points as vector
-    obs = sme.sob[inz]  # keep observation as vector
-    wto = wt * obs  # Observations scaled weights
-
-    # Check whether vsini is a free parameter.
-    # If vsini is a free parameter, force it to be non-negative.
-    min_vsini = 0.1
-    ivsini = "VSINI" in ipar1
-    nvsini = np.count_nonzero(ivsini)
-    iokpar = ~ivsini
-    nokpar = np.count_nonzero(iokpar)
-    if "VSINI" in ipar1:
-        sme.vsini = np.clip(sme.vsini, min_vsini, None)
-
-    # Same is for vmic.
-    max_vmic = 4.
-    if "VMIC" in ipar1:
-        sme.vmic = np.clip(np.abs(sme.vmic), None, max_vmic)
-
-    nfree = npar  ## free parameters
-    freep_a = np.zeros((maxiter + 1, nfree))  # init parameter history array
-
-    # Init and build vector of free parameters.
-    freep = np.zeros(nfree)  # init free parameter vector
-    for i in range(npar):
-        freep[i] = np.atleast_1d(sme[ipar1[i]])[ipar2[i]]  # insert global parameters
-    # SME cannot deal with zero van der Waals in the parameter list although
-    # they are fine if one does not fit them
-    ilimit = (ptype == 4) & (freep >= 0)
-    freep[ilimit] = -8.  # No 0 vw in parameter list
-
-    uvec = np.zeros(nfree) + 1  # unit vector
-    idiag = np.arange(nfree) * (nfree + 1)  # diagonal subscripts
-    pder = np.zeros((nfree, nval))  # init partials array
-    nfull = len(sme.sob)  ## points in full profiles
-    fullpder = np.zeros((nfree, nfull))  # init full partials
-
-    # Calculate initial model. Compute statistics.
-    sme = sme_func(sme, flags, save=True)  # evaluate model fit
-    ilpts = sme.mob[inz] == 1
-    nlpts = np.count_nonzero(ilpts)  # line points
-    icpts = sme.mob[inz] == 2
-    ncpts = np.count_nonzero(icpts)  # continuum points
-    if ncpts < 2:
-        icpts = ilpts
-        ncpts = nlpts
-    degf = nlpts - nfree - sme.nseg  # degrees of freedom
-    if degf <= 0:
-        raise ValueError(
-            "sme_solve: not enough spectrum points to constrain free parameters."
-        )
-
-    fullmdl = smod  # save full model
-    mdl = smod[inz]  # save model at valid obs
-    resid = obs - mdl  # residual of model fit
-    wtres = wt * resid * resid  # weighted residual squared
-    baserchisq = np.sum(wtres[ilpts]) / degf  # calculate reduced chi-squared
-    wtores = wto * resid * resid  # weighted residual squared scaled by observations
-    basechisq = (
-        np.sum(wtores[ilpts]) / degf
-    )  # calculate chi-squared weighte by observations
-
-    if ncpts == 0:
-        basecrms = -1.0  # undefined
-    else:
-        basecrms = np.sqrt(np.sum(resid[icpts] ** 2 / ncpts))  # RMS of continuum fit
-
-    baselrms = np.sqrt(np.sum(resid[ilpts] ** 2 / nlpts))  # RMS of line fit
-
-    # Compute and save initial statistics.
-    chi_vec[0] = basechisq  # save chisq
-    rchi_vec[0] = baserchisq  # save reduced chisq
-    crms_vec[0] = basecrms  # save Continuum RMS
-    lrms_vec[0] = baselrms  # save Line RMS
-    freep_a[0, :] = freep  # save FreeP
-
-    # Save initial fit.
-    sme.smod_orig = smod
-    sme.cmod_orig = cmod
-
-    # Iterate towards solution.
-    iter = 0  # init iteration counter
-    _lambda = 1.0  # init LS-gradient weight
-    while True:  # iterate towards solution
-        fullpder[:, :] = 0
-        # Calculate 2-sided partial derivatives of atmospheric parameters.
-        for i in range(npar):  # loop thru free parameters
-            # Forward parameter perturbation
-            if ptype[i] == 1:
-                sme[ipar1[i]] = freep[i] + dpar[i]
-            else:
-                np.atleast_1d(sme[ipar1[i]])[ipar2[i]] = freep[i] + dpar[i]
-
-            if ptype[i] == 2 or ptype[i] == 4:
-                sme_synth.UpdateLineList(
-                    sme.species[ipar3[i]], sme[ipar1[i]][ipar3[i], :], ipar3[i]
-                )
-
-                wavelen = sme[ipar1[i]][ipar3[i], 2]
-                onlyseg = np.where(
-                    (wavelen != (1 - sme.vrad / clight) * sme.wran[:, 0] - 1) & wavelen
-                    <= (1 - sme.vrad / clight) * sme.wran[:, 1] + 1
-                )[0]
-                nonlyseg = len(onlyseg)
-                if nonlyseg < 1:
-                    raise ValueError(
-                        "sme_solve: can't solve for %10.3f line data - not in observed spectrum."
-                        % wavelen
-                    )
-                    smod = fullmdl  # will make pder zero
-                else:
-                    if nonlyseg > 1:
-                        # Line is present in more than 1 segment
-                        dummy = np.argmin(
-                            np.abs(
-                                wavelen
-                                - (sme.wran[onlyseg, 0] + sme.wran[onlyseg, 1]) * 0.5
-                            )
-                        )
-                        onlyseg = onlyseg[dummy]
-                    else:
-                        onlyseg = onlyseg[0]
-
-                    # When calculating dI/dp for a spectral line parameter (ptype 2 or 4), we can
-                    # reuse the atmosphere, abundances, chemical equilibrium, ionization balance
-                    # and gamma_6 enhancement factor stored in the external library, as long as
-                    # the preceding parameter was not global (ptype 1) or an abundance (ptype 3).
-                    #
-                    no_atmo = True
-                    if i >= 1:
-                        if ptype[i - 1] != 2 and ptype[i - 1] != 4:
-                            no_atmo = False
-                    sme_func(
-                        sme, flags, no_atmo=no_atmo, onlyseg=onlyseg, same_wl_grid=True
-                    )
-            else:
-                sme_func(
-                    sme, flags, check=(ptype[i] == 1), same_wl_grid=True
-                )  # global parameter
-
-            # Store contributions to the derivatives
-            if ptype[i] == 2 or ptype[i] == 4:  # local free parameters
-                if (
-                    nonlyseg > 0
-                ):  # there is an actual contribution to a specific segment
-                    for iseg in range(
-                        nonlyseg
-                    ):  # loop through all the affected segments
-                        jseg = onlyseg[iseg]
-                        ibeg = (
-                            0 if jseg == 0 else sme.wind[jseg - 1] + 1
-                        )  # first pixel in current segment
-                        iend = sme.wind[jseg]  # last pixel in current segment
-                        fullpder[i, ibeg : iend + 1] = (
-                            smod[ibeg : iend + 1] - fullmdl[ibeg : iend + 1]
-                        ) / dpar[i]
-            else:  # global parameters affecting all wavelengths
-                fullpder[i, :] = (smod - fullmdl) / dpar[i]
-
-            chi2fwd = (
-                np.sum((wto * (obs - smod[inz]) * (obs - smod[inz]))[ilpts]) / degf
-            )  # chi^2 for forward der.
-
-            # Backward parameter perturbation
-            if ptype[i] == 1:
-                sme[ipar1[i]] = freep[i] - dpar[i]
-            else:
-                np.atleast_1d(sme[ipar1[i]])[ipar2[i]] = freep[i] - dpar[i]
-
-            if ptype[i] == 2 or ptype[i] == 4:
-                sme_synth.UpdateLineList(
-                    sme.species[ipar3[i]], sme[ipar1[i]][ipar3[i], :], ipar3[i]
-                )
-                wavelen = np.atleast_1d(sme[ipar1[i]])[ipar3[i], 2]
-                onlyseg = np.where(
-                    (wavelen >= (1 - sme.vrad / clight) * sme.wran[:, 0] - 1)
-                    & (wavelen <= (1 - sme.vrad / clight) * sme.wran[:, 1] + 1)
-                )[0]
-                nonlyseg = len(onlyseg)
-                if nonlyseg < 1:
-                    raise ValueError(
-                        "sme_solve: can't solve for %10.4f line data - not in observed spectrum."
-                        % wavelen
-                    )
-                    smod = fullmdl  # will make pder zero
-                else:
-                    if nonlyseg > 1:
-                        # Line is present in more than 1 segment
-                        onlyseg = np.min(
-                            np.abs(wavelen - np.mean(sme.wran[onlyseg], axis=1))
-                        )
-                    else:
-                        onlyseg = onlyseg[0]
-
-                # When calculating dI/dp for a spectral line parameter (ptype 2 or 4), we can
-                # reuse the atmosphere, abundances, chemical equilibrium, ionization balance
-                # and gamma_6 enhancement factor stored in the external library, as long as
-                # the preceding parameter was not global (ptype 1) or an abundance (ptype 3).
-                #
-                no_atmo = True
-                if i >= 1 and ptype[i - 1] != 2 and ptype[i - 1] != 4:
-                    noatmo = False
-                sme_func(
-                    sme, flags, no_atmo=no_atmo, onlyseg=onlyseg, same_wl_grid=True
-                )
-            else:
-                sme_func(
-                    sme, flags, check=(ptype[i] == 1), same_wl_grid=True
-                )  # global parameter
-
-            # Reset parameter value and evaluate 1st and 2 derivatives
-            if ptype[i] == 1:
-                sme[ipar1[i]] = freep[i]
-            else:
-                if sme[ipar1[i]].ndim == 0:
-                    sme[ipar1[i]] = freep[i]
-                else:
-                    sme[ipar1[i]][ipar2[i]] = freep[i]
-            if ptype[i] == 2 or ptype[i] == 4:
-                sme_synth.UpdateLineList(
-                    sme.species[ipar3[i]], sme[ipar1[i]][ipar3[i], :], ipar3[i]
-                )
-
-                if (
-                    nonlyseg > 0
-                ):  # there is an actual contribution to a specific segment
-                    for iseg in range(
-                        nonlyseg
-                    ):  # loop through all the affected segments
-                        jseg = onlyseg[iseg]
-                        ibeg = (
-                            0 if jseg == 0 else sme.wind[jseg - 1] + 1
-                        )  # first pixel in current segment
-                        iend = sme.wind[jseg]  # last pixel in current segment
-                        fullpder[i, ibeg : iend + 1] = (
-                            fullpder[i, ibeg : iend + 1]
-                            - (smod[ibeg : iend + 1] - fullmdl[ibeg : iend + 1])
-                            / dpar[i]
-                        ) * 0.5
-
-            else:  # global parameters affecting all wavelengths
-                fullpder[i, :] = (fullpder[i, :] - (smod - fullmdl) / dpar[i]) * 0.5
-
-            chi2bck = (
-                np.sum((wto * (obs - smod[inz]) * (obs - smod[inz]))[ilpts]) / degf
-            )
-            print(
-                "Calculating partial derivative %i of %i, chi^2 (back)=%f chi^2 (fwd)=%f"
-                % (i + 1, npar, chi2bck, chi2fwd)
-            )  # ,minmax(fullpder[inz,i])
-            pder[i, :] = fullpder[i, inz]
-
-        if iter == 0:
-            baserchisq = np.sum(wtres[ilpts]) / degf  # calculate reduced chi-squared
-            basechisq = (
-                np.sum(wtores[ilpts]) / degf
-            )  # calculate chi-squared weighted by observations
-            if flags["ab"]:
-                iab_free = sme.ab_free == 1
-                nab_free = np.count_nonzero(iab_free)
-                hdr0 = "          Reduced  Weighted"
-                hdr = " lam/n     Chi^2     Chi^2    lRMS    cRMS"
-                freep_zp = 0
-                nm = freep_name
-                if nab_free > 0:
-                    freep_zp = np.zeros(nfree)
-                    abund_solar, elements, _ = solar_abund()
-                    iab = [
-                        i for i in range(len(freep_name)) if "ABUND" in freep_name[i]
-                    ]
-                    for i in range(nab_free):
-                        nm[iab[i]] = "[%s/H]" % (freep_name[iab[i]])
-                    freep_zp[iab] = abund_solar[iab_free]
-
-            for i in range(nfree):
-                if freep_name[i] == "TEFF":
-                    nm[i] = "Teff"
-                elif freep_name[i] == "FEH":
-                    nm[i] = "[M/H]"
-                elif freep_name[i] == "VSINI":
-                    nm[i] = "Vsini"
-                elif freep_name[i] == "GRAV":
-                    nm[i] = "logg"
-                elif freep_name[i] == "VRAD":
-                    nm[i] = "Vrad"
-                elif freep_name[i] == "IPRES":
-                    nm[i] = "Resol"
-                elif "LOGGF" in freep_name[i]:
-                    nm[i] = "gf" + str.split(freep_name[i])[2]
-                elif "LOGVW" in freep_name[i]:
-                    nm[i] = "vw" + str.split(freep_name[i])[2]
-
-            print(hdr0)
-            print(hdr)
-            if basechisq < 1.e6 and baselrms < 100 and basecrms < 100:
-                print(
-                    degf,
-                    baserchisq,
-                    basechisq,
-                    100 * baselrms,
-                    100 * basecrms,
-                    freep - freep_zp,
-                )
-            elif baserchisq >= 1.e6 and baselrms < 100 and basecrms < 100:
-                print(
-                    degf,
-                    baserchisq,
-                    basechisq,
-                    100 * baselrms,
-                    100 * basecrms,
-                    freep - freep_zp,
-                )
-            elif baserchisq < 1.e6 and (baselrms > 100 or basecrms > 100):
-                print(
-                    degf,
-                    baserchisq,
-                    basechisq,
-                    100 * baselrms,
-                    100 * basecrms,
-                    freep - freep_zp,
-                )
-            else:
-                print(
-                    degf,
-                    baserchisq,
-                    basechisq,
-                    100 * baselrms,
-                    100 * basecrms,
-                    freep - freep_zp,
-                )
-
-            # flush, -1, -2
-            chi_vec[0] = basechisq  # save chisq scaled by observations
-            rchi_vec[0] = baserchisq  # save reduced chisq
-            crms_vec[0] = basecrms  # save continuum RMS
-            lrms_vec[0] = baselrms  # save line RMS
-
-        # Invert curvature matrix to find new parameters.
-        chisq = 1e30  # init with very bad chisq
-        rchisq = 1e30  # init with very bad rchisq
-        lamfact = 10.0  # init _lambda step factor
-        lamiter = 0  # init loop counter
-        _lambda = np.clip(_lambda, 1.e-3, None)  # never start below 1e-3
-        savfreep = freep  # save current parameters
-        while True:  # find best _lambda
-            lamiter += 1  # increment loop counter
-
-            # ========================================
-            beta = (resid * wto) @ pder  # evaluate "beta"
-            tmp1 = np.reshape(wto @ uvec, (nfree, nval))
-            tmp2 = pder.T @ (tmp1 * pder)
-            alpha = np.reshape(tmp2, (nfree, nfree))  # evaluate curvature matrix
-
-            # Calculate an alternate alpha in case we need to fix vsini.
-            if nvsini >= 1:
-                if nokpar > 0:
-                    if nokpar > 1:  # added 4/10/12, JAV
-                        beta2 = (resid * wto) @ pder[iokpar, :]
-                    else:  # added 4/10/12, JAV
-                        beta2 = [
-                            np.sum(resid * wto * pder[iokpar, :])
-                        ]  # added 4/10/12, JAV
-                    tmp1 = np.reshape(wto @ uvec[iokpar], (nfree - 1, nval))
-                    tmp2 = pder[iokpar, :].T @ (tmp1 * pder[iokpar, :])
-                    alpha2 = np.reshape(
-                        tmp2, (nfree - 1, nfree - 1)
-                    )  # evaluate curvature matrix
-                else:
-                    alpha2 = 1
-
-            if "vmic" in sme:
-                sme.vmic = np.clip(np.abs(sme.vmic), None, max_vmic)
-            # ========================================
-
-            diag = alpha[idiag]
-            izero = diag == 0
-            diag[izero] = 1
-            Norm = np.reshape(
-                np.sqrt(diag @ diag), (nfree, nfree)
-            )  # norm of diag elements
-            array = np.reshape(alpha / Norm, (nfree, nfree))  # normalized "alpha"
-            array[idiag] = array[idiag] + _lambda  # set LS vs. gradient search
-            array = np.linalg.inv(array)  # invert array
-            if lamiter > 1:  # true: old values exist
-                lastdfreep = dfreep  # save last dfreep
-
-            dfreep = array / Norm @ beta.T  # parameter adjustments
-            freep = savfreep + dfreep
-            iadj = [i for i in range(len(freep_name)) if "ABUND" in freep_name[i]]
-            nadj = len(iadj)
-            if nadj > 0:
-                dpar[iadj] = np.clip(dpar[iadj], 0.01, 0.5 * np.abs(dfreep[iadj]))
-            if nvsini >= 1:
-                if freep[ivsini] < 0:
-                    if nfree > 1:
-                        idiag2 = np.arange(nfree - 1) * nfree
-                        diag2 = alpha2[idiag2]
-                        izero = diag2 == 0
-                        diag2[izero] = 1
-                        Norm2 = np.reshape(
-                            np.sqrt(diag2 @ diag2), (nfree - 1, nfree - 1)
-                        )
-                        array2 = np.reshape(alpha2 / Norm2, (nfree - 1, nfree - 1))
-                        array2[idiag2] = array2[idiag2] + _lambda
-                        array2 = np.linalg.inv(array2)
-                        dfreep2 = array2 / Norm2 @ beta2.T
-                        freep = savfreep
-                        if nokpar > 0:
-                            freep[iokpar] = freep[iokpar] + dfreep2
-                            dfreep[iokpar] = dfreep2
-                    freep[ivsini] = min_vsini
-                    dfreep = freep - savfreep
-            if "vmic" in sme:
-                sme.vmic = np.clip(np.abs(sme.vmic), None, max_vmic)
-
-            ilimit = ptype == 2 or ptype == 4
-            freep[ilimit] = np.clip(
-                freep[ilimit], -10.0, 2.0
-            )  # gf must be gt -10 #gf must be lt   2
-            for i in range(npar):
-                if len(sme[ipar1[i]]) == 1:
-                    sme[ipar1[i]] = freep[i]
-                else:
-                    np.atleast_1d(sme[ipar1[i]])[ipar2[i]] = freep[i]
-                if ptype[i] == 2 or ptype[i] == 4:
-                    sme_synth.UpdateLineList(
-                        sme.species(ipar3[i]), sme[ipar1[i]][ipar3[i], :], ipar3[i]
-                    )
-
-            sme = sme_func(
-                sme, flags, check=(max(ptype) == 1)
-            )  # , file='sme_solve.dump' #global parameters only
-            ilpts = sme.mob[inz] == 1  # line points
-            nlpts = np.count_nonzero(ilpts)
-            icpts = sme.mob[inz] == 2  # continuum points
-            ncpts = np.count_nonzero(icpts)
-            if ncpts < 2:
-                icpts = ilpts
-                ncpts = nlpts
-            degf = nlpts - nfree - sme.nseg  # degrees of freedom
-            mdl = smod[inz]  # keep model as vector
-            resid = obs - mdl  # residual of model
-            wtres = wt * resid * resid  # error weighted residual squared
-            wtores = wto * resid * resid  # observations weighted residual squared
-            lastchisq = chisq  # save last observations weighted chisq
-            lastrchisq = rchisq  # save last reduced chisq
-            chisq = (
-                np.sum(wtores[ilpts]) / degf
-            )  # calculate new chi-squared scaled by observations
-            rchisq = np.sum(wtres[ilpts]) / degf  # calculate new reduced chi-squared
-            crms = np.sqrt(np.sum(resid[icpts] ** 2 / ncpts))  # RMS of continuum fit
-            lrms = np.sqrt(np.sum(resid[ilpts] ** 2 / nlpts))  # RMS of line fit
-            if chisq < 1.e6 and lrms < 100 and crms < 100:
-                print(
-                    np.log10(_lambda),
-                    rchisq,
-                    chisq,
-                    100 * lrms,
-                    100 * crms,
-                    freep - freep_zp,
-                )
-            elif chisq >= 1.e6 and lrms < 100 and crms < 100:
-                print(
-                    np.log10(_lambda),
-                    rchisq,
-                    chisq,
-                    100 * lrms,
-                    100 * crms,
-                    freep - freep_zp,
-                )
-            elif chisq < 1.e6 and (lrms > 100 or crms > 100):
-                print(
-                    np.log10(_lambda),
-                    rchisq,
-                    chisq,
-                    100 * lrms,
-                    100 * crms,
-                    freep - freep_zp,
-                )
-            else:
-                print(
-                    np.log10(_lambda),
-                    rchisq,
-                    chisq,
-                    100 * lrms,
-                    100 * crms,
-                    freep - freep_zp,
-                )
-            # flush, -1, -2
-            if lamiter == 2 and chisq / lastchisq > 0.999:
-                _lambda = _lambda / lamfact  # undo previous step
-                lamfact = (
-                    1.0 / lamfact
-                )  # reverse search direction and decrease the step
-                dummy = chisq  # switch chisq and lastchisq
-                chisq = lastchisq
-                lastchisq = dummy
-                dummy = rchisq  # switch rchisq and lastrchisq
-                rchisq = lastrchisq
-                rlastchisq = dummy
-                dfreep = lastdfreep  # recover best dfreep
-
-            _lambda = _lambda * lamfact  # inc: gradient. dec: least sq.
-            if (lamiter > 2) and (
-                chisq / lastchisq >= 0.9999 or _lambda < 0.99e-4 or _lambda >= 1e4
-            ):
-                break
-
-        # Recompute best model.
-        if (iter > 0) and (lastchisq > chi_vec[iter]):
-            freep = freep_a[iter, :]  # recover last parameters
-            print("Unable to improve chi-square. Using previous solution.")
-            done = True
-        else:
-            if chisq / lastchisq > 1:  # last step made fit worse
-                dfreep = lastdfreep  # adopt previous parameters
-                _lambda /= lamfact  # and previous _lambda value
-            freep = savfreep + dfreep  # best parameter values
-            ilimit = (ptype == 2) | (ptype == 4)
-            freep[ilimit] = np.clip(freep[ilimit], -10, 2)  # gf must be gt -10
-            done = False
-        for i in range(npar):
-            if len(sme[ipar1[i]]) == 1:
-                sme[ipar1[i]] = freep[i]
-            else:
-                np.atleast_1d(sme[ipar1[i]])[ipar2[i]] = freep[i]
-            if ptype[i] == 2 or ptype[i] == 4:
-                sme_synth.UpdateLineList(
-                    sme.species[ipar3[i]], sme[ipar1[i]][ipar3[i], :], ipar3[i]
-                )
-        if (iter > 0) and np.max(np.abs(lastdfreep / freep)) < sme.chirat:
-            done = True
-
-        if done:
-            sme = sme_func(sme, flags)
-        else:
-            sme = sme_func(
-                sme, flags, save=True, check=(max(ptype) == 1)
-            )  # , file='sme_solve.dump'
-        ilpts = sme.mob[inz] == 1  # line points
-        nlpts = np.count_nonzero(ilpts)
-        icpts = sme.mob[inz] == 2  # continuum points
-        ncpts = np.count_nonzero(icpts)
-        degf = nlpts - nfree - sme.nseg  # degrees of freedom
-        fullmdl = smod
-        mdl = smod[inz]  # keep model as vector
-        resid = obs - mdl  # residual of model
-        wtores = wto * resid * resid  # weighted residual squared
-        chisq = np.sum(wtores[ilpts]) / degf  # recover chisq for model
-        wtres = wt * resid * resid  # weighted residual squared
-        rchisq = np.sum(wtres[ilpts]) / degf  # recover chisq for model
-        if ncpts < 2:
-            icpts = ilpts
-            ncpts = nlpts
-        crms = np.sqrt(np.sum(resid[icpts] ** 2 / ncpts))  # RMS of continuum fit
-        lrms = np.sqrt(np.sum(resid[ilpts] ** 2 / nlpts))  # RMS of line fit
-        _lambda = _lambda / lamfact  # set _lambda for next time
-
-        # Compute and save statistics.
-        iter = iter + 1  # increment iteration count
-        chi_vec[iter] = chisq  # save weighted chisq
-        rchi_vec[iter] = rchisq  # save reduced chisq
-        crms_vec[iter] = crms  # save continuum RMS
-        lrms_vec[iter] = lrms  # save line RMS
-        freep_a[iter, :] = freep  # save free parameters
-        if chisq < 1.e6 and lrms < 100 and crms < 100:
-            print(
-                np.log10(_lambda),
-                rchisq,
-                chisq,
-                100 * lrms,
-                100 * crms,
-                freep - freep_zp,
-            )
-        elif chisq >= 1.e6 and lrms < 100 and crms < 100:
-            print(
-                np.log10(_lambda),
-                rchisq,
-                chisq,
-                100 * lrms,
-                100 * crms,
-                freep - freep_zp,
-            )
-        elif chisq < 1.e6 and (lrms > 100 or crms > 100):
-            print(
-                np.log10(_lambda),
-                rchisq,
-                chisq,
-                100 * lrms,
-                100 * crms,
-                freep - freep_zp,
-            )
-        else:
-            print(
-                np.log10(_lambda),
-                rchisq,
-                chisq,
-                100 * lrms,
-                100 * crms,
-                freep - freep_zp,
-            )
-        i = freep != 0
-        maxchange = np.max(np.abs(lastdfreep[i] / freep[i]))
-        print, "     maxchange=%10.4f" % maxchange
-        # flush, -1, -2
-        # Test failure or success.
-        if done or iter >= maxiter or np.abs(chisq / chi_vec[iter - 1] - 1.0) < 0.002:
-            break
-
-    # Trim statistics arrays.
-    chi_vec = chi_vec[: iter + 1]  # trim chisq record
-    rchi_vec = rchi_vec[: iter + 1]  # trim reduced chisq record
-    crms_vec = crms_vec[: iter + 1]  # trim continuum RMS record
-    lrms_vec = lrms_vec[: iter + 1]  # trim line RMS record
-    freep_a = freep_a[: iter + 1, :]  # trim free parameter record
-
-    # Calculate errors in best-fit parameters.
-    tmp1 = np.reshape(wt @ uvec, (nfree, nval))
-    tmp2 = pder.T @ (tmp1 * pder)
-    alpha = np.reshape(tmp2, (nfree, nfree))  # evaluate curvature matrix
-    diag = alpha(idiag)
-    izero = diag == 0
-    diag[izero] = 1.0
-    Norm = np.reshape(np.sqrt(diag @ diag), (nfree, nfree))  # norm of diag elements
-    array = np.reshape(alpha / Norm, (nfree, nfree))  # normalized "alpha"
-    array = np.linalg.inv(array)
-    freep_unc = np.sqrt(array[idiag] / diag)  # calculate uncertainties
-    fullpder = pder
-    freep_covar = np.linalg.inv(alpha)  # covariance matrix
-
-    if nvsini >= 1 and sme.vsini == 0:
-        if nfree > 1:
-            # Calculate an alternate alpha in case we need to fix vsini.
-            if nokpar > 0:
-                if nokpar > 1:  # added 4/10/12, JAV
-                    beta2 = (resid * wt) @ pder[iokpar, :]
-                else:  # added 4/10/12, JAV
-                    beta2 = [np.sum(resid * wt * pder[iokpar, :])]  # added 4/10/12, JAV
-                tmp1 = np.reshape(wt @ uvec[iokpar], (nfree - 1, nval))
-                tmp2 = pder[iokpar, :].T @ (tmp1 * pder[iokpar, :])
-                alpha2 = np.reshape(
-                    tmp2, (nfree - 1, nfree - 1)
-                )  # evaluate curvature matrix
-            else:
-                alpha2 = 1
-            array2 = np.reshape(alpha2 / Norm2, (nfree - 1, nfree - 1))
-            array2 = np.linalg.inv(array2)
-            if nokpar > 0:
-                freep_unc[iokpar] = np.sqrt(array2[idiag2] / diag2)
-        freep_unc[ivsini] = 0.0
-        fullpder = pder
-        tmp = np.linalg.inv(alpha2)
-        if nokpar > 0:
-            for i in range(nfree - 1):
-                freep_covar[iokpar[i], iokpar] = tmp[i, :]
-        freep_covar[ivsini, :] = 0.0
-        freep_covar[:, ivsini] = 0.0
-
-    unc = uob[inz]
-    freep_med = np.zeros(nfree)
-    freep_msig = np.zeros(nfree)
-    freep_psig = np.zeros(nfree)
-    for ifree in range(nfree):
-        i = (pder[ifree, :] != 0) & (np.abs(resid) < 5. * unc)
-        ni = np.count_nonzero(i)
-        if ni > 11:
-            ii = np.argsort(resid[i] / pder[ifree, i])
-            ch_x = (
-                resid[i[ii]] / pder[ifree, i[ii]]
-            )  # Sort pixels according to the change of the ifree
-            # parameter needed to match the observations
-            ch_y = (
-                np.abs(pder[ifree, i[ii]]) / unc[i[ii]]
-            )  # Weights of the individual pixels also sorted
-            for i in range(1, ni):
-                ch_y[i] = ch_y[i - 1] + ch_y[i]  # Cumulative weights
-            ch_y = ch_y / ch_y[ni - 1]  # Normalized cumulative weights
-            hmed = np.interp(0.5, ch_y, ch_x)  # Median
-            lowsigma = np.interp(
-                0.5 - 0.6827 / 2, ch_y, ch_x
-            )  # value of distribution at -sigma
-            uppsigma = np.interp(
-                0.5 + 0.6827 / 2, ch_y, ch_x
-            )  # value of distribution at +sigma
-            sigmaestimate = (uppsigma - lowsigma) * 0.5  # mean value of sigma
-            freep_unc[ifree] = sigmaestimate
-            freep_msig[ifree] = lowsigma
-            freep_psig[ifree] = uppsigma
-            freep_med[ifree] = hmed
-
-    return sme
-
-
 def sme_main(sme, only_func=False):
 
     flags = get_flags(sme)
 
-    sme_synth.SetLibraryPath()
-    sme_synth.InputLineList(sme.atomic, sme.species)
-
-    sme.nmu = len(sme.mu)
-    sme.cintb = np.zeros((sme.nseg, sme.nmu))
-    sme.cintr = np.zeros((sme.nseg, sme.nmu))
-
-    if flags["opro"]:
-        npts = len(sme.wave)
-        sme.smod = np.zeros(npts)
-        sme.cmod = np.zeros(npts)
-    else:
-        sme.wind = np.zeros(sme.nseg, dtype=int)
-
     # Decide which global parameters, if any, are free parameters.
-    # and set step sizes for each
     freep = []
 
     if "glob_free" in sme:
         freep += sme.glob_free
 
     # Decide which log(gf), if any, are free parameters.
-    ngf = 0
     if flags["gf"]:
         igf = sme.gf_free > 0
-        freep += ["%s %i LOGGF" % (s, i) for s, i in np.zip(sme.species[igf], tr_atomic[2, igf])]
+        freep += [
+            "%s %i LOGGF" % (s, i)
+            for s, i in np.zip(sme.species[igf], sme.atomic.T[2, igf])
+        ]
 
     # Decide which van der Waal's constants, if any, are free parameters.
-    nvw = 0
     if flags["vw"]:
         ivw = sme.vw_free > 0
         freep += [
             "%s%i %i LOGVW " % (s, i, j)
             for s, i, j in zip(
-                elements[tr_atomic[0, ivw] - 1], tr_atomic[1, ivw], tr_atomic[2, ivw]
+                elements[sme.atomic.T[0, ivw] - 1],
+                sme.atomic.T[1, ivw],
+                sme.atomic.T[2, ivw],
             )
         ]
 
@@ -1848,15 +1097,14 @@ def sme_main(sme, only_func=False):
     # TODO: sme_nlte_reset
 
     # Call model evaluator/solver.
-    if npar > 0 and not only_func:  # true: call gradient solver
+    if len(freep) > 0 and not only_func:  # true: call gradient solver
         sme = solve(
             sme, param_names=freep, wavelength=None
         )  # solve for best parameters
     else:  # else: parameters known
-        sme = sme_func(sme, flags=flags)  # just evaluate model once
+        sme = sme_func_2(sme)  # just evaluate model once
 
-    np.save("result.dat", sme)
-    # print(sme)
+    sme.save_py()
 
     return sme
 
@@ -1864,16 +1112,15 @@ def sme_main(sme, only_func=False):
 in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
 sme = SME.read(in_file)
 
-res = sme_func_2(sme)
+# res = sme_func_2(sme)
 
-plt.plot(res.wave, res.smod)
-plt.plot(res.wave, res.sob)
-plt.show()
+# plt.plot(res.wave, res.smod)
+# plt.plot(res.wave, res.sob)
+# plt.show()
 
+#Choose free parameters
 parameter_names = ["teff", "grav", "feh"]
-wave = np.geomspace(min(sme.wave), max(sme.wave), num=len(sme.wave))
-
-popt = solve(sme, parameter_names, wavelength=sme.wave)
+popt = solve(sme, parameter_names)
 
 sme = SME.SME_Structure.load_py("sme.npy")
 plt.plot(sme.wave, sme.smod)

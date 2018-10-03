@@ -21,7 +21,7 @@ class SME_Structure:
         self.__fields__ = {}
         if isinstance(sme, str):
             self.filename = sme
-            sme = readsav(sme)['sme']
+            sme = readsav(sme)["sme"]
         else:
             self.filename = None
 
@@ -43,10 +43,12 @@ class SME_Structure:
                 self.__fields__[field] = value
 
     def __repr__(self):
-        fields = ['{key!s}:{value!r}'.format(key=key, value=self.__fix__(
-            value)) for key, value in self.__dict__.items()]
-        fields = ', '.join(fields)
-        fields = '{%s}' % fields
+        fields = [
+            "{key!s}:{value!r}".format(key=key, value=self.__fix__(value))
+            for key, value in self.__dict__.items()
+        ]
+        fields = ", ".join(fields)
+        fields = "{%s}" % fields
         return fields
 
     def __getitem__(self, index):
@@ -73,23 +75,23 @@ class SME_Structure:
     def __fix__(self, value):
         if isinstance(value, np.ndarray):
             value = repr(value)
-            i = value.rfind('dtype') - 2
-            value = value[6:i].replace('\n', '').replace(' ', '')
+            i = value.rfind("dtype") - 2
+            value = value[6:i].replace("\n", "").replace(" ", "")
         return value
 
     def __get_typecode__(self, dtype):
         """ Get the IDL typecode for a given dtype """
-        if dtype.name[:5] == 'bytes':
-            return '1'
-        if dtype.name == 'int16':
-            return '2'
-        if dtype.name == 'int32':
-            return '3'
-        if dtype.name == 'float32':
-            return '4'
-        if dtype.name == 'float64':
-            return '5'
-        if dtype.name[:3] == 'str':
+        if dtype.name[:5] == "bytes":
+            return "1"
+        if dtype.name == "int16":
+            return "2"
+        if dtype.name == "int32":
+            return "3"
+        if dtype.name == "float32":
+            return "4"
+        if dtype.name == "float64":
+            return "5"
+        if dtype.name[:3] == "str":
             return dtype.name[3:]
 
     def __write__(self, file):
@@ -98,32 +100,38 @@ class SME_Structure:
         data arrays are stored in seperate temp files, and only the filename is passed to idl
         """
         iterator = list(self.__dict__.items())
-        sep = ''
+        sep = ""
 
         for key, value in iterator:
-            if key in ['__temps__', 'filename']:
+            if key in ["__temps__", "filename"]:
                 continue
             if isinstance(value, SME_Structure):
-                file.write(',{key!s}:{{'.format(key=key))
+                file.write(",{key!s}:{{".format(key=key))
                 value.__write__(file)
                 self.__temps__ += value.__temps__
-                file.write('}$\n')
+                file.write("}$\n")
             else:
                 if isinstance(value, np.ndarray):
-                    if value.dtype.name[:3] == 'str':
+                    if value.dtype.name[:3] == "str":
                         value = value.astype(bytes)
                         shape = (value.dtype.itemsize, len(value))
                     else:
                         shape = value.shape[::-1]
-                    with tempfile.NamedTemporaryFile('w+', suffix='.dat', delete=False) as temp:
+                    with tempfile.NamedTemporaryFile(
+                        "w+", suffix=".dat", delete=False
+                    ) as temp:
                         value.tofile(temp)
-                        value = [temp.name, str(
-                            list(shape)), self.__get_typecode__(value.dtype)]
+                        value = [
+                            temp.name,
+                            str(list(shape)),
+                            self.__get_typecode__(value.dtype),
+                        ]
                         self.__temps__.append(temp.name)
 
-                field = '{sep}{key!s}:{value!r} $\n'.format(
-                    key=key, value=value, sep=sep)
-                sep = ','
+                field = "{sep}{key!s}:{value!r} $\n".format(
+                    key=key, value=value, sep=sep
+                )
+                sep = ","
                 file.write(field)
 
     def __clean_temp__(self):
@@ -146,14 +154,12 @@ class SME_Structure:
         """ Names of the existing SME fields """
         return self.__fields__.keys()
 
-
     @property
     def dtype(self):
         # this emulates a numpy.recarray, as read from a IDL save file
         dtype = lambda: None
         dtype.names = [s.upper() for s in self.names]
         return dtype
-
 
     def save_py(self, file="sme.npy"):
         np.save(file, self)
@@ -170,14 +176,16 @@ class SME_Structure:
             fname = self.filename
         elif fname is None:
             raise AttributeError(
-                'fname needs to be set or the structure needs to be assigned a filename')
+                "fname needs to be set or the structure needs to be assigned a filename"
+            )
 
-        with tempfile.NamedTemporaryFile('w+', suffix='.pro') as temp:
+        with tempfile.NamedTemporaryFile("w+", suffix=".pro") as temp:
             tempname = temp.name
-            temp.write('sme = {')
+            temp.write("sme = {")
             self.__write__(temp)
-            temp.write('} \n')
-            temp.write("""tags = tag_names(sme)
+            temp.write("} \n")
+            temp.write(
+                """tags = tag_names(sme)
 new_sme = {}
 
 for i =0, n_elements(tags)-1 do begin
@@ -217,13 +225,14 @@ for i =0, n_elements(tags)-1 do begin
     new_sme = create_struct(temporary(new_sme), tags[i], arr)
 endfor
 
-sme = new_sme\n""")
+sme = new_sme\n"""
+            )
             temp.write('save, sme, filename="{fn}"\n'.format(fn=fname))
-            temp.write('end\n')
+            temp.write("end\n")
             temp.flush()
 
             # with open(os.devnull, 'w') as devnull:
-            subprocess.run(['idl', '-e', '.r %s' % tempname])
+            subprocess.run(["idl", "-e", ".r %s" % tempname])
             self.__clean_temp__()
 
     def check(self):
@@ -242,10 +251,19 @@ sme = new_sme\n""")
         """
         with tempfile.NamedTemporaryFile() as file:
             self.save(file.name)
-            with open(os.devnull, 'w') as devnull:
+            with open(os.devnull, "w") as devnull:
                 process = subprocess.run(
-                    ['idl', '-e', 'restore, "%s" & sme_struct_valid, sme, valid, /user, extra=extra & print, valid' % file.name], check=True, stdout=subprocess.PIPE, stderr=devnull)
-            result = process.stdout.decode().split('\n')[-2].strip()
+                    [
+                        "idl",
+                        "-e",
+                        'restore, "%s" & sme_struct_valid, sme, valid, /user, extra=extra & print, valid'
+                        % file.name,
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=devnull,
+                )
+            result = process.stdout.decode().split("\n")[-2].strip()
             result = bool(result)
             return result
 
@@ -297,7 +315,10 @@ sme = new_sme\n""")
         CONT, LINE, BAD = 2, 1, 0
 
         self.mob[np.abs(spec - synt) > threshold] = BAD
-        #sme.save(join(dir, 'wasp29_7_tmp.out'))
+        # sme.save(join(dir, 'wasp29_7_tmp.out'))
+
+
+
 
 
 def read(filename):
@@ -332,9 +353,18 @@ def change_parameter(filename, parameter, value):
         new value of the parameter
     """
 
-    with open(os.devnull, 'w') as devnull:
-        subprocess.run(['idl', '-e', 'restore, "{fn}" & sme.{par} = {val} & save, sme, filename="{fn}"'.format(
-            fn=filename, par=parameter, val=value)], stderr=devnull, stdout=devnull)
+    with open(os.devnull, "w") as devnull:
+        subprocess.run(
+            [
+                "idl",
+                "-e",
+                'restore, "{fn}" & sme.{par} = {val} & save, sme, filename="{fn}"'.format(
+                    fn=filename, par=parameter, val=value
+                ),
+            ],
+            stderr=devnull,
+            stdout=devnull,
+        )
 
 
 def launch(filename):
@@ -353,10 +383,18 @@ def launch(filename):
         output filename
     """
 
-    with open(os.devnull, 'w') as devnull:
+    with open(os.devnull, "w") as devnull:
         _ = subprocess.run(
-            ['idl', '-e', 'restore, "%s" & sme_main, sme & save, sme, file="%s"' % (filename, filename)], check=True, stderr=devnull)
-    filename = os.path.splitext(filename)[0] + '.out'
+            [
+                "idl",
+                "-e",
+                'restore, "%s" & sme_main, sme & save, sme, file="%s"'
+                % (filename, filename),
+            ],
+            check=True,
+            stderr=devnull,
+        )
+    filename = os.path.splitext(filename)[0] + ".out"
     return filename
 
 
@@ -375,9 +413,18 @@ def check_input(filename):
         True if file is valid, False otherwise
     """
 
-    with open(os.devnull, 'w') as devnull:
+    with open(os.devnull, "w") as devnull:
         process = subprocess.run(
-            ['idl', '-e', 'restore, "%s" & sme_struct_valid, sme, valid, /user, extra=extra & print, valid' % filename], check=True, stdout=subprocess.PIPE, stderr=devnull)
-    result = process.stdout.decode().split('\n')[-2].strip()
+            [
+                "idl",
+                "-e",
+                'restore, "%s" & sme_struct_valid, sme, valid, /user, extra=extra & print, valid'
+                % filename,
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=devnull,
+        )
+    result = process.stdout.decode().split("\n")[-2].strip()
     result = bool(result)
     return result

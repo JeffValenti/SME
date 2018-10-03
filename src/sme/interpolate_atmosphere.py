@@ -7,92 +7,116 @@ from .sme import SME_Structure
 
 
 def interp_atmo_pair(
-    atmo1, atmo2, frac, interpvar="", itop=0, atmop=None, trace=0, plot=False, old=False
+    atmo1,
+    atmo2,
+    frac,
+    interpvar="RHOX",
+    itop=0,
+    atmop=None,
+    verbose=0,
+    plot=0,
+    old=False,
 ):
-    # Interpolate between two model atmospheres, accounting for shifts in
-    # the mass column density or optical depth scale.
-    #
-    # Inputs:
-    # atmo1 (structure) first atmosphere to interpolate
-    # atmo2 (structure) second atmosphere to interpolate
-    # frac (scalar) interpolation fraction: 0.0 -> atmo1 and 1.0 -> atmo2
-    # [interpvar=] (string) atmosphere interpolation variable (RHOX or TAU).
-    # [itop=] (scalar) index of top point in the atmosphere to use. default
-    #   is to use all points (itop=0). use itop=1 to clip top depth point.
-    # [atmop=] (array[5,ndep]) interpolated atmosphere prediction (for plots)
-    #   Not needed if atmospheres are provided as structures.
-    # [trace=] (scalar) diagnostic print level (0: no printing)
-    # [plot=] (scalar) diagnostic plot level (0: no plots). Larger absolute
-    #   value yields more plots. Negative values cause a wait for keypress
-    #   after each plot.
-    # [/old] (switch) also plot result from the old interpkrz2 algorithm.
-    #
-    # Outputs:
-    # atmo (structure) interpolated atmosphere
-    #
-    # Atmosphere structures:
-    # atmo atmosphere specification
-    #  .rhox (vector[ndep]) mass column density (g/cm^2)
-    #  .tau  (vector[ndep]) reference optical depth (at 5000 Å)
-    #  .temp (vector[ndep]) temperature (K)
-    #  .xne  (vector[ndep]) electron number density (1/cm^3)
-    #  .xna  (vector[ndep]) atomic number density (1/cm^3)
-    #  .rho  (vector[ndep]) mass density (g/cm^3)
-    #
-    # Algorithm:
-    # 1) The second atmosphere is fitted onto the first, individually for
-    #  each of the four atmospheric quantitites: T, xne, xna, rho.
-    # The fitting uses a linear shift in both the (log) depth parameter and
-    #  in the (log) atmospheric quantity. For T, the midpoint of the two
-    #  atmospheres is aligned for the initial guess. The result of this fit
-    #  is used as initial guess for the other quantities. A penalty function
-    #  is applied to each fit, to avoid excessively large shifts on the
-    #  depth scale.
-    # 2) The mean of the horizontal shift in each parameter is used to
-    #  construct the common output depth scale.
-    # 3) Each atmospheric quantity is interpolated after shifting the two
-    #  corner models by the amount determined in step 1), rescaled by the
-    #  interpolation fraction (frac).
-    #
-    # History:
-    # 2004-Apr-15 Valenti  Initial coding.
-    # MB  - interpolation on tau scale
-    # 2012-Oct-30 TN - Rewritten to use either column mass (RHOX) or
-    #   reference optical depth (TAU) as vertical scale. Shift-interpolation
-    #   algorithms have been improved for stability in cool dwarfs (<=3500 K).
-    #   The reference optical depth scale is preferred in terms of interpolation
-    #   accuracy across most of parameter space, with significant improvement for
-    #   both cool models (where depth vs temperature is rather flat) and hot
-    #   models (where depth vs temperature exhibits steep transitions).
-    #   Column mass depth is used by default for backward compatibility.
-    #
-    # 2013-May-17 Valenti  Use frac to weight the two shifted depth scales,
-    #   rather than simply averaging them. This change fixes discontinuities
-    #   when crossing grid nodes.
-    #
-    # 2013-Sep-10 Valenti  Now returns an atmosphere structure instead of a
-    #   [5,NDEP] atmosphere array. This was necessary to support interpolation
-    #   using one variable (e.g., TAU) and radiative transfer using a different
-    #   variable (e.g. RHOX). The atmosphere array could only store one depth
-    #   variable, meaning the radiative transfer variable had to be the same
-    #   as the interpolation variable. Returns atmo.rhox if available and also
-    #   atmo.tau if available. Since both depth variables are returned, if
-    #   available, this routine no longer needs to know which depth variable
-    #   will be used for radiative transfer. Only the interpolation variable
-    #   is important. Thus, the interpvar= keyword argument replaces the
-    #   type= keyword argument. Very similar code blocks for each atmospheric
-    #   quantity have been unified into a single code block inside a loop over
-    #   atmospheric quantities.
-    #
-    # 2013-Sep-21 Valenti  Fixed an indexing bug that affected the output depth
-    #   scale but not other atmosphere vectors. Itop clipping was not being
-    #   applied to the depth scale ('RHOX' or 'TAU'). Bug fixed by adding
-    #   interpvar to vtags. Now atmospheres interpolated with interp_atmo_grid
-    #   match output from revision 398. Revisions back to 399 were development
-    #   only, so no users should be affected.
-    #
-    # 2014-Mar-05 Piskunov  Replicated the removal of the bad top layers in
-    #                       models for interpvar eq 'TAU'
+    """
+    Interpolate between two model atmospheres, accounting for shifts in
+    the mass column density or optical depth scale.
+
+    Inputs
+    ------
+    atmo1 : Atmosphere
+        first atmosphere to interpolate
+    atmo2 : Atmosphere
+        second atmosphere to interpolate
+    frac : float
+        interpolation fraction: 0.0 -> atmo1 and 1.0 -> atmo2
+    interpvar : {"RHOX", "TAU"}, optional
+        atmosphere interpolation variable (default:"RHOX").
+    itop : int, optional
+        index of top point in the atmosphere to use. default
+        is to use all points (itop=0). use itop=1 to clip top depth point.
+    atmop : array[5, ndep], optional
+        interpolated atmosphere prediction (for plots)
+        Not needed if atmospheres are provided as structures. (default: None)
+    verbose : {0, 5}, optional
+        diagnostic print level (default 0: no printing)
+    plot : {-1, 0, 1}, optional
+        diagnostic plot level. Larger absolute
+        value yields more plots. Negative values cause a wait for keypress
+        after each plot. (default: 0, no plots)
+    old : bool, optional
+        also plot result from the old interpkrz2 algorithm. (default: False)
+
+    Outputs:
+    ------
+    atmo : Atmosphere
+        interpolated atmosphere
+
+    Atmosphere structures: (see also sme.Atmosphere)
+    atmo atmosphere specification
+     .rhox (vector[ndep]) mass column density (g/cm^2)
+     .tau  (vector[ndep]) reference optical depth (at 5000 Å)
+     .temp (vector[ndep]) temperature (K)
+     .xne  (vector[ndep]) electron number density (1/cm^3)
+     .xna  (vector[ndep]) atomic number density (1/cm^3)
+     .rho  (vector[ndep]) mass density (g/cm^3)
+
+    Algorithm
+    --------
+    1) The second atmosphere is fitted onto the first, individually for
+     each of the four atmospheric quantitites: T, xne, xna, rho.
+    The fitting uses a linear shift in both the (log) depth parameter and
+     in the (log) atmospheric quantity. For T, the midpoint of the two
+     atmospheres is aligned for the initial guess. The result of this fit
+     is used as initial guess for the other quantities. A penalty function
+     is applied to each fit, to avoid excessively large shifts on the
+     depth scale.
+    2) The mean of the horizontal shift in each parameter is used to
+     construct the common output depth scale.
+    3) Each atmospheric quantity is interpolated after shifting the two
+     corner models by the amount determined in step 1), rescaled by the
+     interpolation fraction (frac).
+
+    History
+    -------
+    2004-Apr-15 Valenti  Initial coding.
+    MB  - interpolation on tau scale
+    2012-Oct-30 TN - Rewritten to use either column mass (RHOX) or
+      reference optical depth (TAU) as vertical scale. Shift-interpolation
+      algorithms have been improved for stability in cool dwarfs (<=3500 K).
+      The reference optical depth scale is preferred in terms of interpolation
+      accuracy across most of parameter space, with significant improvement for
+      both cool models (where depth vs temperature is rather flat) and hot
+      models (where depth vs temperature exhibits steep transitions).
+      Column mass depth is used by default for backward compatibility.
+
+    2013-May-17 Valenti  Use frac to weight the two shifted depth scales,
+      rather than simply averaging them. This change fixes discontinuities
+      when crossing grid nodes.
+
+    2013-Sep-10 Valenti  Now returns an atmosphere structure instead of a
+      [5,NDEP] atmosphere array. This was necessary to support interpolation
+      using one variable (e.g., TAU) and radiative transfer using a different
+      variable (e.g. RHOX). The atmosphere array could only store one depth
+      variable, meaning the radiative transfer variable had to be the same
+      as the interpolation variable. Returns atmo.rhox if available and also
+      atmo.tau if available. Since both depth variables are returned, if
+      available, this routine no longer needs to know which depth variable
+      will be used for radiative transfer. Only the interpolation variable
+      is important. Thus, the interpvar= keyword argument replaces the
+      type= keyword argument. Very similar code blocks for each atmospheric
+      quantity have been unified into a single code block inside a loop over
+      atmospheric quantities.
+
+    2013-Sep-21 Valenti  Fixed an indexing bug that affected the output depth
+      scale but not other atmosphere vectors. Itop clipping was not being
+      applied to the depth scale ('RHOX' or 'TAU'). Bug fixed by adding
+      interpvar to vtags. Now atmospheres interpolated with interp_atmo_grid
+      match output from revision 398. Revisions back to 399 were development
+      only, so no users should be affected.
+
+    2014-Mar-05 Piskunov  Replicated the removal of the bad top layers in
+                          models for interpvar eq 'TAU'
+    """
 
     # Internal program parameters.
     min_drhox = 0.01  # minimum fractional step in rhox
@@ -228,10 +252,10 @@ def interp_atmo_pair(
             err1[igd],
             ipar,
             functargs=functargs,
-            parinfo=parinfo,
+            # parinfo=parinfo,
             constraints=constraints,
-            nprint=(trace >= 1),
-            quiet=True,
+            # nprint=(trace >= 1),
+            # quiet=True,
         )
 
         # Make a diagnostic plot.
@@ -391,89 +415,108 @@ def interp_atmo_pair(
     return atmo
 
 
-def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=False):
-    # General routine to interpolate in 3D grid of model atmospheres
-    #
-    # Inputs:
-    # Teff (scalar) effective temperature of desired model (K).
-    # logg (scalar) logarithmic gravity of desired model (log cm/s/s).
-    # MonH (scalar) metalicity of desired model.
-    #
-    # Outputs:
-    # atmo= (structure) interpolated atmosphere data in structure format.
-    #  .teff (scalar) effective temperature of model (in K)
-    #  .logg (scalar) logarithm of surface gravity (in cm/s^2)
-    #  .monh (scalar) metalicity, i.e. logarithm of abundances, relative to solar
-    #  .vturb (scalar) turbulent velocity assumed in model (in km/s)
-    #  .lonh (mixing length parameter relative to pressure scale height
-    #  .wlstd (scalar) wavelength at which continuum TAU is computed, if present
-    #  .modtyp (scalar) model type: 0='RHOX', 1='TAU'
-    #  .opflag (vector(20)) opacity flags: 0=OFF, 1=ON
-    #  .abund (vector(99)) abundance relative to total atomic nuclei
-    #  .tau (vector(ndep)) reference optical depth
-    #  .rhox (vector(ndep)) mass column density (in g/cm^2)
-    #  .temp  (vector(ndep)) temperature (in K)
-    #  .xne (vector(ndep)) electron number density (in 1/cm^3)
-    #  .xne (vector(ndep)) atomic number density (in 1/cm^3)
-    #  .rho (vector(ndep)) mass density (in g/cm^3)
-    #  .ndep (scalar) number of depths in atmosphere
-    #
-    # History:
-    # 28-Oct-94 JAV	Create.
-    # 05-Apr-96 JAV Update syntax description for "atmo=" mode.
-    # 05-Apr-02 JAV Complete rewrite of interpkrz to allow interpolation in [M/H].
-    # 28-Jan-04 JAV Significant code update to remove jumps in output atmosphere
-    #                for small changes in Teff, logg, or [M/H] that cross grid
-    #                points. Now the output depth scale is also interpolated.
-    #                Also switched from spline to linear interpolation so that
-    #                extrapolation at top and bottom of atmosphere behaves better.
-    # 16-Apr-04 JAV Complete overhaul of the interpolation algorithm to account
-    #                for shifts in mass column scale between models. Two new
-    #                auxiliary routines are now required: interp_atmo_pair.pro
-    #                and interp_atmo_func.pro. Previous results were flawed.
-    # 05-Mar-12 JAV Added arglist= and _extra to support changes to sme_func.
-    # 20-May-12 UH  Use _extra to pass grid file name.
-    # 30-Oct-12 TN  Rewritten to interpolate on either the tau (optical depth)
-    #                or the rhox (column mass) scales. Renamed from interpkrz2/3
-    #                to be used as a general routine, called via interfaces.
-    # 29-Apr-13 TN  krz3 structure renamed to the generic name atmo_grid.
-    #                Savefiles have also been renamed: atlas12.sav and marcs2012.sav.
-    # 09-Sep-13 JAV The gridfile= keyword argument is now mandatory. There is no
-    #                default value. The gridfile= keyword argument is now defined
-    #                explicitly, rather than as part of the _extra= argument.
-    #                Execution halts with an explicit error, if gridfile is not
-    #                set. If a gridfile is loaded and contains data in variables
-    #                with old-style names (e.g., krz2), then the data are copied
-    #                to variables with new-style names (e.g., atmo_grid). This
-    #                allow the routine to work with old or new variable names.
-    #
-    # 10-Sep-13 JAV Added interpvar= keyword argument to control interpolation
-    #                variable. Default value is 'TAU' if available, otherwise
-    #                'RHOX'. Added depthvar= keyword argument to control depth
-    #                scale for radiative transfer. Default value is value of
-    #                atmo_grid.modtyp. These keywords can have values of 'RHOX'
-    #                or 'TAU'. Deprecated type= keyword argument, which sets
-    #                both interpvar and depthvar to the specified value. Added
-    #                logic to handle receiving a structure from interp_atmo_pair,
-    #                rather than a [5,NDEP] array.
-    #
-    # 20-Sep-13 JAV For spherical models, save mean radius in existing radius
-    #                field, rather than trying to add a new radius field. Code
-    #                block reformatted.
-    # 13-Dec-13 JAV Bundle atmosphere variables into an ATMO structure.
-    #
-    # 11-Nov-14 JAV Calculate the actual fractional step between each pair of
-    #                atmospheres, rather than assuming that all interpolations
-    #                of a particular flavor (monh, logg, or teff) have the same
-    #                fractional step. This fixes a bug when the atmosphere grid
-    #                is irregular, e.g. due to a missing atmosphere.
+def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=False):
+    """
+    General routine to interpolate in 3D grid of model atmospheres
 
-    # Define common block used to hold 17 MB grid of pre-computed atmospheres,
-    # and the common block used by sme_entrypoints to store execution directory.
-    # common atmo_grid_common, atmo_grid, atmo_grid_maxdep, atmo_grid_natmo $
-    # , atmo_grid_vers, atmo_grid_file, atmo_grid_pro
-    # common entrypoints, entry, prefix, sme_library
+    Inputs
+    -----
+    Teff : float
+        effective temperature of desired model (K).
+    logg : float
+        logarithmic gravity of desired model (log cm/s/s).
+    MonH : float
+        metalicity of desired model.
+    atmo_in : Atmosphere
+        Input atmosphere
+    verbose : {0, 1}, optional
+        how much information to plot/print (default: 0)
+    plot : bool, optional
+        wether to plot debug information (default: False)
+    reload : bool
+        wether to reload atmosphere information from disk (default: False)
 
+    Outputs
+    -------
+    atmo : Atmosphere
+        interpolated atmosphere data
+        .teff (scalar) effective temperature of model (in K)
+        .logg (scalar) logarithm of surface gravity (in cm/s^2)
+        .monh (scalar) metalicity, i.e. logarithm of abundances, relative to solar
+        .vturb (scalar) turbulent velocity assumed in model (in km/s)
+        .lonh (mixing length parameter relative to pressure scale height
+        .wlstd (scalar) wavelength at which continuum TAU is computed, if present
+        .modtyp (scalar) model type: 0='RHOX', 1='TAU'
+        .opflag (vector(20)) opacity flags: 0=OFF, 1=ON
+        .abund (vector(99)) abundance relative to total atomic nuclei
+        .tau (vector(ndep)) reference optical depth
+        .rhox (vector(ndep)) mass column density (in g/cm^2)
+        .temp  (vector(ndep)) temperature (in K)
+        .xne (vector(ndep)) electron number density (in 1/cm^3)
+        .xne (vector(ndep)) atomic number density (in 1/cm^3)
+        .rho (vector(ndep)) mass density (in g/cm^3)
+        .ndep (scalar) number of depths in atmosphere
+
+    History
+    ---------
+    28-Oct-94 JAV	Create.
+    05-Apr-96 JAV Update syntax description for "atmo=" mode.
+    05-Apr-02 JAV Complete rewrite of interpkrz to allow interpolation in [M/H].
+    28-Jan-04 JAV Significant code update to remove jumps in output atmosphere
+                   for small changes in Teff, logg, or [M/H] that cross grid
+                   points. Now the output depth scale is also interpolated.
+                   Also switched from spline to linear interpolation so that
+                   extrapolation at top and bottom of atmosphere behaves better.
+    16-Apr-04 JAV Complete overhaul of the interpolation algorithm to account
+                   for shifts in mass column scale between models. Two new
+                   auxiliary routines are now required: interp_atmo_pair.pro
+                   and interp_atmo_func.pro. Previous results were flawed.
+    05-Mar-12 JAV Added arglist= and _extra to support changes to sme_func.
+    20-May-12 UH  Use _extra to pass grid file name.
+    30-Oct-12 TN  Rewritten to interpolate on either the tau (optical depth)
+                   or the rhox (column mass) scales. Renamed from interpkrz2/3
+                   to be used as a general routine, called via interfaces.
+    29-Apr-13 TN  krz3 structure renamed to the generic name atmo_grid.
+                   Savefiles have also been renamed: atlas12.sav and marcs2012.sav.
+    09-Sep-13 JAV The gridfile= keyword argument is now mandatory. There is no
+                   default value. The gridfile= keyword argument is now defined
+                   explicitly, rather than as part of the _extra= argument.
+                   Execution halts with an explicit error, if gridfile is not
+                   set. If a gridfile is loaded and contains data in variables
+                   with old-style names (e.g., krz2), then the data are copied
+                   to variables with new-style names (e.g., atmo_grid). This
+                   allow the routine to work with old or new variable names.
+
+    10-Sep-13 JAV Added interpvar= keyword argument to control interpolation
+                   variable. Default value is 'TAU' if available, otherwise
+                   'RHOX'. Added depthvar= keyword argument to control depth
+                   scale for radiative transfer. Default value is value of
+                   atmo_grid.modtyp. These keywords can have values of 'RHOX'
+                   or 'TAU'. Deprecated type= keyword argument, which sets
+                   both interpvar and depthvar to the specified value. Added
+                   logic to handle receiving a structure from interp_atmo_pair,
+                   rather than a [5,NDEP] array.
+
+    20-Sep-13 JAV For spherical models, save mean radius in existing radius
+                   field, rather than trying to add a new radius field. Code
+                   block reformatted.
+    13-Dec-13 JAV Bundle atmosphere variables into an ATMO structure.
+
+    11-Nov-14 JAV Calculate the actual fractional step between each pair of
+                   atmospheres, rather than assuming that all interpolations
+                   of a particular flavor (monh, logg, or teff) have the same
+                   fractional step. This fixes a bug when the atmosphere grid
+                   is irregular, e.g. due to a missing atmosphere.
+    """
+
+    # Internal parameters.
+    nb = 2  # number of bracket points
+    itop = 1  # index of top depth to use on rhox scale
+
+    # Load common block variable "prefix" with directory containing atmospheric grids
+    prefix = os.path.dirname(__file__)
+
+    # TODO: remove reliance on atmo_in parameter
     # Load values from previous call if they exist
     self = interp_atmo_grid
     if hasattr(self, "atmo_grid"):
@@ -485,14 +528,6 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
     else:
         atmo_grid = None
         atmo_grid_file = None
-
-    # Internal parameters.
-    nb = 2  # number of bracket points
-    itop = 1  # index of top depth to use on rhox scale
-
-    # Load common block variable "prefix" with directory containing atmospheric grids
-    # sme_entrypoints()				#locate atmospheric grids
-    prefix = os.path.dirname(__file__)
 
     # Load atmosphere grid from disk, if not already loaded.
     changed = atmo_grid_file is not None and atmo_grid_file != atmo_in.source
@@ -602,7 +637,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
     Mb = [Mlo, Mup]  # bounding [M/H] values
 
     # Trace diagnostics.
-    if trace >= 5:
+    if verbose >= 5:
         print("[M/H]: %.3f < %.3f < %.3f" % (Mlo, MonH, Mup))
 
     # *** DETERMINATION OF LOG(G) BRACKETS AT [M/H] BRACKET VALUES ***
@@ -638,7 +673,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
         Gb[iMb] = [Glo, Gup]  # store boundary values.
 
         # Trace diagnostics.
-        if trace >= 5:
+        if verbose >= 5:
             if iMb == 0:
                 print()
             print(
@@ -681,7 +716,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
             Tb[iMb, iGb, :] = [Tlo, Tup]  # store boundary values.
 
             # Trace diagnostics.
-            if trace >= 5:
+            if verbose >= 5:
                 if iGb == 0 and iMb == 0:
                     print()
                 print(
@@ -711,7 +746,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
                 icor[iMb, iGb, iTb] = iwhr[0]
 
     # Trace diagnostics.
-    if trace >= 1:
+    if verbose >= 1:
         print()
         print("Teff=%i,  log(g)=%.3f,  [M/H]=%.3f:" % (Teff, logg, MonH))
         print()
@@ -757,7 +792,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
         mfrac,
         interpvar=interpvar,
         itop=itop,
-        trace=trace - 1,
+        verbose=verbose - 1,
         plot=plot and (mfrac != 0),
     )
     m0 = atmo_grid[icor[0, 1, 0]].monh
@@ -769,7 +804,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
         mfrac,
         interpvar=interpvar,
         itop=itop,
-        trace=trace - 1,
+        verbose=verbose - 1,
         plot=plot and (mfrac != 0),
     )
     m0 = atmo_grid[icor[0, 0, 1]].monh
@@ -781,7 +816,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
         mfrac,
         interpvar=interpvar,
         itop=itop,
-        trace=trace - 1,
+        verbose=verbose - 1,
         plot=plot and (mfrac != 0),
     )
     m0 = atmo_grid[icor[0, 1, 1]].monh
@@ -793,7 +828,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
         mfrac,
         interpvar=interpvar,
         itop=itop,
-        trace=trace - 1,
+        verbose=verbose - 1,
         plot=plot and (mfrac != 0),
     )
 
@@ -807,7 +842,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
         atmo01,
         gfrac,
         interpvar=interpvar,
-        trace=trace - 1,
+        verbose=verbose - 1,
         plot=plot and (gfrac != 0),
     )
     g0 = atmo10.logg
@@ -818,7 +853,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
         atmo11,
         gfrac,
         interpvar=interpvar,
-        trace=trace - 1,
+        verbose=verbose - 1,
         plot=plot and (gfrac != 0),
     )
 
@@ -832,7 +867,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
         atmo1,
         tfrac,
         interpvar=interpvar,
-        trace=trace - 1,
+        verbose=verbose - 1,
         plot=plot * (tfrac != 0),
     )
     ktags = krz.names
@@ -892,19 +927,33 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, trace=0, plot=False, reload=Fals
     return atmo
 
 
-def interp_atmo_constrained(x_in, y_in, err_in, par, constraints=None, **kwargs):
+def interp_atmo_constrained(x_in, y_in, err_in, par, constraints=None, functargs={}):
     """
-    Apply a constraint on each parameter, to have it approach zero:
-    constraint (vector[nconstraint]) - error vector for constrained parameters.
-    Use errors of 0 for unconstrained parameters.
-    Input structure functargs (forwarded via _extra) _must_ contain parameters
-    ndep (scalar) - number of depth points in supplied quantities
-    ipar (vector[3]) - initial values of fitted parameters
+    Apply a constraint on each parameter, to have it approach zero
+
+    Input
+    -------
+    x_in : array[n]
+        x data
+    y_in : array[n]
+        y data
+    err_in : array[n]
+        errors on y data
+    par : list[3]
+        initial guess for fit parameters - see interp_atmo_func
+    constraints : array[nconstraint], optional
+        error vector for constrained parameters.
+        Use errors of 0 for unconstrained parameters.
+    functargs : dict
+        passes keyword arguments to interp_atmo_func 
+        x2 : array
+        y2 : array
+        ndep : int
+            number of depth points in supplied quantities
     Other input parameters are forwarded to interp_atmo_func, below, via mpfitfun.
     """
 
-    ndep = kwargs.get("functargs", {}).get("ndep")
-    # ndep = extra.functargs.ndep
+    # TODO: What do the constraints even do?
     if constraints is not None:
         i = constraints != 0
         nconstraints = np.count_nonzero(i)
@@ -919,45 +968,51 @@ def interp_atmo_constrained(x_in, y_in, err_in, par, constraints=None, **kwargs)
         y = y_in
         err = err_in
 
+    x2 = functargs.pop("x2")
+    y2 = functargs.pop("y2")
+
     # Evaluate
     # ret = mpfitfun("interp_atmo_func", x, y, err, par, extra=extra, yfit=yfit)
-    func = lambda x, *p: interp_atmo_func(x, p, **kwargs["functargs"])
+    func = lambda x, *p: interp_atmo_func(x, p, x2, y2, **functargs)
     popt, _ = curve_fit(func, x, y, sigma=err, p0=par)
 
     ret = popt
-    yfit = func(x, *popt)
-
-    # Remove constraints from the list of fitted points:
-    if nconstraints > 0:
-        yfit = yfit[0:ndep]
+    yfit = func(x_in, *popt)
 
     return ret, yfit
 
 
-def interp_atmo_func(x1, par, ndep=None, **kwargs):
-    # Apply a horizontal shift to x2 (passed in _extra).
-    # Apply a vertical shift to y2 (passed in _extra).
-    # Interpolate onto x1 the shifted y2 as a function of shifted x2.
-    #
-    # Inputs:
-    # x1 (vector[ndep1]) independent variable for output function
-    # par (vector[3]) shift parameters
-    #  par[0] - horizontal shift for x2
-    #  par[1] - vertical shift for y2
-    #  par[2] - vertical scale factor for y2
-    # extra (structure) input atmosphere
-    #  .x2 (vector[ndep2]) independent variable for tabulated input function
-    #  .y2 (vector[ndep2]) dependent variable for tabulated input function
-    #  .y1 (vector[ndep2]) data values being fitted
-    #  .ndep (scalar) - number of depth points in atmospheric structure.
-    #      Additional input parameters are bogus values for constrained fitting.
-    #
-    # Note:
-    # Only pass extra.y1 if you want to restrict the y-values of extrapolated
-    #  data points. This is useful when solving for the shifts, but should
-    #  not be used when calculating shifted functions for actual use, since
-    #  this restriction can cause discontinuities.
+def interp_atmo_func(x1, par, x2, y2, ndep=None, y1=None):
+    """
+    Apply a horizontal shift to x2.
+    Apply a vertical shift to y2.
+    Interpolate onto x1 the shifted y2 as a function of shifted x2.
 
+    Inputs
+    ---------
+    x1 : array[ndep1]
+        independent variable for output function
+    par : array[3]
+        shift parameters
+        par[0] - horizontal shift for x2
+        par[1] - vertical shift for y2
+        par[2] - vertical scale factor for y2
+    x2 : array[ndep2]
+        independent variable for tabulated input function
+    y2 : array[ndep2]
+        dependent variable for tabulated input function
+    ndep : int, optional
+        number of depth points in atmospheric structure (default is use all)
+    y1 : array[ndep2], optional
+        data values being fitted
+
+    Note
+    -------
+    Only pass y1 if you want to restrict the y-values of extrapolated
+    data points. This is useful when solving for the shifts, but should
+    not be used when calculating shifted functions for actual use, since
+    this restriction can cause discontinuities.
+    """
     # Constrained fits may append non-atmospheric quantities to the end of
     #  input vector.
     # Extract the output depth scale:
@@ -967,27 +1022,26 @@ def interp_atmo_func(x1, par, ndep=None, **kwargs):
     # Shift input x-values.
     # Interpolate input y-values onto output x-values.
     # Shift output y-values.
-    x2sh = kwargs["x2"] + par[0]
-    y2sh = kwargs["y2"] + par[1]
-    y1 = np.zeros_like(x1)
-    y1[:ndep] = interp1d(x2sh, y2sh, kind="linear", fill_value="extrapolate")(
+    x2sh = x2 + par[0]
+    y2sh = y2 + par[1]
+    y = np.zeros_like(x1)
+    y[:ndep] = interp1d(x2sh, y2sh, kind="linear", fill_value="extrapolate")(
         x1[:ndep]
     )  # Note, this implicitly extrapolates
 
     # Scale output y-values about output y-center.
-    y1min = np.min(y1[:ndep])
-    y1max = np.max(y1[:ndep])
-    y1cen = 0.5 * (y1min + y1max)
-    y1[:ndep] = y1cen + (1.0 + par[2]) * (y1[:ndep] - y1cen)
+    ymin = np.min(y[:ndep])
+    ymax = np.max(y[:ndep])
+    ycen = 0.5 * (ymin + ymax)
+    y[:ndep] = ycen + (1.0 + par[2]) * (y[:ndep] - ycen)
 
     # If extra.y1 was passed, then clip minimum and maximum of output y1.
-    if "y1" in kwargs.keys():
-        y1[:ndep] = np.clip(y1[:ndep], np.min(kwargs["y1"]), np.max(kwargs["y1"]))
+    if y1 is not None:
+        y[:ndep] = np.clip(y[:ndep], np.min(y1), np.max(y1))
 
+    # Set all leftover values to zero
+    y[ndep:] = 0
     # Append information for constrained fits:
-    y = y1
-    # if ndep is not None:
-    #     y = np.concatenate([y1, np.zeros(len(x1) - ndep)])
-    # y = np.concatenate([y1, par - kwargs["ipar"]])
+    # y1 = np.concatenate([y1, par - kwargs["ipar"]])
     # Return function value.
     return y
