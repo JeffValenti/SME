@@ -13,7 +13,7 @@ from scipy.optimize import curve_fit, least_squares
 
 import src.sme.abund as abund
 from src.sme import sme as SME, broadening
-from src.sme.rtint import rtint
+from src.sme.rtint import rtint, rdpop
 from src.sme import sme_synth
 from src.sme.broadening import gaussbroad, sincbroad, tablebroad
 from src.sme.cwrapper import idl_call_external

@@ -1,4 +1,6 @@
 import numpy as np
+import os.path
+import glob
 
 from scipy.ndimage.filters import convolve
 from .bezier import interpolate as spl_interp
@@ -119,7 +121,7 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
         #  is just given by the relative area of each annulus, normalized such that
         #  the sum of all weights is unity.  Weights for limb darkening are included
         #  explicitly in the intensity profiles, so they aren't !=eded here.
-        wt = r[1 :] ** 2 - r[:-1] ** 2  # weights = relative areas
+        wt = r[1:] ** 2 - r[:-1] ** 2  # weights = relative areas
     else:
         wt = np.array([1.0])  # single mu value, full weight
 
@@ -232,3 +234,121 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
     flux = np.reshape(flux, (npts, os))  # convert to an array
     return np.pi * np.sum(flux, axis=1) / os  # sum, normalize, and return
 
+
+def rdpop(species, wave, e_low, model, b, pop_dir=None, eps_wave=4e-6, eps_energy=0.01):
+    """
+    rdpop reads departure coefficients from one or several files and returns them
+    as a 2 x ndepth array referring to the two levels involved in the transition and
+    the number of depth points in model atmosphere.
+    HISTORY:
+    XX-XX-2012 NP wrote.
+    27-03-2013 NP added optional parameters for pop-file(s) directory replacing
+               explicit pop file name.
+    28-03-2013 NP added checks for energy of the lower level and ionization,
+                and optional parameters for the test criteria.
+    """
+
+    sp = species.strip().replace(
+        " ", "_"
+    )  # Trim species name and replace all spaces with underscore
+    sss = sp.split()
+    ion = int(sss[1])
+    sp = sss[0]
+
+    if pop_dir is not None:  # Construct pop-file template
+        file = os.path.join(pop_dir, sp + "*_*" + model + "*.pop")
+    else:
+        file = os.path.join(".", sp + "*_*" + model + "*.pop")
+
+    files = glob.glob(file)
+    nfiles = len(files)  # Find all relevant pop-files
+
+    if nfiles == 0:
+        raise IOError(
+            "No files matching this template: " + file + " were found! Returning ..."
+        )
+
+    if nfiles == 1:
+        files = [files]
+
+    level = {
+        "__name__": "energy_level",
+        "id": " ",
+        "number": -1,
+        "energy": 0.,
+        "ion": 0,
+    }
+    b = 0
+    for ifile in range(nfiles):
+        # Loop through the pop-files
+        un = open(files[ifile])
+        nlines = len(un)
+        if nlines <= 0:
+            un.close()
+            continue
+        s = ""
+        i1 = 0
+        i2 = 0
+        id = ""
+        w = 0
+        energy = 0.0
+        n_low = -1
+        n_upp = -1
+        levels = np.full(2000, level).view(np.recarray)
+        nlevels = 0
+        for i in range(nlines):
+            # Read file
+            s = un.readline()
+            if s[0] == "%":
+                continue
+            ss = s.strip().replace(" ", "_")
+            if "ATOM=" in ss.upper():
+                atom = ss[5:]
+            if "NDEPTH=" in ss.upper():
+                ndepth = int(ss[7:])
+            if "LEVEL=" in ss.upper():
+                sss = ss.split()
+                levels[nlevels].id = sss[1].strip()
+                levels[nlevels].number = int(sss[2])
+                levels[nlevels].energy = float(sss[3])
+                levels[nlevels].ion = int(sss[4])
+                nlevels = nlevels + 1
+            if "RBB=" in ss.upper():
+                levels = levels[0:nlevels]
+                i1, i2, w = ss[4:].split()
+                # reads, strmid(ss, 4), i1, i2, w
+                ii = levels.number == i1
+                nii = np.count_nonzero(ii)
+                if nii > 0:
+                    energy = levels[ii[0]].energy
+                    if (
+                        abs(wave - w) / wave < eps_wave
+                        and abs(e_low - energy) < eps_energy
+                        and levels[ii[0]].ion == ion
+                    ):
+                        n_low = i1
+                        n_upp = i2
+            if "DEPARTURES=" in ss.upper():
+                break
+
+        if n_low < 0 or n_upp < 0:
+            un.close()
+            continue
+
+        b_low = np.zeros(ndepth)
+        b_upp = np.zeros(ndepth)
+        bb = np.zeros((ndepth, 2))
+        for i in range(1, n_upp + 1):
+            level = int(ss[11:])
+            bb = un.readline()
+            if level == n_low:
+                b_low = bb[:, 0]
+            if level == n_upp:
+                b_upp = bb[:, 0]
+            s = un.readline()
+            ss = s.strip().replace(" ", "_")
+
+        b = np.transpose(([[[b_low]], [[b_upp]]]))
+
+        izero = b == 0
+        b[izero] = 1.
