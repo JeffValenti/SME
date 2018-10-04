@@ -970,6 +970,7 @@ def interp_atmo_constrained(x_in, y_in, err_in, par, constraints=None, functargs
 
     x2 = functargs.pop("x2")
     y2 = functargs.pop("y2")
+    _ = functargs.pop("ipar")
 
     # Evaluate
     # ret = mpfitfun("interp_atmo_func", x, y, err, par, extra=extra, yfit=yfit)
