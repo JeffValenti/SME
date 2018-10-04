@@ -1,5 +1,5 @@
 import os.path
-
+from itertools import combinations, product
 from joblib import Memory
 
 memory = Memory("./__cache__", verbose=0)
@@ -124,6 +124,7 @@ def sme_func_atmo(sme):
     sme.atmo = atmo
     return sme
 
+
 def get_flags(sme):
     tags = np.array(list(sme.names))
     f_ipro = "IPTYPE" in tags
@@ -213,12 +214,7 @@ def get_wavelengthrange(wran, vrad, vsini):
     return wbeg, wend
 
 
-def synthetize_spectrum(
-    wavelength, *param, sme=None, param_names=[], flags=None, setLineList=True
-):
-    # parse parameters
-    if flags is None:
-        flags = get_flags(sme)
+def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineList=True):
 
     # change parameters
     for name, value in zip(param_names, param):
@@ -226,7 +222,7 @@ def synthetize_spectrum(
 
     # run spectral synthesis
     sme = sme_func_2(sme, setLineList=setLineList)
-    sme.save_py()
+    sme.save()
 
     # interpolate to required wavelenth grid
     res = np.interp(wavelength, sme.wave, sme.smod)
@@ -237,7 +233,6 @@ def synthetize_spectrum(
 def solve(sme, param_names=["teff", "grav", "feh"], wavelength=None):
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
     bounds = {"teff": [3500, 7000], "grav": [3, 5], "feh": [-5, 1]}
-    flags = get_flags(sme)
     if wavelength is None:
         wavelength = sme.wave
     spectrum = sme.sob
@@ -249,12 +244,7 @@ def solve(sme, param_names=["teff", "grav", "feh"], wavelength=None):
     func = (
         lambda p, x, y, yerr: (
             synthetize_spectrum(
-                x,
-                *p,
-                sme=sme,
-                param_names=parameter_names,
-                flags=flags,
-                setLineList=False
+                x, *p, sme=sme, param_names=parameter_names, setLineList=False
             )
             - y
         )
@@ -278,18 +268,24 @@ def solve(sme, param_names=["teff", "grav", "feh"], wavelength=None):
     )
 
     popt = res.x
-    sme.pfree = popt
+    sme.pfree = np.atleast_2d(popt) #2d for compatibility
     sme.pname = param_names
-    
+
+    for i, name in enumerate(param_names):
+        sme[name] = popt[i]
+
     cost = 2 * res.cost
     # Do Moore-Penrose inverse discarding zero singular values.
     _, s, VT = np.linalg.svd(res.jac, full_matrices=False)
     threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
     s = s[s > threshold]
-    VT = VT[:s.size]
-    pcov = np.dot(VT.T / s**2, VT)
+    VT = VT[: s.size]
+    pcov = np.dot(VT.T / s ** 2, VT)
 
     sme.cov = pcov
+    sme.pder = res.jac
+    sme.resid = res.fun
+    sme.cost = res.cost * 2
     print(res.message)
 
     for name, value in zip(param_names, popt):
@@ -458,6 +454,7 @@ def sme_func_2(sme, setLineList=True, passAtmosphere=True):
     sme.cscale = np.stack(cscale)
 
     return sme
+
 
 def sme_func(
     sme,
@@ -1059,6 +1056,63 @@ def sme_func(
 
     return sme
 
+
+def fisher(sme):
+    """ Calculate fisher information matrix """
+    nparam = len(sme.pfree[-1, :])
+    fisher_matrix = np.zeros((nparam, nparam))
+
+    x = sme.wave
+    y = sme.sob
+    yerr = sme.uob
+    parameter_names = sme.pname
+    p0 = sme.pfree[-1, :]
+
+    step = 1e-4
+
+    second_deriv = lambda f, x, h: (f(x + h) - 2 * f(x) + f(x - h)) / np.sum(h) ** 2
+
+    sme_synth.SetLibraryPath()
+    sme_synth.InputLineList(sme.atomic, sme.species)
+    # func = 0.5 * sum ((model - obs) / sigma)**2
+    func = lambda p: 0.5 * np.sum(
+        (
+            (
+                synthetize_spectrum(
+                    x, *p, sme=sme, param_names=parameter_names, setLineList=False
+                )
+                - y
+            )
+            / yerr
+        )
+        ** 2
+    )
+
+    # Diagonal elements
+    for i in range(nparam):
+        h = np.zeros(nparam)
+        h[i] = step * p0[i]
+        fisher_matrix[i, i] = second_deriv(func, p0, h)
+
+    # Cross terms, fisher matrix is symmetric, so only calculate one half
+    for i, j in combinations(range(nparam), 2):
+        h = np.zeros(nparam)
+        total = 0
+        for k, m in product([-1, 1], repeat=2):
+            h[i] = k * step * p0[i]
+            h[j] = m * step * p0[j]
+            total += func(p0 + h) * k * m
+
+        total /= 4 * (step)**2
+        fisher_matrix[i, j] = total
+        fisher_matrix[j, i] = total
+
+    np.save("fisher_matrix", fisher_matrix)
+    print(fisher_matrix)
+    return fisher_matrix
+
+
+
 def sme_main(sme, only_func=False):
 
     flags = get_flags(sme)
@@ -1104,7 +1158,7 @@ def sme_main(sme, only_func=False):
     else:  # else: parameters known
         sme = sme_func_2(sme)  # just evaluate model once
 
-    sme.save_py()
+    sme.save()
 
     return sme
 
@@ -1112,17 +1166,18 @@ def sme_main(sme, only_func=False):
 in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
 sme = SME.read(in_file)
 
+fmatrix = fisher(sme)
 # res = sme_func_2(sme)
 
 # plt.plot(res.wave, res.smod)
 # plt.plot(res.wave, res.sob)
 # plt.show()
 
-#Choose free parameters
+# Choose free parameters
 parameter_names = ["teff", "grav", "feh"]
 popt = solve(sme, parameter_names)
 
-sme = SME.SME_Structure.load_py("sme.npy")
+sme = SME.SME_Structure.load("sme.npy")
 plt.plot(sme.wave, sme.smod)
 plt.plot(sme.wave, sme.sob)
 plt.show()
