@@ -197,14 +197,7 @@ def GetNelec():
     raise NotImplementedError()
 
 
-def Transf(
-    mu,
-    accrt,
-    accwi,
-    keep_lineop = 0,
-    long_continuum = 1,
-    nwmax = 400000,
-):
+def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000):
     """ """
     nw = 0
     nmu = len(mu)
@@ -212,7 +205,7 @@ def Transf(
     wint_seg = np.zeros((nwmax))
     sint_seg = np.zeros((nwmax, nmu))  # line+continuum intensities
     cint_seg = np.zeros((nwmax, nmu))  # all continuum intensities
-    cintr_seg = np.zeros((nmu))        # red continuum intensity
+    cintr_seg = np.zeros((nmu))  # red continuum intensity
 
     error = idl_call_external(
         "Transf",
@@ -238,6 +231,7 @@ def Transf(
     cint_seg = cint_seg[:nw, :].T
 
     return nw, wint_seg, sint_seg, cint_seg
+
 
 def CentralDepth():
     """ """

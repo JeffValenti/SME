@@ -172,6 +172,7 @@ class Param(Collection):
 
 class NLTE(Collection):
     """ NLTE data """
+
     def __init__(self, *args, **kwargs):
         if len(args) != 0 and args[0] is not None:
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
@@ -186,6 +187,7 @@ class NLTE(Collection):
 
 class Version(Collection):
     """ Describes the Python version and information about the computer host """
+
     def __init__(self, *args, **kwargs):
         if len(args) != 0 and args[0] is not None:
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
@@ -220,6 +222,7 @@ class Version(Collection):
 
     def __str__(self):
         return "%s %s" % (self.os_name, self.release)
+
 
 class Atmo(Param):
     def __init__(self, *args, **kwargs):

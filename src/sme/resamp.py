@@ -24,11 +24,6 @@ def resamp(wold, sold, wnew):
     # Program flags.
     trace = 0  # (0)1: (don't) print trace info
 
-    # Verify that wold, sold, and wnew are real*8
-    # wold = wold.astype(float)
-    # sold = sold.astype(float)
-    # wnew = wnew.astype(float)
-
     # Determine spectrum attributes.
     nold = len(wold)  # number of old points
     nnew = len(wnew)  # number of new points
@@ -36,12 +31,8 @@ def resamp(wold, sold, wnew):
     psnew = (wnew[-1] - wnew[0]) / (nnew - 1)  # new pixel scale
 
     # Verify that new wavelength scale is a subset of old wavelength scale.
-    wnew_lo = wnew[0] - 0.5 * (wnew[1] - wnew[0])
-    wold_lo = wold[0] - 0.5 * (wold[1] - wold[0])
-    wnew_hi = wnew[-1] + 0.5 * (wnew[-1] - wnew[-2])
-    wold_hi = wold[-1] + 0.5 * (wold[-1] - wold[-2])
-    # if (wnew_lo < wold_lo) or (wnew_hi > wold_hi):
-    #     raise ValueError("New wavelength scale not subset of old.")
+    if min(wnew) < min(wold) or max(wnew) > max(wold):
+        raise ValueError("New wavelength scale not subset of old.")
 
     # Select integration or interpolation depending on change in dispersion.
     if psnew < psold:  # pixel scale decreased
@@ -57,12 +48,14 @@ def resamp(wold, sold, wnew):
         if trace:
             print("Pixel scale expansion factor: %f", xfac)
 
-        #  Construct another wavelength scale (w) with a pixel scale close to that of
-        #    the old wavelength scale (wold), but with the additional constraint that
-        #    every xfac pixels in w will exactly fill a pixel in the new wavelength
-        #    scale (wnew). Optimized for xfac < nnew.
-        dw = 0.5 * (wnew[2:] - wnew[:-2])  # local pixel scale
-        dw = np.concatenate([[2 * dw[0] - dw[1]], dw, [2 * dw[-3] - dw[-4]]])  # add trailing endpoint first add leading endpoint last
+        # Construct another wavelength scale (w) with a pixel scale close to that of
+        # the old wavelength scale (wold), but with the additional constraint that
+        # every xfac pixels in w will exactly fill a pixel in the new wavelength
+        # scale (wnew). Optimized for xfac < nnew.
+        dw = 0.5 * (wnew[2:] - wnew[:-2])  # local pixel scale, diff2?
+        dw = np.concatenate(
+            [[2 * dw[0] - dw[1]], dw, [2 * dw[-3] - dw[-4]]]
+        )  # add trailing endpoint first add leading endpoint last
         w = np.zeros((xfac, nnew))  # initialize W as array
         for i in range(xfac):  # loop thru subpixels
             w[i] = wnew + dw * (2 * i + 1 / (2 * xfac) - 0.5)  # pixel centers in W

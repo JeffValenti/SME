@@ -3,6 +3,7 @@ import numpy as np
 from scipy.ndimage.filters import convolve
 from .bezier import bezier_interp
 
+
 def apply_broadening(ipres, x_seg, y_seg, type="gauss", sme=None):
     # Using the log-linear wavelength grid requires using the first point
     # for specifying the the width of the instrumental profile

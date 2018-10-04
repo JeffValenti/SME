@@ -7,7 +7,19 @@ from scipy.constants import speed_of_light
 from .bezier import bezier_interp
 
 
-def match_rv_continuum(x_obs, y_obs, u_obs, x_syn, y_syn, mask, ndeg=1, rvel=0, cscale=None, fix_c=False, fix_rv=False):
+def match_rv_continuum(
+    x_obs,
+    y_obs,
+    u_obs,
+    x_syn,
+    y_syn,
+    mask,
+    ndeg=1,
+    rvel=0,
+    cscale=None,
+    fix_c=False,
+    fix_rv=False,
+):
     """
     Match both the continuum and the radial velocity of observed/synthetic spectrum
 
@@ -46,16 +58,16 @@ def match_rv_continuum(x_obs, y_obs, u_obs, x_syn, y_syn, mask, ndeg=1, rvel=0, 
         new continuum coefficients
     """
 
-    c_light = speed_of_light * 1e-3 # speed of light in km/s
+    c_light = speed_of_light * 1e-3  # speed of light in km/s
 
     if not fix_c:
         # fit a line to the continuum points
         cont = mask == 2
-        cscale_new = np.polyfit(x_obs[cont], y_obs[cont], deg=ndeg, w=1/u_obs[cont])
+        cscale_new = np.polyfit(x_obs[cont], y_obs[cont], deg=ndeg, w=1 / u_obs[cont])
         cscale = cscale_new[::-1]
 
     if not fix_rv:
-        #apply continuum
+        # apply continuum
         if cscale is not None:
             cont = np.polyval(cscale[::-1], x_obs)
         else:
@@ -71,22 +83,21 @@ def match_rv_continuum(x_obs, y_obs, u_obs, x_syn, y_syn, mask, ndeg=1, rvel=0, 
         offset = np.argmax(corr)
 
         x1 = x_obs[offset]
-        x2 = x_obs[len(x_obs)//2]
+        x2 = x_obs[len(x_obs) // 2]
 
-        rvel = c_light * (1 - x2/x1)
+        rvel = c_light * (1 - x2 / x1)
 
         lines = mask == 1
 
         # Then minimize the least squares
         def func(x):
-            tmp = np.interp(x_obs[lines] * (1 - x/c_light), x_syn , y_syn)
-            return np.sum((y_obs[lines] - tmp)**2 * u_obs[lines]**-2)
+            tmp = np.interp(x_obs[lines] * (1 - x / c_light), x_syn, y_syn)
+            return np.sum((y_obs[lines] - tmp) ** 2 * u_obs[lines] ** -2)
 
         res = minimize(func, x0=rvel)
         rvel = res.x[0]
 
     return rvel, cscale
-
 
 
 # def discrep(xc, yc, xo, yo, no, wt, mask, ndeg, clim, mnx, rvel, cscale, fixc=False):
@@ -263,9 +274,6 @@ def match_rv_continuum(x_obs, y_obs, u_obs, x_syn, y_syn, mask, ndeg=1, rvel=0, 
 #     return chisq, yfit
 
 
-
-
-
 # def sme_crvmatch(
 #     xclc_in,
 #     yclc_in,
@@ -291,8 +299,6 @@ def match_rv_continuum(x_obs, y_obs, u_obs, x_syn, y_syn, mask, ndeg=1, rvel=0, 
 
 #     # out: Radial velocity rvel
 #     #      Continuum parameters cscale
-
-    
 
 
 #     # Find radial velocity shift (rvel) and continuum scaling (cscale) of
