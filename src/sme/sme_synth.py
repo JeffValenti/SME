@@ -138,13 +138,14 @@ def InputAbund(abund, feh):
     Introduced limiter in case the proposed step in abundance is too large [2018-Apr-25].
     """
     # Convert abundances to the right format
-    # TODO might be obsolete with new SME structure?
-    abund = np.copy(abund)
-    abund[2:] = abund[2:] + feh  # apply metallicity, except to H He
-    abund[2:] = np.clip(abund[2:], None, -1.)  # make sure we do not go berserk here
-    abund[1:] = 10.0 ** abund[1:]  # convert log(fraction) to fraction
-    abund /= np.sum(abund)  # normalize sum of fractions
-    abund[1:] = np.log10(abund[1:])  # convert fraction to log(fraction)
+    abund = abund("sme", raw=True)
+
+    # abund = np.copy(abund.get_pattern("H=12", raw=True))
+    # abund[2:] += feh     #apply metallicity, except to H He
+    # abund[2:] = np.clip(abund[2:], None, -1.)         #make sure we do not go berserk here
+    # abund[1:] = 10.0**abund[1:]          #convert log(fraction) to fraction
+    # abund /= np.sum(abund)        #normalize sum of fractions
+    # abund[1:] = np.log10(abund[1:])       #convert fraction to log(fraction)
 
     return idl_call_external("InputAbund", abund)
 

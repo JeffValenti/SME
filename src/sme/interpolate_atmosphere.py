@@ -3,7 +3,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
 from scipy.io import readsav
-from .sme import SME_Structure
+from .sme import Atmo
 
 
 def interp_atmo_pair(
@@ -379,7 +379,7 @@ def interp_atmo_pair(
 
     # Construct output structure with interpolated atmosphere.
     # Might be wise to interpolate abundances, in case those ever change.
-    atmo = SME_Structure(None)
+    atmo = Atmo()
     stags = ["TEFF", "LOGG", "MONH", "VTURB", "LONH", "ABUND"]
     ndep_orig = len(atmo1.temp)
     for tag in tags1:
@@ -530,7 +530,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         atmo_grid_file = None
 
     # Load atmosphere grid from disk, if not already loaded.
-    changed = atmo_grid_file is not None and atmo_grid_file != atmo_in.source
+    changed = atmo_grid_file is None or atmo_grid_file != atmo_in.source
     if changed or atmo_grid is None or reload:
         path = os.path.join(prefix, "atmospheres", atmo_in.source)
         krz2 = readsav(path)
@@ -592,7 +592,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         interp = "RHOX"
     else:
         raise ValueError("no value for ATMO.INTERP")
-    if interp != "TAU" and interp != "RHOX":
+    if interp not in ["TAU", "RHOX"]:
         raise ValueError("ATMO.INTERP must be 'TAU' or 'RHOX', not '%s'" % interp)
     if interp not in gtags:
         raise ValueError(

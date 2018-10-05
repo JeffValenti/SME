@@ -235,7 +235,7 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
     return np.pi * np.sum(flux, axis=1) / os  # sum, normalize, and return
 
 
-def rdpop(species, wave, e_low, model, b, pop_dir=None, eps_wave=4e-6, eps_energy=0.01):
+def rdpop(species, wave, e_low, model, pop_dir=None, eps_wave=4e-6, eps_energy=0.01):
     """
     rdpop reads departure coefficients from one or several files and returns them
     as a 2 x ndepth array referring to the two levels involved in the transition and

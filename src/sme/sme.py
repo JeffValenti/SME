@@ -5,6 +5,7 @@ Notably all SME objects will be Collections, which can accessed both by attribut
 
 import sys
 import platform
+import inspect
 import numpy as np
 from scipy.io import readsav
 
@@ -112,13 +113,15 @@ class Collection(object):
 
     @property
     def names(self):
-        return dir(self)
+        exclude = ["names", "dtype"]
+        exclude += [s[0] for s in inspect.getmembers(self.__class__, predicate=inspect.isroutine)]
+        return [s for s in dir(self) if s[0] != "_" and s not in exclude and getattr(self, s) is not None]
 
     @property
     def dtype(self):
         """ emulate numpt recarray dtype names """
         dummy = lambda: None
-        dummy.names = self.names
+        dummy.names = [s.upper() for s in self.names]
         return dummy
 
     def get(self, key, alt=None):
@@ -133,18 +136,31 @@ class Param(Collection):
 
     def __init__(self, monh=None, abund=None, abund_pattern="sme", **kwargs):
         if monh is None:
-            monh = kwargs.pop("feh", 0)
+            monh = kwargs.pop("feh", None)
         if "grav" in kwargs.keys():
             kwargs["logg"] = kwargs["grav"]
             kwargs.pop("grav")
 
-        self.teff = 0
-        self.logg = 0
-        self.vsini = 0
-        self.vmac = 0
-        self.vmic = 0
+        self.teff = None
+        self.logg = None
+        self.vsini = None
+        self.vmac = None
+        self.vmic = None
         self.monh = monh
+
+        # TODO: in the SME structure, the abundance values are in a different scheme than described in Abund
+        if abund is not None and abund[1] > 0:
+            abund = np.copy(abund)
+            abund[1] = np.log10(abund[1])
+
         self.set_abund(monh, abund, abund_pattern)
+
+        # asp = Abund(0, "asplund2009").get_pattern("sme", raw=True)
+        # temp = self.abund.get_pattern(abund_pattern, raw=True)
+
+        # if not np.allclose(abund, temp, 0.001):
+        #     raise ValueError("Abund messed up")
+
         super().__init__(**kwargs)
 
     def __str__(self):
@@ -153,6 +169,16 @@ class Param(Collection):
     @property
     def abund(self):
         return self._abund
+
+    @abund.setter
+    def abund(self, value):
+        # assume that its sme type
+        if isinstance(value, Abund):
+            self._abund = value
+        elif isinstance(value, np.ndarray) and value.size == 99:
+            self.set_abund(self.monh, value, "sme")
+        else:
+            raise TypeError("Abundance can only be set by Abund object, use set_abund otherwise")
 
     def set_abund(self, monh, abpatt, abtype):
         if abpatt is None:
@@ -193,15 +219,15 @@ class Version(Collection):
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
             args.update(kwargs)
             kwargs = args
-        self.arch = ""
-        self.os = ""
-        self.os_family = ""
-        self.os_name = ""
-        self.release = ""
-        self.build_date = ""
-        self.memory_bits = 0
-        self.field_offset_bits = 0
-        self.host = ""
+        self.arch = None
+        self.os = None
+        self.os_family = None
+        self.os_name = None
+        self.release = None
+        self.build_date = None
+        self.memory_bits =None
+        self.field_offset_bits =None
+        self.host = None
         # self.info = sys.version
         if len(kwargs) == 0:
             self.update()
@@ -230,91 +256,91 @@ class Atmo(Param):
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
             args.update(kwargs)
             kwargs = args
-        self.rhox = np.zeros(0)
-        self.tau = np.zeros(0)
-        self.temp = np.zeros(0)
-        self.xna = np.zeros(0)
-        self.xne = np.zeros(0)
-        self.vturb = 0
-        self.lonh = 0
-        self.method = ""
-        self.source = ""
-        self.depth = ""
-        self.interp = ""
-        self.geom = ""
+        self.rhox = None
+        self.tau = None
+        self.temp = None
+        self.xna = None
+        self.xne = None
+        self.vturb =None
+        self.lonh =None
+        self.method = None
+        self.source = None
+        self.depth = None
+        self.interp = None
+        self.geom = None
         super().__init__(**kwargs)
 
 
 class SME_Struct(Param):
     def __init__(self, atmo=None, nlte=None, idlver=None, **kwargs):
         # Meta information
-        self.version = 5.1
-        self.md5 = ""
-        self.id = "today"
+        self.version = None
+        self.md5 = None
+        self.id = None
         # additional parameters
-        self.vrad = 0
-        self.vrad_flag = -3
-        self.cscale = [1]
-        self.cscale_flag = 0
-        self.gam6 = 1
-        self.h2broad = 0
-        self.accwi = 0
-        self.accrt = 0
-        self.clim = 0.01
-        self.nmu = 7
-        self.mu = []
+        self.vrad =None
+        self.vrad_flag = None
+        self.cscale = None
+        self.cscale_flag =None
+        self.gam6 =None
+        self.h2broad =None
+        self.accwi =None
+        self.accrt =None
+        self.clim = None
+        self.nmu =None
+        self.mu = None
         # linelist
-        self.species = []
-        self.atomic = []
-        self.lande = []
-        self.depth = []
-        self.lineref = []
-        self.short_line_format = 2
-        self.line_extra = []
-        self.line_lulande = []
-        self.line_term_low = []
-        self.line_term_upp = []
-        self.wran = []
+        self.species = None
+        self.atomic = None
+        self.lande = None
+        self.depth = None
+        self.lineref = None
+        self.short_line_format =None
+        self.line_extra = None
+        self.line_lulande = None
+        self.line_term_low = None
+        self.line_term_upp = None
+        self.wran = None
         # free parameters
-        self.glob_free = []
-        self.ab_free = []
+        self.glob_free = None
+        self.ab_free = None
         # wavelength grid
         # Illiffe vector?
-        self.nseg = 1
-        self.wave = []
-        self.wind = []
+        self.nseg =None
+        self.wave = None
+        self.wind = None
         # Observation
-        self.sob = []
-        self.uob = []
-        self.mob = []
-        self.obs_name = ""
-        self.obs_type = 3
+        self.sob = None
+        self.uob = None
+        self.mob = None
+        self.obs_name = None
+        self.obs_type =None
         # Instrument broadening
-        self.iptype = "gauss"
-        self.ipres = 110000
-        self.vmac_pro = ""
-        self.cintb = []
-        self.cintr = []
+        self.iptype = None
+        self.ipres = None
+        self.vmac_pro =None
+        self.cintb =None
+        self.cintr =None
         # Fit results
-        self.maxiter = 100
-        self.chirat = 0
-        self.smod_orig = []
-        self.smod = []
-        self.cmod_orig = []
-        self.cmod = []
-        self.jint = []
-        self.wint = []
-        self.sint = []
-        self.chisq = 0
-        self.rchisq = 0
-        self.crms = 0
-        self.lrms = 0
-        self.pfree = []
-        self.punc = []
-        self.psig_l = []
-        self.psig_r = []
-        self.pname = []
-        self.covar = [[]]
+        self.maxiter =None
+        self.chirat =None
+        self.smod_orig = None
+        self.smod = None
+        self.cmod_orig = None
+        self.cmod = None
+        self.jint = None
+        self.wint = None
+        self.sint = None
+        self.chisq =None
+        self.rchisq =None
+        self.crms =None
+        self.lrms =None
+        self.pfree = None
+        self.punc = None
+        self.psig_l = None
+        self.psig_r = None
+        self.pname = None
+        self.covar = None
         # Substructures
         self.idlver = Version(idlver)
         self.atmo = Atmo(atmo)
@@ -322,8 +348,12 @@ class SME_Struct(Param):
         super().__init__(**kwargs)
 
     @property
-    def system(self):
-        return self.idlver
+    def feh(self):
+        return self.monh
+
+    @feh.setter
+    def feh(self, value):
+        self.monh = value
 
     @staticmethod
     def load(filename="sme.npy"):

@@ -56,7 +56,7 @@ def pass_nlte(sme):
             sme.atomic[2, iline],
             sme.atomic[3, iline],
             modname,
-            POP_DIR=poppath,
+            pop_dir=poppath,
         )
         if len(bnlte) == 2 * ndep:
             b_nlte[:, iline, :] = bnlte
@@ -108,8 +108,8 @@ def sme_func_atmo(sme):
         prev_msdi = None
 
     if atmo.method == "grid":
-        reload = msdi_save is not None and atmo.source != prev_msdi[1]
-        atmo = interp_atmo_grid(sme.teff, sme.grav, sme.feh, sme.atmo, reload=reload)
+        reload = msdi_save is None or atmo.source != prev_msdi[1]
+        atmo = interp_atmo_grid(sme.teff, sme.logg, sme.feh, sme.atmo, reload=reload)
         prev_msdi = [atmo.method, atmo.source, atmo.depth, atmo.interp]
         setattr(self, "prev_msdi", prev_msdi)
         setattr(self, "msdi_save", True)
@@ -117,7 +117,7 @@ def sme_func_atmo(sme):
         atmo = atmo.source(sme, atmo)
     elif atmo.method == "embedded":
         # atmo structure already extracted in sme_main
-        atmo = sme.atmo
+        pass
     else:
         raise AttributeError("Source must be 'grid', 'routine', or 'file'")
 
@@ -230,9 +230,10 @@ def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineLis
     return res
 
 
-def solve(sme, param_names=["teff", "grav", "feh"], wavelength=None):
+def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
-    bounds = {"teff": [3500, 7000], "grav": [3, 5], "feh": [-5, 1]}
+    # TODO: Set up a sparsity scheme for the jacobian (some parameters are sufficiently independent)
+    bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1]}
     if wavelength is None:
         wavelength = sme.wave
     spectrum = sme.sob
@@ -345,7 +346,7 @@ def sme_func_2(sme, setLineList=True, passAtmosphere=True):
         sme_synth.InputLineList(sme.atomic, sme.species)
     if passAtmosphere:
         sme = sme_func_atmo(sme)
-        sme_synth.InputModel(sme.teff, sme.grav, sme.vmic, sme.atmo)
+        sme_synth.InputModel(sme.teff, sme.logg, sme.vmic, sme.atmo)
         # Compile the table of departure coefficients if NLTE flag is set
         if "nlte" in sme and "atmo_pro" in sme:
             pass_nlte(sme)
@@ -1068,7 +1069,9 @@ def fisher(sme):
     parameter_names = sme.pname
     p0 = sme.pfree[-1, :]
 
-    step = 1e-4
+    # step size = machine precision ** (1/number of points) 
+    # see scipy.optimize._numdiff.approx_derivative
+    step = np.finfo(np.float64).eps ** (1/3)
 
     second_deriv = lambda f, x, h: (f(x + h) - 2 * f(x) + f(x - h)) / np.sum(h) ** 2
 
@@ -1091,7 +1094,7 @@ def fisher(sme):
     # Diagonal elements
     for i in range(nparam):
         h = np.zeros(nparam)
-        h[i] = step * p0[i]
+        h[i] = step
         fisher_matrix[i, i] = second_deriv(func, p0, h)
 
     # Cross terms, fisher matrix is symmetric, so only calculate one half
@@ -1099,8 +1102,8 @@ def fisher(sme):
         h = np.zeros(nparam)
         total = 0
         for k, m in product([-1, 1], repeat=2):
-            h[i] = k * step * p0[i]
-            h[j] = m * step * p0[j]
+            h[i] = k * step
+            h[j] = m * step
             total += func(p0 + h) * k * m
 
         total /= 4 * (step)**2
@@ -1164,17 +1167,19 @@ def sme_main(sme, only_func=False):
 
 
 in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
-sme = SME.read(in_file)
+sme = SME.SME_Struct.load(in_file)
 
-fmatrix = fisher(sme)
-# res = sme_func_2(sme)
+orig = readsav(in_file)["sme"]
+
+#fmatrix = fisher(sme)
+#res = sme_func_2(sme)
 
 # plt.plot(res.wave, res.smod)
 # plt.plot(res.wave, res.sob)
 # plt.show()
 
 # Choose free parameters
-parameter_names = ["teff", "grav", "feh"]
+parameter_names = ["teff", "logg", "feh"]
 popt = solve(sme, parameter_names)
 
 sme = SME.SME_Structure.load("sme.npy")
