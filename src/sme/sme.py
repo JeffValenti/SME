@@ -94,6 +94,10 @@ class Collection(object):
         for key, value in kwargs.items():
             if isinstance(value, bytes):
                 value = value.decode()
+            if isinstance(value, np.ndarray) and value.dtype == np.dtype("O"):
+                value = value.astype(str)
+            if isinstance(value, np.ndarray):
+                value = np.require(value, requirements="WO")
             setattr(self, key, value)
 
     def __getattribute__(self, name):
@@ -114,8 +118,15 @@ class Collection(object):
     @property
     def names(self):
         exclude = ["names", "dtype"]
-        exclude += [s[0] for s in inspect.getmembers(self.__class__, predicate=inspect.isroutine)]
-        return [s for s in dir(self) if s[0] != "_" and s not in exclude and getattr(self, s) is not None]
+        exclude += [
+            s[0]
+            for s in inspect.getmembers(self.__class__, predicate=inspect.isroutine)
+        ]
+        return [
+            s
+            for s in dir(self)
+            if s[0] != "_" and s not in exclude and getattr(self, s) is not None
+        ]
 
     @property
     def dtype(self):
@@ -178,7 +189,9 @@ class Param(Collection):
         elif isinstance(value, np.ndarray) and value.size == 99:
             self.set_abund(self.monh, value, "sme")
         else:
-            raise TypeError("Abundance can only be set by Abund object, use set_abund otherwise")
+            raise TypeError(
+                "Abundance can only be set by Abund object, use set_abund otherwise"
+            )
 
     def set_abund(self, monh, abpatt, abtype):
         if abpatt is None:
@@ -225,8 +238,8 @@ class Version(Collection):
         self.os_name = None
         self.release = None
         self.build_date = None
-        self.memory_bits =None
-        self.field_offset_bits =None
+        self.memory_bits = None
+        self.field_offset_bits = None
         self.host = None
         # self.info = sys.version
         if len(kwargs) == 0:
@@ -261,8 +274,8 @@ class Atmo(Param):
         self.temp = None
         self.xna = None
         self.xne = None
-        self.vturb =None
-        self.lonh =None
+        self.vturb = None
+        self.lonh = None
         self.method = None
         self.source = None
         self.depth = None
@@ -278,16 +291,16 @@ class SME_Struct(Param):
         self.md5 = None
         self.id = None
         # additional parameters
-        self.vrad =None
+        self.vrad = None
         self.vrad_flag = None
         self.cscale = None
-        self.cscale_flag =None
-        self.gam6 =None
-        self.h2broad =None
-        self.accwi =None
-        self.accrt =None
+        self.cscale_flag = None
+        self.gam6 = None
+        self.h2broad = None
+        self.accwi = None
+        self.accrt = None
         self.clim = None
-        self.nmu =None
+        self.nmu = None
         self.mu = None
         # linelist
         self.species = None
@@ -295,7 +308,7 @@ class SME_Struct(Param):
         self.lande = None
         self.depth = None
         self.lineref = None
-        self.short_line_format =None
+        self.short_line_format = None
         self.line_extra = None
         self.line_lulande = None
         self.line_term_low = None
@@ -306,7 +319,7 @@ class SME_Struct(Param):
         self.ab_free = None
         # wavelength grid
         # Illiffe vector?
-        self.nseg =None
+        self.nseg = None
         self.wave = None
         self.wind = None
         # Observation
@@ -314,16 +327,16 @@ class SME_Struct(Param):
         self.uob = None
         self.mob = None
         self.obs_name = None
-        self.obs_type =None
+        self.obs_type = None
         # Instrument broadening
         self.iptype = None
         self.ipres = None
-        self.vmac_pro =None
-        self.cintb =None
-        self.cintr =None
+        self.vmac_pro = None
+        self.cintb = None
+        self.cintr = None
         # Fit results
-        self.maxiter =None
-        self.chirat =None
+        self.maxiter = None
+        self.chirat = None
         self.smod_orig = None
         self.smod = None
         self.cmod_orig = None
@@ -331,10 +344,10 @@ class SME_Struct(Param):
         self.jint = None
         self.wint = None
         self.sint = None
-        self.chisq =None
-        self.rchisq =None
-        self.crms =None
-        self.lrms =None
+        self.chisq = None
+        self.rchisq = None
+        self.crms = None
+        self.lrms = None
         self.pfree = None
         self.punc = None
         self.psig_l = None
