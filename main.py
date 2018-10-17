@@ -1,10 +1,16 @@
 import os.path
 from itertools import combinations, product
+import warnings
+from scipy.optimize import OptimizeWarning
+warnings.simplefilter("ignore", FutureWarning)
+warnings.simplefilter("ignore", OptimizeWarning)
+
 from joblib import Memory
 
 memory = Memory("./__cache__", verbose=0)
 
 import numpy as np
+import lmfit
 from scipy.io import readsav
 import matplotlib.pyplot as plt
 from scipy.constants import speed_of_light
@@ -12,7 +18,9 @@ from scipy.optimize import curve_fit, least_squares
 
 
 import src.sme.abund as abund
+from src.sme.vald import ValdFile
 from src.sme import sme as SME, broadening
+from src.sme.abund import Abund
 from src.sme.rtint import rtint, rdpop
 from src.sme import sme_synth
 from src.sme.broadening import gaussbroad, sincbroad, tablebroad
@@ -24,24 +32,7 @@ from src.sme.solar_abund import solar_abund
 
 
 clight = speed_of_light * 1e-3  # km/s
-
-# fmt: off
-elements = np.array([
-    "H" ,  "He", "Li", "Be", "B" , "C" , "N" , "O",
-    "F" ,  "Ne", "Na", "Mg", "Al", "Si", "P" , "S",
-    "Cl",  "Ar", "K" , "Ca", "Sc", "Ti", "V" , "Cr",
-    "Mn",  "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
-    "As",  "Se", "Br", "Kr", "Rb", "Sr", "Y" , "Zr",
-    "Nb",  "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
-    "In",  "Sn", "Sb", "Te", "I" , "Xe", "Cs", "Ba",
-    "La",  "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd",
-    "Tb",  "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf",
-    "Ta",  "W" , "Re", "Os", "Ir", "Pt", "Au", "Hg",
-    "Tl",  "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra",
-    "Ac",  "Th", "Pa", "U" , "Np", "Pu", "Am", "Cm",
-    "Bk",  "Cf", "Es",
-])
-# fmt: on
+elements = Abund._elem
 
 
 def pass_nlte(sme):
@@ -218,14 +209,19 @@ def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineLis
 
     # change parameters
     for name, value in zip(param_names, param):
+        if isinstance(value, lmfit.Parameter):
+            value = value.value
         sme[name] = value
 
     # run spectral synthesis
     sme = sme_func_2(sme, setLineList=setLineList)
     sme.save()
 
-    # interpolate to required wavelenth grid
-    res = np.interp(wavelength, sme.wave, sme.smod)
+    if not np.allclose(wavelength, sme.wave):
+        # interpolate to required wavelenth grid
+        res = np.interp(wavelength, sme.wave, sme.smod)
+    else:
+        res = sme.smod
 
     return res
 
@@ -233,6 +229,7 @@ def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineLis
 def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
     # TODO: Set up a sparsity scheme for the jacobian (some parameters are sufficiently independent)
+    # TODO: create more efficient jacobian function
     bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1]}
     if wavelength is None:
         wavelength = sme.wave
@@ -245,14 +242,12 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     func = (
         lambda p, x, y, yerr: (
             synthetize_spectrum(
-                x, *p, sme=sme, param_names=parameter_names, setLineList=False
+                x, *p, sme=sme, param_names=param_names, setLineList=False
             )
             - y
         )
         / yerr
     )
-
-    # TODO: jacobian?
 
     # Prepare LineList only once
     sme_synth.SetLibraryPath()
@@ -268,14 +263,15 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
         args=(wavelength, spectrum, uncertainties),
     )
 
+    sme = SME.SME_Struct.load("sme.npy")
+
     popt = res.x
-    sme.pfree = np.atleast_2d(popt) #2d for compatibility
+    sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
     sme.pname = param_names
 
     for i, name in enumerate(param_names):
         sme[name] = popt[i]
 
-    cost = 2 * res.cost
     # Do Moore-Penrose inverse discarding zero singular values.
     _, s, VT = np.linalg.svd(res.jac, full_matrices=False)
     threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
@@ -283,18 +279,95 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     VT = VT[: s.size]
     pcov = np.dot(VT.T / s ** 2, VT)
 
-    sme.cov = pcov
+    sme.covar = pcov
     sme.pder = res.jac
     sme.resid = res.fun
-    sme.cost = res.cost * 2
-    print(res.message)
+    sme.chisq = res.cost * 2 / (sme.sob.size - len(param_names))
 
+    sme.punc = [0 for _ in param_names]
+    nparam = len(param_names)
+    for i in range(nparam):
+        tmp = res.fun / res.jac[:, i]
+        while True:
+            std = np.std(tmp)
+            tmp = tmp[np.abs(tmp) <= 5 * std]
+            std2 = np.std(tmp)
+            if np.abs(std - std2) < 1e-6:
+                std = std2
+                break
+
+        plt.hist(tmp, bins=1000, range=(-5*std, 5*std))
+        plt.show()
+
+        sme.punc[i] = std
+
+
+
+    sme.punc2 = np.sqrt(np.diag(pcov))
+
+    sme.save()
+
+    print(res.message)
     for name, value in zip(param_names, popt):
         print("%s\t%.5f" % (name, value))
 
-    return popt
+    return sme
 
+def lmsolve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
+    # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
+    # TODO: Set up a sparsity scheme for the jacobian (some parameters are sufficiently independent)
+    bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1]}
+    if wavelength is None:
+        wavelength = sme.wave
+    spectrum = sme.sob
+    uncertainties = sme.uob
 
+    p0 = [sme[s] for s in param_names]
+    # bounds = np.array([bounds[s] for s in param_names]).T
+    # func = (model - obs) / sigma
+    def residuals(params, x, data, eps):
+        p = [params[s] for s in param_names]
+        model = synthetize_spectrum(x, *p, sme=sme, param_names=param_names)         
+        return (data - model)/eps
+
+    # Prepare LineList only once
+    sme_synth.SetLibraryPath()
+    sme_synth.InputLineList(sme.atomic, sme.species)
+
+    params = lmfit.Parameters()
+    for name in param_names:
+        params.add(name, value=sme[name], min=bounds[name][0], max=bounds[name][1])
+
+    mini = lmfit.Minimizer(residuals, params, fcn_args=(wavelength, spectrum, uncertainties))
+    res = mini.minimize()
+    print(lmfit.fit_report(res.params))
+
+    conf = lmfit.conf_interval(mini, res)
+    lmfit.printfuncs.report_ci(conf)
+
+    np.save("conf.dat", conf)
+
+    sme = SME.SME_Struct.load("sme.npy")
+
+    popt = res.params
+    sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
+    sme.pname = param_names
+
+    for i, name in enumerate(param_names):
+        sme[name] = popt[name]
+
+    sme.covar = res.cov
+    sme.pder = res.jac
+    sme.resid = res.fun
+    sme.cost = res.cost * 2
+
+    sme.save()
+
+    print(res.message)
+    for name, value in zip(param_names, popt):
+        print("%s\t%.5f" % (name, value))
+
+    return sme
 def new_wavelength_grid(wint):
     wmid = 0.5 * (wint[-1] + wint[0])  # midpoint of segment
     wspan = wint[-1] - wint[0]  # width of segment
@@ -316,7 +389,7 @@ def new_wavelength_grid(wint):
     return x_seg, vstep
 
 
-@memory.cache
+# @memory.cache
 def sme_func_2(sme, setLineList=True, passAtmosphere=True):
     # Define constants
     n_segments = sme.nseg
@@ -424,7 +497,7 @@ def sme_func_2(sme, setLineList=True, passAtmosphere=True):
             sob_seg = uob_seg = mob_seg = None
             wind[il] = len(wave[il])
 
-        #   Determine Continuum / Radial Velocity for each segment
+        # Determine Continuum / Radial Velocity for each segment
         cscale_seg, ndeg = get_cscale(sme.cscale, sme.cscale_flag, il)
 
         fix_c = sme.cscale_flag < 0
@@ -1060,60 +1133,54 @@ def sme_func(
 
 def fisher(sme):
     """ Calculate fisher information matrix """
-    nparam = len(sme.pfree[-1, :])
-    fisher_matrix = np.zeros((nparam, nparam))
+    nparam = len(sme.pname)
+    fisher_matrix = np.zeros((nparam, nparam), dtype=np.float64)
 
     x = sme.wave
     y = sme.sob
     yerr = sme.uob
-    parameter_names = sme.pname
-    p0 = sme.pfree[-1, :]
+    parameter_names = [s.decode() for s in sme.pname]
+    p0 = sme.pfree[-1, :nparam]
 
-    # step size = machine precision ** (1/number of points) 
+    # step size = machine precision ** (1/number of points)
     # see scipy.optimize._numdiff.approx_derivative
-    step = np.finfo(np.float64).eps ** (1/3)
+    # step = np.finfo(np.float64).eps ** (1 / 3)
+    step = np.abs(sme.pfree[-3, :nparam] - sme.pfree[-1, :nparam])
 
     second_deriv = lambda f, x, h: (f(x + h) - 2 * f(x) + f(x - h)) / np.sum(h) ** 2
 
     sme_synth.SetLibraryPath()
     sme_synth.InputLineList(sme.atomic, sme.species)
+    # chi squared function, i.e. log likelihood
     # func = 0.5 * sum ((model - obs) / sigma)**2
     func = lambda p: 0.5 * np.sum(
-        (
-            (
-                synthetize_spectrum(
-                    x, *p, sme=sme, param_names=parameter_names, setLineList=False
-                )
-                - y
-            )
-            / yerr
-        )
+        ((synthetize_spectrum(x, *p, sme=sme, param_names=parameter_names) - y) / yerr)
         ** 2
     )
 
     # Diagonal elements
     for i in range(nparam):
         h = np.zeros(nparam)
-        h[i] = step
-        fisher_matrix[i, i] = second_deriv(func, p0, h)
+        h[i] = step[i]
+        fisher_matrix[i, i] = -second_deriv(func, p0, h)
 
     # Cross terms, fisher matrix is symmetric, so only calculate one half
     for i, j in combinations(range(nparam), 2):
         h = np.zeros(nparam)
         total = 0
         for k, m in product([-1, 1], repeat=2):
-            h[i] = k * step
-            h[j] = m * step
+            h[i] = k * step[i]
+            h[j] = m * step[j]
             total += func(p0 + h) * k * m
 
-        total /= 4 * (step)**2
-        fisher_matrix[i, j] = total
-        fisher_matrix[j, i] = total
+        total /= 4 * np.abs(h[i] * h[j])
+        print(i, j, total)
+        fisher_matrix[i, j] = -total
+        fisher_matrix[j, i] = -total
 
     np.save("fisher_matrix", fisher_matrix)
     print(fisher_matrix)
     return fisher_matrix
-
 
 
 def sme_main(sme, only_func=False):
@@ -1165,24 +1232,44 @@ def sme_main(sme, only_func=False):
 
     return sme
 
-
 in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
+vald_file = "/home/ansgar/Documents/IDL/SME/harps_red.lin"
+vald = ValdFile(vald_file)
 sme = SME.SME_Struct.load(in_file)
-
 orig = readsav(in_file)["sme"]
 
-#fmatrix = fisher(sme)
-#res = sme_func_2(sme)
+# sme.pname = sme.pname[:3]
+# fmatrix = fisher(sme)
+# np.savetxt("fisher1.dat", fmatrix)
 
+# cov = np.linalg.inv(fmatrix)
+# sig = np.sqrt(np.abs(np.diag(cov)))
+
+# res = sme_func_2(sme)
 # plt.plot(res.wave, res.smod)
 # plt.plot(res.wave, res.sob)
 # plt.show()
 
+# make linelist errors
+# rel_error = vald.linelist.error
+# wlcent = vald.linelist.wlcent
+# width = 1
+# sig_syst = np.zeros(len(sme.uob), dtype=float)
+# wave = sme.wave
+
+# for i, line in enumerate(vald.linelist):
+#     #find closest wavelength region
+#     w = (wave >= wlcent[i]-width) & (wave <= wlcent[i] + width)
+#     sig_syst[w] += rel_error[i]
+
+# sig_syst *= np.clip(1 - sme.sob, 0, 1)
+# sme.uob += sig_syst
+
 # Choose free parameters
 parameter_names = ["teff", "logg", "feh"]
-popt = solve(sme, parameter_names)
+sme = solve(sme, parameter_names)
 
-sme = SME.SME_Structure.load("sme.npy")
+# sme = SME.SME_Struct.load("sme.npy")
 plt.plot(sme.wave, sme.smod)
 plt.plot(sme.wave, sme.sob)
 plt.show()
