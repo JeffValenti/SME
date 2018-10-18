@@ -138,7 +138,7 @@ class Abund:
         if raw:
             return abund
         else:
-            return {el:abund[Abund._elem_dict[el]] for el in Abund._elem}
+            return {el: abund[Abund._elem_dict[el]] for el in Abund._elem}
 
     @staticmethod
     def totype(pattern, totype, raw=False):
@@ -170,7 +170,7 @@ class Abund:
                 "got abundance type '{}',".format(type)
                 + " should be 'H=12', 'n/nH', 'n/nTot', or 'sme'"
             )
-        
+
         if raw:
             return abund
         else:
@@ -274,7 +274,7 @@ class Abund:
 
     def update_pattern(self, updates):
         for key in updates:
-            if key in self._elem.keys():
+            if key in self._elem:
                 pos = self._elem_dict[key]
                 self._pattern[pos] = float(updates[key])
             else:
@@ -315,7 +315,7 @@ class Abund:
     def empty_pattern(self):
         """Return an abundance pattern with value None for all elements.
         """
-        return np.full(len(self._elem), np.nan)# OrderedDict.fromkeys(self._elem)
+        return np.full(len(self._elem), np.nan)  # OrderedDict.fromkeys(self._elem)
 
     def print(self):
         if self._pattern is None:

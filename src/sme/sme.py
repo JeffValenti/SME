@@ -368,6 +368,19 @@ class SME_Struct(Param):
     def feh(self, value):
         self.monh = value
 
+    def __getitem__(self, key):
+        if key[-5:].casefold() == "abund":
+            element = key.split(" ", 1)[0]
+            return self.abund[element]
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if key[-5:].casefold() == "abund":
+            element = key.split(" ", 1)[0]
+            self.abund.update_pattern({element: value})
+            return
+        return super().__setitem__(key, value)
+
     @staticmethod
     def load(filename="sme.npy"):
         """ load SME data from disk """
@@ -385,7 +398,7 @@ class SME_Struct(Param):
         """ save SME data to disk """
         np.save(filename, self)
 
-    def spectrum(self, syn=False, cont=False):
+    def spectrum(self, syn=False, cont=False, return_mask=False):
         """
         load the wavelength and spectrum, with wavelength sets seperated into seperate arrays
 
@@ -411,10 +424,18 @@ class SME_Struct(Param):
             # observed spectrum
             obs_flux = self.sob
 
+        # Catch none existing data
+        if obs_flux is None:
+            if return_mask:
+                return None, None, None
+            else:
+                return None, None
+
         # return as Iliffe vectors, where the arrays can have different sizes
         # this is pretty much the same as it was before, just with fancier indexing
         w = Iliffe_vector(None, index=section_index, values=wave)
         s = Iliffe_vector(None, index=section_index, values=obs_flux)
+        m = Iliffe_vector(None, index=section_index, values=self.mob)
 
         # Apply continuum normalization
         # but only to the real observations
@@ -427,6 +448,8 @@ class SME_Struct(Param):
                     x = np.arange(len(s[i]))
                     s[i] /= np.polyval(self.cscale[i][::-1], x)
 
+        if return_mask:
+            return w, s, m
         return w, s
 
 
