@@ -121,3 +121,6 @@ src/sme/uioenvfile.txt
 src/sme/dll/sme_synth.so.linux.x86_64.64
 *.npy
 dump.bin
+src/sme/dll/idl_test.c
+src/sme/dll/idl_test.h
+fisher1.dat
