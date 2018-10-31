@@ -122,3 +122,5 @@ dump.bin
 src/sme/dll/sme_synth.so.*
 src/sme/dll/intel64_lin/*
 src/sme/nlte_grids/*
+src/sme/dll/idl_test.*
+fisher1.dat
