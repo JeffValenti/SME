@@ -7,7 +7,6 @@ import os.path
 import warnings
 from itertools import combinations, product
 
-import lmfit
 import matplotlib.pyplot as plt
 import numpy as np
 from joblib import Memory
@@ -207,8 +206,6 @@ def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineLis
 
     # change parameters
     for name, value in zip(param_names, param):
-        if isinstance(value, lmfit.Parameter):
-            value = value.value
         sme[name] = value
 
     # run spectral synthesis
@@ -224,28 +221,26 @@ def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineLis
     return res
 
 
-def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
+def solve(sme, param_names=["teff", "logg", "feh"]):
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
-    # TODO: Set up a sparsity scheme for the jacobian (some parameters are sufficiently independent)
+    # TODO: Set up a sparsity scheme for the jacobian (if some parameters are sufficiently independent)
     # TODO: create more efficient jacobian function
     bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1]}
     bounds.update({"%s abund" % el.casefold(): [-10, 10] for el in Abund._elem})
-    if wavelength is None:
-        wavelength = sme.wave
-    spectrum = sme.sob
-    uncertainties = sme.uob
+
+    nparam = len(param_names)
 
     p0 = [sme[s] for s in param_names]
     bounds = np.array([bounds[s.casefold()] for s in param_names]).T
     # func = (model - obs) / sigma
     func = (
-        lambda p, x, y, yerr: (
+        lambda p, sme: (
             synthetize_spectrum(
-                x, *p, sme=sme, param_names=param_names, setLineList=False
+                sme.wave[sme.mob != 0], *p, sme=sme, param_names=param_names
             )
-            - y
+            - sme.sob[sme.mob != 0]
         )
-        / yerr
+        / sme.uob[sme.mob != 0]
     )
 
     # Prepare LineList only once
@@ -253,13 +248,7 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     sme_synth.InputLineList(sme.atomic, sme.species)
 
     res = least_squares(
-        func,
-        x0=p0,
-        jac="2-point",
-        bounds=bounds,
-        loss="linear",
-        verbose=2,
-        args=(wavelength, spectrum, uncertainties),
+        func, x0=p0, jac="3-point", bounds=bounds, loss="linear", verbose=2, args=(sme,)
     )
 
     sme = SME.SME_Struct.load("sme.npy")
@@ -271,6 +260,7 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     for i, name in enumerate(param_names):
         sme[name] = popt[i]
 
+    # Determine the covariance matrix of the fit
     # Do Moore-Penrose inverse discarding zero singular values.
     _, s, VT = np.linalg.svd(res.jac, full_matrices=False)
     threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
@@ -278,94 +268,29 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     VT = VT[: s.size]
     pcov = np.dot(VT.T / s ** 2, VT)
 
+    # Alternative for determining the Covariance
+    # hess = res.jac.T.dot(res.jac) # hessian == fisher information matrix
+    # covar = np.linalg.pinv(hess)
+    # sig = np.sqrt(covar.diag())
+
     sme.covar = pcov
+    sme.grad = res.grad
     sme.pder = res.jac
     sme.resid = res.fun
-    sme.chisq = res.cost * 2 / (sme.sob.size - len(param_names))
+    sme.chisq = res.cost * 2 / (sme.sob.size - nparam)
 
-    sme.punc = [0 for _ in param_names]
-    nparam = len(param_names)
+    sme.punc = {name: 0 for name in param_names}
     for i in range(nparam):
-        tmp = res.fun / res.jac[:, i]
-        while True:
-            std = np.std(tmp)
-            tmp = tmp[np.abs(tmp) <= 5 * std]
-            std2 = np.std(tmp)
-            if np.abs(std - std2) < 1e-6:
-                std = std2
-                break
-
-        plt.hist(tmp, bins=1000, range=(-5 * std, 5 * std))
-        plt.show()
-
-        sme.punc[i] = std
+        tmp = np.abs(res.fun) / np.median(np.abs(res.jac[:, i]))
+        sme.punc[param_names[i]] = tmp
 
     sme.punc2 = np.sqrt(np.diag(pcov))
 
     sme.save()
 
     print(res.message)
-    for name, value, unc in zip(param_names, popt, sme.punc):
+    for name, value, unc in zip(param_names, popt, sme.punc.values()):
         print("%s\t%.5f +- %.5f" % (name, value, unc))
-
-    return sme
-
-
-def lmsolve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
-    # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
-    # TODO: Set up a sparsity scheme for the jacobian (some parameters are sufficiently independent)
-    bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1]}
-    if wavelength is None:
-        wavelength = sme.wave
-    spectrum = sme.sob
-    uncertainties = sme.uob
-
-    p0 = [sme[s] for s in param_names]
-    # bounds = np.array([bounds[s] for s in param_names]).T
-    # func = (model - obs) / sigma
-    def residuals(params, x, data, eps):
-        p = [params[s] for s in param_names]
-        model = synthetize_spectrum(x, *p, sme=sme, param_names=param_names)
-        return (data - model) / eps
-
-    # Prepare LineList only once
-    sme_synth.SetLibraryPath()
-    sme_synth.InputLineList(sme.atomic, sme.species)
-
-    params = lmfit.Parameters()
-    for name in param_names:
-        params.add(name, value=sme[name], min=bounds[name][0], max=bounds[name][1])
-
-    mini = lmfit.Minimizer(
-        residuals, params, fcn_args=(wavelength, spectrum, uncertainties)
-    )
-    res = mini.minimize()
-    print(lmfit.fit_report(res.params))
-
-    conf = lmfit.conf_interval(mini, res)
-    lmfit.printfuncs.report_ci(conf)
-
-    np.save("conf.dat", conf)
-
-    sme = SME.SME_Struct.load("sme.npy")
-
-    popt = res.params
-    sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
-    sme.pname = param_names
-
-    for i, name in enumerate(param_names):
-        sme[name] = popt[name]
-
-    sme.covar = res.cov
-    sme.pder = res.jac
-    sme.resid = res.fun
-    sme.cost = res.cost * 2
-
-    sme.save()
-
-    print(res.message)
-    for name, value in zip(param_names, popt):
-        print("%s\t%.5f" % (name, value))
 
     return sme
 
@@ -623,9 +548,7 @@ def sme_main(sme, only_func=False):
 
     # Call model evaluator/solver.
     if len(freep) > 0 and not only_func:  # true: call gradient solver
-        sme = solve(
-            sme, param_names=freep, wavelength=None
-        )  # solve for best parameters
+        sme = solve(sme, param_names=freep)  # solve for best parameters
     else:  # else: parameters known
         sme = sme_func(sme)  # just evaluate model once
 
