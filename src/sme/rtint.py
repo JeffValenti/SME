@@ -350,5 +350,5 @@ def rdpop(species, wave, e_low, model, pop_dir=None, eps_wave=4e-6, eps_energy=0
 
         b = np.transpose(([[[b_low]], [[b_upp]]]))
 
-        izero = b == 0
-        b[izero] = 1.
+        b[b == 0] = 1.
+    return b
