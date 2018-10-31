@@ -7,7 +7,7 @@ import os.path
 import warnings
 from itertools import combinations, product
 
-import lmfit
+# import lmfit
 import matplotlib.pyplot as plt
 import numpy as np
 from joblib import Memory
@@ -207,22 +207,38 @@ def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineLis
 
     # change parameters
     for name, value in zip(param_names, param):
-        if isinstance(value, lmfit.Parameter):
-            value = value.value
+        #    if isinstance(value, lmfit.Parameter):
+        #       value = value.value
         sme[name] = value
 
     # run spectral synthesis
     sme = sme_func(sme, setLineList=setLineList)
     sme.save()
 
-    if not np.allclose(wavelength, sme.wave):
+    mask = (sme.mob != 0) & (sme.uob != 0)
+    if not np.allclose(wavelength, sme.wave[mask]):
         # interpolate to required wavelenth grid
-        res = np.interp(wavelength, sme.wave, sme.smod)
+        res = np.interp(wavelength, sme.wave[mask], sme.smod[mask])
     else:
-        res = sme.smod
+        res = sme.smod[mask]
 
     return res
 
+def linelist_errors(sme, linelist):
+    # make linelist errors
+    mask = (sme.mob != 0) & (sme.uob != 0)
+    rel_error = linelist.error
+    width = sme_synth.GetLineRange(len(linelist))  # TODO
+    sig_syst = np.zeros(np.count_nonzero(mask), dtype=float)
+    wave = sme.wave[mask]
+
+    for i, line in enumerate(linelist):
+        # find closest wavelength region
+        w = (wave >= width[i, 0]) & (wave <= width[i, 1])
+        sig_syst[w] += rel_error[i]
+
+    sig_syst *= np.clip(1 - sme.sob[mask], 0, 1)
+    return sig_syst
 
 def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
@@ -232,34 +248,28 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     bounds.update({"%s abund" % el.casefold(): [-10, 10] for el in Abund._elem})
     if wavelength is None:
         wavelength = sme.wave
-    spectrum = sme.sob
-    uncertainties = sme.uob
 
     p0 = [sme[s] for s in param_names]
     bounds = np.array([bounds[s.casefold()] for s in param_names]).T
     # func = (model - obs) / sigma
-    func = (
-        lambda p, x, y, yerr: (
-            synthetize_spectrum(
-                x, *p, sme=sme, param_names=param_names, setLineList=False
-            )
-            - y
-        )
-        / yerr
-    )
+
+    def residuals(param):
+        mask = (sme.mob != 0) & (sme.uob != 0) 
+        wave = sme.wave[mask]
+        spec = sme.sob[mask]
+        uncs = sme.uob[mask]
+        
+        synth = synthetize_spectrum(wave, *param, param_names=param_names, sme=sme)
+        uncs2 = linelist_errors(sme, sme.linelist)
+        resid = (synth - spec) / (uncs + uncs2)
+        return np.nan_to_num(resid, copy=False)
 
     # Prepare LineList only once
     sme_synth.SetLibraryPath()
     sme_synth.InputLineList(sme.atomic, sme.species)
 
     res = least_squares(
-        func,
-        x0=p0,
-        jac="2-point",
-        bounds=bounds,
-        loss="linear",
-        verbose=2,
-        args=(wavelength, spectrum, uncertainties),
+        residuals, x0=p0, jac="2-point", bounds=bounds, loss="linear", verbose=2
     )
 
     sme = SME.SME_Struct.load("sme.npy")
@@ -295,8 +305,8 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
                 std = std2
                 break
 
-        plt.hist(tmp, bins=1000, range=(-5 * std, 5 * std))
-        plt.show()
+        # plt.hist(tmp, bins=1000, range=(-5 * std, 5 * std))
+        # plt.show()
 
         sme.punc[i] = std
 
@@ -311,63 +321,64 @@ def solve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
     return sme
 
 
-def lmsolve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
-    # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
-    # TODO: Set up a sparsity scheme for the jacobian (some parameters are sufficiently independent)
-    bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1]}
-    if wavelength is None:
-        wavelength = sme.wave
-    spectrum = sme.sob
-    uncertainties = sme.uob
-
-    p0 = [sme[s] for s in param_names]
-    # bounds = np.array([bounds[s] for s in param_names]).T
-    # func = (model - obs) / sigma
-    def residuals(params, x, data, eps):
-        p = [params[s] for s in param_names]
-        model = synthetize_spectrum(x, *p, sme=sme, param_names=param_names)
-        return (data - model) / eps
-
-    # Prepare LineList only once
-    sme_synth.SetLibraryPath()
-    sme_synth.InputLineList(sme.atomic, sme.species)
-
-    params = lmfit.Parameters()
-    for name in param_names:
-        params.add(name, value=sme[name], min=bounds[name][0], max=bounds[name][1])
-
-    mini = lmfit.Minimizer(
-        residuals, params, fcn_args=(wavelength, spectrum, uncertainties)
-    )
-    res = mini.minimize()
-    print(lmfit.fit_report(res.params))
-
-    conf = lmfit.conf_interval(mini, res)
-    lmfit.printfuncs.report_ci(conf)
-
-    np.save("conf.dat", conf)
-
-    sme = SME.SME_Struct.load("sme.npy")
-
-    popt = res.params
-    sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
-    sme.pname = param_names
-
-    for i, name in enumerate(param_names):
-        sme[name] = popt[name]
-
-    sme.covar = res.cov
-    sme.pder = res.jac
-    sme.resid = res.fun
-    sme.cost = res.cost * 2
-
-    sme.save()
-
-    print(res.message)
-    for name, value in zip(param_names, popt):
-        print("%s\t%.5f" % (name, value))
-
-    return sme
+# def lmsolve(sme, param_names=["teff", "logg", "feh"], wavelength=None):
+#    # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
+#    # TODO: Set up a sparsity scheme for the jacobian (some parameters are sufficiently independent)
+#    bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1]}
+#    if wavelength is None:
+#        wavelength = sme.wave
+#    spectrum = sme.sob
+#    uncertainties = sme.uob
+#
+#    p0 = [sme[s] for s in param_names]
+#    # bounds = np.array([bounds[s] for s in param_names]).T
+#    # func = (model - obs) / sigma
+#    def residuals(params, x, data, eps):
+#        p = [params[s] for s in param_names]
+#        model = synthetize_spectrum(x, *p, sme=sme, param_names=param_names)
+#        return (data - model) / eps
+#
+#    # Prepare LineList only once
+#    sme_synth.SetLibraryPath()
+#    sme_synth.InputLineList(sme.atomic, sme.species)
+#
+#    params = lmfit.Parameters()
+#    for name in param_names:
+#        params.add(name, value=sme[name], min=bounds[name][0], max=bounds[name][1])
+#
+#    mini = lmfit.Minimizer(
+#        residuals, params, fcn_args=(wavelength, spectrum, uncertainties)
+#    )
+#    res = mini.minimize()
+#    print(lmfit.fit_report(res.params))
+#
+#    conf = lmfit.conf_interval(mini, res)
+#    lmfit.printfuncs.report_ci(conf)
+#
+#    np.save("conf.dat", conf)
+#
+#    sme = SME.SME_Struct.load("sme.npy")
+#
+#    popt = res.params
+#    sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
+#    sme.pname = param_names
+#
+#    for i, name in enumerate(param_names):
+#        sme[name] = popt[name]
+#
+#    sme.covar = res.cov
+#    sme.pder = res.jac
+#    sme.resid = res.fun
+#    sme.cost = res.cost * 2
+#
+#    sme.save()
+#
+#    print(res.message)
+#    for name, value in zip(param_names, popt):
+#        print("%s\t%.5f" % (name, value))
+#
+#    return sme
+#
 
 
 def new_wavelength_grid(wint):

@@ -2,19 +2,27 @@ import os.path
 import numpy as np
 import ctypes as ct
 
+import sys
+import platform
 
 class IDL_String(ct.Structure):
     _fields_ = [("slen", ct.c_int), ("stype", ct.c_ushort), ("s", ct.c_char_p)]
 
+def get_lib_name():
+    """ Get the name of the sme C library """
+    system = sys.platform
+    arch = platform.machine()
+    bits = platform.architecture()[0][:-3]
+
+    return f"sme_synth.so.{system}.{arch}.{bits}"
 
 def idl_call_external(funcname, *args, restype="str", inttype="int"):
     # Load library if that wasn't done yet
     if not hasattr(idl_call_external, "lib"):
         localdir = os.path.dirname(__file__)
         #libfile = "./dll/idl_test.so"
-        libfile = "./dll/sme_synth.so.linux.x86_64.64"
-        libfile = os.path.join(localdir, libfile)
-
+        libfile = get_lib_name()
+        libfile = os.path.join(localdir, "dll", libfile)
         idl_call_external.lib = ct.CDLL(libfile)
 
     # Parse arguments into c values

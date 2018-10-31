@@ -114,10 +114,11 @@ src/sme/dll/sme_synth.so.linux.x86_64.64i
 src/sme/atmospheres/*.sav
 src/sme/**/*.pro
 src/sme/dll/*.INTEL*
-src/sme/dll/sme_synth.so.linux.x86_64.64g
 src/sme/dll/vcsbalmer.dat
 __cache__/**
 src/sme/uioenvfile.txt
-src/sme/dll/sme_synth.so.linux.x86_64.64
 *.npy
 dump.bin
+src/sme/dll/sme_synth.so.*
+src/sme/dll/intel64_lin/*
+src/sme/nlte_grids/*

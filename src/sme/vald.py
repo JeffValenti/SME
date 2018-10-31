@@ -244,7 +244,7 @@ class ValdFile:
                 error[i] = abs(float(flag[1:]))
             elif flag[0] == "N":
                 # NIST quality class
-                flag = flag[1:].strip()
+                flag = flag[1:5].strip()
                 error[i] = nist[flag]
         return error
 

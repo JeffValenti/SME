@@ -11,7 +11,7 @@ class check_error:
     def __call__(self, *args, **kwargs):
         error = self.func(*args, **kwargs)
         if error != b"":
-            raise ValueError("%s (call external): %s" % (self.name, error.decode()))
+            raise ValueError(f"{self.name} (call external): {error.decode()}")
         return error
 
 
@@ -73,7 +73,7 @@ def OutputLineList(atomic, copy=False):
         atomic = np.copy(atomic)
     error = idl_call_external("OutputLineList", nlines, atomic.T)
     if error != b"":
-        raise ValueError("%s (call external): %s" % (__name__, error.decode()))
+        raise ValueError(f"{__name__} (call external): {error.decode()}")
     return atomic
 
 
@@ -165,7 +165,7 @@ def GetOpacity():
     return idl_call_external("GetOpacity")
 
 
-@check_error
+#@check_error
 def Ionization(ion=0):
     """
     Calculate ionization balance for current atmosphere and abundances.
@@ -180,8 +180,9 @@ def Ionization(ion=0):
     in the model atmosphere (usually scaled solar) and SME (may be non-solar)
     can affect line shape, e.g. shape of hydrogen lines.
     """
-    return idl_call_external("Ionization", ion, inttype="short")
-
+    error = idl_call_external("Ionization", ion, inttype="short")
+    if error != b"":
+        print(f"{__name__} (call external): {error.decode()}")
 
 def GetDensity():
     """ """
@@ -224,7 +225,7 @@ def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000):
         np.int16(long_continuum),
     )
     if error != b"":
-        raise ValueError("Transf (call external): %s" % error.decode())
+        raise ValueError(f"Transf (call external): {error.decode()}")
     nw = np.count_nonzero(wint_seg)
 
     wint_seg = wint_seg[:nw]
@@ -235,5 +236,19 @@ def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000):
 
 
 def CentralDepth():
+    """ """
+    raise NotImplementedError()
+
+def GetLineRange(nlines):
+    """ """
+    linerange = np.zeros((nlines, 2), dtype=float)
+
+    error = idl_call_external("GetLineRange", linerange, nlines)
+    if error != b"":
+        raise ValueError(f"GetLineRange (call external): {error.decode()}")
+
+    return linerange
+
+def GetNLTEflags():
     """ """
     raise NotImplementedError()
