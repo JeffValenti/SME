@@ -199,12 +199,20 @@ def GetNelec():
     raise NotImplementedError()
 
 
-def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000):
-    """ """
-    nw = 0
+def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000, wave=None):
+    """ Radiative Transfer Calculation """
+
+    if wave is None:
+        nw = 0
+        wint_seg = np.zeros((nwmax))
+    else:
+        nw = len(wave)
+        nwmax = nw
+        wint_seg = wave
+
     nmu = len(mu)
+
     # Prepare data:
-    wint_seg = np.zeros((nwmax))
     sint_seg = np.zeros((nwmax, nmu))  # line+continuum intensities
     cint_seg = np.zeros((nwmax, nmu))  # all continuum intensities
     cintr_seg = np.zeros((nmu))  # red continuum intensity

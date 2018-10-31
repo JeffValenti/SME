@@ -34,6 +34,7 @@ class MaskPlot:
         self.segment = segment
         self.wind = [0, *(sme.wind + 1)]
         self.mode = "line/cont"
+        self.lines = sme.linelist
 
         if axes is None:
             self.im = plt.subplots()[1]

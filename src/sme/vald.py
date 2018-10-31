@@ -58,93 +58,103 @@ class LineList:
     """Atomic data for a list of spectral lines.
     """
 
-    def __init__(self):
-        self._lines = []
+    def __init__(self, linedata, lineformat="short", **kwargs):
+        if isinstance(linedata, list):
+            names = [
+                "species",
+                "wlcent",
+                "excit",
+                "vmic",
+                "gflog",
+                "gamrad",
+                "gamqst",
+                "gamvw",
+                "lande",
+                "depth",
+                "ref",
+            ]
+            linedata = np.rec.fromrecords(linedata, names=names)
+
+        self._lines = linedata
+        self.lineformat = lineformat
+
+        if "ionization" not in kwargs.keys():
+            self.ionization = [int(s[-1]) for s in linedata["species"]]
+
+        if "atom_number" not in kwargs.keys():
+            # self.atom_number = [s[0:2].strip() for s in linedata["species"]]
+            self.atom_number = [1 for _ in linedata]
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def __len__(self):
         return len(self._lines)
 
     def __str__(self):
-        out = []
-        for line in self._lines:
-            out.append(line.__str__())
-        return "\n".join(out)
+        return str(self._lines)
+
+    def __iter__(self):
+        return self._lines.__iter__()
+
+    def __next__(self):
+        return self._lines.__next__()
 
     @property
     def species(self):
-        return [line.species for line in self._lines]
+        return self._lines["species"]
 
     @property
     def wlcent(self):
-        return [line.wlcent for line in self._lines]
+        return self._lines["wlcent"]
 
     @property
     def excit(self):
-        return [line.excit for line in self._lines]
+        return self._lines["excit"]
 
     @property
     def gflog(self):
-        return [line.gflog for line in self._lines]
+        return self._lines["gflog"]
 
     @property
     def gamrad(self):
-        return [line.gamrad for line in self._lines]
+        return self._lines["gamrad"]
 
     @property
     def gamqst(self):
-        return [line.gamqst for line in self._lines]
+        return self._lines["gamqst"]
 
     @property
     def gamvw(self):
-        return [line.gamvw for line in self._lines]
+        return self._lines["gamvw"]
 
-    def add(
-        self,
-        species,
-        wlcent,
-        excit,
-        gflog,
-        gamrad,
-        gamqst,
-        gamvw,
-        lulande=None,
-        extra=None,
-    ):
-        line = Line(
-            species,
-            wlcent,
-            excit,
-            gflog,
-            gamrad,
-            gamqst,
-            gamvw,
-            lulande=lulande,
-            extra=extra,
-        )
-        self._lines.append(line)
+    @property
+    def lulande(self):
+        if self.lineformat == "short":
+            raise AttributeError("LuLande is only available in the long line format")
+
+            # additional data arrays for sme
+        return self._lines[["lande_lower", "lande_upper"]]
+
+    @property
+    def extra(self):
+        if self.lineformat == "short":
+            raise AttributeError("Extra is only available in the long line format")
+        return self._lines[["j_lo", "e_upp", "j_up"]]
 
     @property
     def atomic(self):
-        # Data (ouput array) array of important atomic data
-        # data(0,*) atomic number (H=1, He=2, Li=3, etc.)
-        # data(1,*) ionization stage (neutral=0, singly=1, etc.)
-        # data(2,*) central wavelength of transition (Angstroms)
-        # data(3,*) excitation potential of lower state (eV)
-        # data(4,*) log(gf)
-        # data(5,*) radiative damping constant
-        # data(6,*) quadratic Stark damping constant
-        # data(7,*) van der Waal's damping constant
-        # dtype = c_double
-        atomic = np.zeros((len(self), 8), dtype=float)
-        atomic[:, 0] = [Abund._elem_dict[s] for s in self.species]  # Atomic number
-        atomic[:, 1] = [int(s[-1]) for s in self.species]  # Ionization
-        atomic[:, 2] = self.wlcent  # Central Wavelength
-        atomic[:, 3] = self.excit  # Excitation
-        atomic[:, 4] = self.gflog  # Oscillator strength
-        atomic[:, 5] = self.gamrad  # radiative damping
-        atomic[:, 6] = self.gamqst  # Stark
-        atomic[:, 7] = self.gamvw  # van der Waals
-        return atomic
+        names = [
+            "atom_number",
+            "ionization",
+            "wlcent",
+            "excit",
+            "gflog",
+            "gamrad",
+            "gamqst",
+            "gamvw",
+        ]
+        return np.array([getattr(self, n) for n in names])
 
 
 class ValdFile:
@@ -251,7 +261,6 @@ class ValdFile:
     def parse_linedata(self, lines, fmt="short"):
         """Parse line data from a VALD line data file.
         """
-        linelist = LineList()
 
         if fmt == "short":
             dtype = np.dtype(
@@ -286,11 +295,6 @@ class ValdFile:
                     ("gamqst", float),
                     ("gamvw", float),
                     ("depth", float),
-                    # ("term_lower", "<U255"),
-                    # ("term_upper", "<U255"),
-                    # ("reference", "<U255"),
-                    # ("ionization", int),
-                    # ("error", float),
                 ]
             )
             term_lower = lines[1::4]
@@ -309,22 +313,20 @@ class ValdFile:
             linelist["excit"] /= 8065.544
             linelist["e_upp"] /= 8065.544
 
-            # add extra fields
-            ionization = np.array([int(s[-1]) for s in linelist["species"]])
+            # extract error data
             error = np.array([s[1:11].strip() for s in comment])
             error = self.parse_line_error(error, linelist["depth"])
 
-            linelist = np.lib.recfunctions.append_fields(
+            linelist = LineList(
                 linelist,
-                ("term_lower", "term_upper", "reference", "ionization", "error"),
-                (term_lower, term_upper, comment, ionization, error),
-                usemask=False,
-                asrecarray=True,
+                lineformat=fmt,
+                term_lower=term_lower,
+                term_upper=term_upper,
+                reference=comment,
+                error=error,
             )
-
-            # additional data arrays for sme
-            linelist.lulande = linelist[["lande_lower", "lande_upper"]]
-            linelist.extra = linelist[["j_lo", "e_upp", "j_up"]]
+        else:
+            linelist = LineList(linelist)
 
         return linelist
 
