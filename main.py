@@ -11,8 +11,8 @@ from src.sme.solve import sme_func, solve
 from src.sme.vald import ValdFile
 
 
-in_file = "/home/ansgar/wasp39_11.out"
-vald_file = "/home/ansgar/linelist.lin"
+in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
+vald_file = "/home/ansgar/Documents/IDL/SME/harps_red.lin"
 vald = ValdFile(vald_file)
 sme = SME.SME_Struct.load(in_file)
 orig = readsav(in_file)["sme"]

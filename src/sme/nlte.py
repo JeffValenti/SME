@@ -328,7 +328,7 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     # Reduce the stored data to only relevant energy levels
     bgrid = bgrid[iused, ...]
 
-    return bgrid, level_labels, linelevels, lineindices
+    return bgrid, level_labels, linelevels, np.where(lineindices)[0]
 
 
 def get_gridindices(points, param, var, name=""):
@@ -423,7 +423,7 @@ def nlte(sme, elem):
 
     nlte_grid, linerefs, lineindices = read_grid(sme, elem)
     subgrid = interpolate_grid(sme, elem, nlte_grid)
-    return subgrid
+    return subgrid, linerefs, lineindices
 
 
 if __name__ == "__main__":

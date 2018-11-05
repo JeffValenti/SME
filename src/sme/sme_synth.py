@@ -165,7 +165,7 @@ def GetOpacity():
     return idl_call_external("GetOpacity")
 
 
-#@check_error
+# @check_error
 def Ionization(ion=0):
     """
     Calculate ionization balance for current atmosphere and abundances.
@@ -183,6 +183,7 @@ def Ionization(ion=0):
     error = idl_call_external("Ionization", ion, inttype="short")
     if error != b"":
         print(f"{__name__} (call external): {error.decode()}")
+
 
 def GetDensity():
     """ """
@@ -247,6 +248,7 @@ def CentralDepth():
     """ """
     raise NotImplementedError()
 
+
 def GetLineRange(nlines):
     """ """
     linerange = np.zeros((nlines, 2), dtype=float)
@@ -256,6 +258,19 @@ def GetLineRange(nlines):
         raise ValueError(f"GetLineRange (call external): {error.decode()}")
 
     return linerange
+
+
+@check_error
+def InputNLTE(bmat, lineindices):
+    """ Input NLTE departure coefficients """
+    return idl_call_external("InputDepartureCoefficients", bmat, lineindices)
+
+
+@check_error
+def ResetNLTE():
+    """ Reset departure coefficients from any previous call, to ensure LTE as default """
+    return idl_call_external("ResetDepartureCoefficients")
+
 
 def GetNLTEflags():
     """ """

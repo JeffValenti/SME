@@ -18,10 +18,10 @@ from . import sme as SME
 from . import sme_synth
 from .abund import Abund
 
-from .cwrapper import idl_call_external
 from .interpolate_atmosphere import interp_atmo_grid
 from .rtint import rdpop, rtint
 from .sme_crvmatch import match_rv_continuum
+from .update_depcoeff import sme_update_depcoeffs
 
 warnings.simplefilter("ignore", FutureWarning)
 warnings.simplefilter("ignore", OptimizeWarning)
@@ -49,11 +49,7 @@ def pass_nlte(sme):
         if len(bnlte) == 2 * ndep:
             b_nlte[:, iline, :] = bnlte
 
-    error = idl_call_external("InputNLTE", b_nlte)
-    if error != b"":
-        raise ValueError(
-            "InputDepartureCoefficients (call_external): %s" % error.decode()
-        )
+    error = sme_synth.InputNLTE(b_nlte, 0)
     return error
 
 
@@ -80,9 +76,6 @@ def sme_func_atmo(sme):
      2013-Sep-23 Valenti Extracted and adapted from sme_func.pro
      2013-Dec-13 Valenti Bundle atmosphere variables in ATMO structure
     """
-
-    # Static storage
-    #   common common_sme_func_atmo, prev_msdi
 
     # Handle atmosphere grid or user routine.
     atmo = sme.atmo
@@ -221,6 +214,7 @@ def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineLis
 
     return res
 
+
 def linelist_errors(sme, linelist):
     # make linelist errors
     mask = (sme.mob != 0) & (sme.uob != 0)
@@ -237,6 +231,7 @@ def linelist_errors(sme, linelist):
     sig_syst *= np.clip(1 - sme.sob[mask], 0, 1)
     return sig_syst
 
+
 def solve(sme, param_names=["teff", "logg", "feh"]):
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
     # TODO: Set up a sparsity scheme for the jacobian (if some parameters are sufficiently independent)
@@ -251,11 +246,11 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
     # func = (model - obs) / sigma
 
     def residuals(param):
-        mask = (sme.mob != 0) & (sme.uob != 0) 
+        mask = (sme.mob != 0) & (sme.uob != 0)
         wave = sme.wave[mask]
         spec = sme.sob[mask]
         uncs = sme.uob[mask]
-        
+
         synth = synthetize_spectrum(wave, *param, param_names=param_names, sme=sme)
         uncs2 = linelist_errors(sme, sme.linelist)
         resid = (synth - spec) / (uncs + uncs2)
@@ -335,7 +330,7 @@ def new_wavelength_grid(wint):
 
 
 # @memory.cache
-def sme_func(sme, setLineList=True, passAtmosphere=True):
+def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
     # Define constants
     n_segments = sme.nseg
     nmu = len(sme.mu)
@@ -373,6 +368,11 @@ def sme_func(sme, setLineList=True, passAtmosphere=True):
         sme_synth.Ionization(0)
         sme_synth.SetVWscale(sme.gam6)
         sme_synth.SetH2broad(sme.h2broad)
+    if passNLTE:
+        # TODO ???
+        if "atmo_pro" in sme:
+            pass_nlte(sme)
+        sme_update_depcoeffs(sme)
 
     # Loop over segments
     #   Input Wavelength range and Opacity
