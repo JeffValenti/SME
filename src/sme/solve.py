@@ -289,18 +289,18 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
     # covar = np.linalg.pinv(hess)
     # sig = np.sqrt(covar.diag())
 
-    sme.covar = pcov
-    sme.grad = res.grad
-    sme.pder = res.jac
-    sme.resid = res.fun
-    sme.chisq = res.cost * 2 / (sme.sob.size - nparam)
+    sme.fitresults.covar = pcov
+    sme.fitresults.grad = res.grad
+    sme.fitresults.pder = res.jac
+    sme.fitresults.resid = res.fun
+    sme.fitresults.chisq = res.cost * 2 / (sme.sob.size - nparam)
 
-    sme.punc = {name: 0 for name in param_names}
+    sme.fitresults.punc = {name: 0 for name in param_names}
     for i in range(nparam):
         tmp = np.abs(res.fun) / np.median(np.abs(res.jac[:, i]))
-        sme.punc[param_names[i]] = tmp
+        sme.fitresults.punc[param_names[i]] = tmp
 
-    sme.punc2 = np.sqrt(np.diag(pcov))
+    sme.fitresults.punc2 = np.sqrt(np.diag(pcov))
 
     sme.save()
 
