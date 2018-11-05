@@ -1,4 +1,6 @@
+import sys
 import os.path
+import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,21 +13,46 @@ from src.sme.solve import sme_func, solve
 from src.sme.vald import ValdFile
 
 
-in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
-vald_file = "/home/ansgar/Documents/IDL/SME/harps_red.lin"
-vald = ValdFile(vald_file)
-sme = SME.SME_Struct.load(in_file)
-orig = readsav(in_file)["sme"]
+def parse_args():
+    parser = argparse.ArgumentParser(description="SME solve")
+    parser.add_argument(
+        "sme",
+        type=str,
+        help="an sme input file (either in IDL sav or Numpy npy format)",
+    )
+    parser.add_argument("--vald", type=str, default=None, help="the vald linelist file")
+    parser.add_argument(
+        "fitparameters",
+        type=str,
+        nargs="*",
+        help="Parameters to fit, abundances are 'Mg Abund'",
+    )
+    args = parser.parse_args()
+    return args.sme, args.vald, args.fitparameters
 
-sme.linelist = vald.linelist
+
+if len(sys.argv) > 1:
+    in_file, vald_file, fitparameters = parse_args()
+else:
+    # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
+    in_file = "./sme_3param_extra_errors.npy"
+    vald_file = "/home/ansgar/Documents/IDL/SME/harps_red.lin"
+    fitparameters = []
+
+sme = SME.SME_Struct.load(in_file)
+
+if vald_file is not None:
+    vald = ValdFile(vald_file)
+    sme.linelist = vald.linelist
 
 # Choose free parameters, i.e. sme.pname
-parameter_names = ["teff", "logg", "feh", "Mg Abund", "Y Abund"]
-sme = solve(sme, parameter_names)
+if len(fitparameters) == 0:
+    # ["teff", "logg", "feh", "Mg Abund", "Y Abund"]
+    fitparameters = sme.pname
 
-sme.linelist = vald.linelist
+sme = solve(sme, fitparameters)
 
-# sme = SME.SME_Struct.load("sme.npy")
+# Plot results
 mask_plot = plotting.MaskPlot(sme)
 # Update mask
 # new_mask = mask_plot.mask

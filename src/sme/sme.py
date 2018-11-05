@@ -3,7 +3,9 @@ This module contains all Classes needed to load, save and handle SME structures
 Notably all SME objects will be Collections, which can accessed both by attribute and by index
 """
 
+
 import sys
+import os.path
 import platform
 import inspect
 import numpy as np
@@ -393,7 +395,8 @@ class SME_Struct(Param):
     @staticmethod
     def load(filename="sme.npy"):
         """ load SME data from disk """
-        if filename[-3:] == "npy":
+        _, ext = os.path.splitext(filename)
+        if ext == ".npy":
             s = np.load(filename)
             s = np.atleast_1d(s)[0]
         else:
