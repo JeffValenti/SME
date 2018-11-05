@@ -59,7 +59,12 @@ def ClearH2broad():
 @check_error
 def InputLineList(atomic, species):
     """ Read in line list """
-    nlines = atomic.shape[0]
+    nlines = species.size
+
+    # _, sort = np.unique(atomic[2], return_index=True)
+    # atomic = atomic[:, sort]
+    # species = species[sort]
+
     atomic = atomic.T.astype(float, copy=False)
     species = species.astype(str, copy=False)
     return idl_call_external("InputLineList", nlines, species, atomic)

@@ -59,6 +59,56 @@ class LineList:
     """
 
     def __init__(self, linedata, lineformat="short", **kwargs):
+        if linedata is None:
+            # everything is in the kwargs (usually by loading from old SME file)
+            species = kwargs.pop("species").astype("U")
+            atomic = kwargs.pop("atomic")
+            lande = kwargs.pop("lande")
+            depth = kwargs.pop("depth")
+            lineref = kwargs.pop("lineref").astype("U")
+            short_line_format = kwargs.pop("short_line_format")
+            if short_line_format == 2:
+                line_extra = kwargs.pop("line_extra")
+                line_lulande = kwargs.pop("line_lulande")
+                line_term_low = kwargs.pop("line_term_low").astype("U")
+                line_term_upp = kwargs.pop("line_term_upp").astype("U")
+
+            arrays = [species, *[atomic[:, i] for i in range(8)], lande, depth, lineref]
+            names = [
+                "species",
+                "atom_number",
+                "ionization",
+                "wlcent",
+                "excit",
+                "gflog",
+                "gamrad",
+                "gamqst",
+                "gamvw",
+                "lande",
+                "depth",
+                "ref",
+            ]
+
+            if short_line_format == 1:
+                lineformat = "short"
+            if short_line_format == 2:
+                lineformat = "long"
+                arrays = arrays + [
+                    line_lulande[:, 0],
+                    line_lulande[:, 1],
+                    line_extra[:, 0],
+                    line_extra[:, 1],
+                    line_extra[:, 2],
+                ]
+                names = names + ["lande_lower", "lande_upper", "j_lo", "e_upp", "j_up"]
+                self.term_lower = line_term_low
+                self.term_upper = line_term_upp
+                self.comment = lineref
+                self.error = [s[0:11].strip() for s in lineref]
+                self.error = ValdFile.parse_line_error(self.error, depth)
+
+            linedata = np.rec.fromarrays(arrays, names=names)
+
         if isinstance(linedata, list):
             names = [
                 "species",
@@ -79,14 +129,33 @@ class LineList:
         self.lineformat = lineformat
 
         if "ionization" not in kwargs.keys():
-            self.ionization = [int(s[-1]) for s in linedata["species"]]
+            if "ionization" not in linedata.dtype.names:
+                self.ionization = [int(s[-1]) for s in linedata["species"]]
+            else:
+                self.ionization = linedata["ionization"]
+        else:
+            self.ionization = kwargs["ionization"]
 
         if "atom_number" not in kwargs.keys():
-            # self.atom_number = [s[0:2].strip() for s in linedata["species"]]
-            self.atom_number = [1 for _ in linedata]
+            if "atom_number" not in linedata.dtype.names:
+                # self.atom_number = [s[0:2].strip() for s in linedata["species"]]
+                self.atom_number = [1 for _ in linedata]
+            else:
+                self.atom_number = linedata["atom_number"]
+        else:
+            self.atom_number = kwargs["atom_number"]
 
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+        if "term_upper" in kwargs.keys():
+            self.term_upper = np.asarray(kwargs["term_upper"])
+        if "term_lower" in kwargs.keys():
+            self.term_lower = np.asarray(kwargs["term_lower"])
+        if "comment" in kwargs.keys():
+            self.comment = np.asarray(kwargs["comment"])
+        if "error" in kwargs.keys():
+            self.error = np.asarray(kwargs["error"])
+
+        # for key, value in kwargs.items():
+        # setattr(self, key, value)
 
     def __len__(self):
         return len(self._lines)
@@ -134,27 +203,27 @@ class LineList:
             raise AttributeError("LuLande is only available in the long line format")
 
             # additional data arrays for sme
-        return self._lines[["lande_lower", "lande_upper"]]
+        tmp = self._lines[["lande_lower", "lande_upper"]]
+        tmp = np.array(tmp.tolist())
+        return tmp
 
     @property
     def extra(self):
         if self.lineformat == "short":
             raise AttributeError("Extra is only available in the long line format")
-        return self._lines[["j_lo", "e_upp", "j_up"]]
+        tmp = self._lines[["j_lo", "e_upp", "j_up"]]
+        tmp = np.array(tmp.tolist())
+        return tmp
 
     @property
     def atomic(self):
-        names = [
-            "atom_number",
-            "ionization",
-            "wlcent",
-            "excit",
-            "gflog",
-            "gamrad",
-            "gamqst",
-            "gamvw",
-        ]
-        return np.array([getattr(self, n) for n in names])
+        names = ["wlcent", "excit", "gflog", "gamrad", "gamqst", "gamvw"]
+        # Select fields
+        tmp = [self.atom_number, self.ionization]
+        tmp += [self._lines[n] for n in names]
+        # Convert to 2D array
+        tmp = np.array(tmp)
+        return tmp.T
 
 
 class ValdFile:
@@ -224,7 +293,8 @@ class ValdFile:
         self._nlines_proc = int(words[3])
         self._vmicro = float(words[4])
 
-    def parse_line_error(self, error_flags, values):
+    @staticmethod
+    def parse_line_error(error_flags, values):
         nist = {
             "AAA": 0.003,
             "AA": 0.01,

@@ -253,8 +253,12 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
         print(f"No NLTE transitions for {elem} found")
         return None, None, None
 
-    parts_low = sme.line_term_low[lineindices]
-    parts_upp = sme.line_term_upp[lineindices]
+    parts_low = sme.linelist.term_lower[lineindices]
+    parts_upp = sme.linelist.term_upper[lineindices]
+
+    # Remove quotation marks (if any are there)
+    parts_low = [s.replace("'", "") for s in parts_low]
+    parts_upp = [s.replace("'", "") for s in parts_upp]
 
     parts_low = np.array([s.split()[1:] for s in parts_low])
     parts_upp = np.array([s.split()[1:] for s in parts_upp])
@@ -272,7 +276,7 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
             sme.species[lineindices],
             parts_low[:, 0],
             parts_low[:, 1],
-            sme.line_extra[lineindices, 0],
+            sme.linelist.extra[lineindices, 0],
         )
     ]
 
@@ -282,7 +286,7 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
             sme.species[lineindices],
             parts_upp[:, 0],
             parts_upp[:, 1],
-            sme.line_extra[lineindices, 2],
+            sme.linelist.extra[lineindices, 2],
         )
     ]
 
@@ -415,11 +419,6 @@ def nlte(sme, elem):
 
     if sme.nlte.nlte_grids[elem_num] is None:
         raise ValueError(f"Element {elem} has not been prepared for NLTE")
-
-    if sme.line_extra is None:
-        raise ValueError(
-            "VALD3 long-format linedata is required to relate line terms to NLTE level corrections"
-        )
 
     nlte_grid, linerefs, lineindices = read_grid(sme, elem)
     subgrid = interpolate_grid(sme, elem, nlte_grid)

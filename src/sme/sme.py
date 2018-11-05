@@ -13,8 +13,10 @@ from scipy.io import readsav
 
 try:
     from .abund import Abund
+    from .vald import LineList
 except ModuleNotFoundError:
     from abund import Abund
+    from vald import LineList
 
 
 class Iliffe_vector:
@@ -295,6 +297,21 @@ class Atmo(Param):
         super().__init__(**kwargs)
 
 
+class Fitresults(Collection):
+    def __init__(self, **kwargs):
+        self.maxiter = kwargs.pop("maxiter", None)
+        self.chirat = kwargs.pop("chirat", None)
+        self.chisq = kwargs.pop("chisq", None)
+        self.rchisq = kwargs.pop("rchisq", None)
+        self.crms = kwargs.pop("crms", None)
+        self.lrms = kwargs.pop("lrms", None)
+        self.punc = kwargs.pop("punc", None)
+        self.psig_l = kwargs.pop("psig_l", None)
+        self.psig_r = kwargs.pop("psig_r", None)
+        self.covar = kwargs.pop("covar", None)
+        super().__init__(**kwargs)
+
+
 class SME_Struct(Param):
     def __init__(self, atmo=None, nlte=None, idlver=None, **kwargs):
         # Meta information
@@ -314,18 +331,23 @@ class SME_Struct(Param):
         self.nmu = None
         self.mu = None
         # linelist
-        self.species = None
-        self.atomic = None
-        self.lande = None
-        self.depth = None
-        self.lineref = None
-        self.short_line_format = None
-        self.line_extra = None
-        self.line_lulande = None
-        self.line_term_low = None
-        self.line_term_upp = None
-        self.wran = None
+        # TODO move class from vald.py to sme.py ?
+        self.linelist = LineList(
+            None,
+            species=kwargs.pop("species"),
+            atomic=kwargs.pop("atomic"),
+            lande=kwargs.pop("lande"),
+            depth=kwargs.pop("depth"),
+            lineref=kwargs.pop("lineref"),
+            short_line_format=kwargs.pop("short_line_format"),
+            line_extra=kwargs.pop("line_extra", None),
+            line_lulande=kwargs.pop("line_lulande", None),
+            line_term_low=kwargs.pop("line_term_low", None),
+            line_term_upp=kwargs.pop("line_term_upp", None),
+        )
         # free parameters
+        self.pfree = None
+        self.pname = None
         self.glob_free = None
         self.ab_free = None
         # wavelength grid
@@ -333,6 +355,7 @@ class SME_Struct(Param):
         self.nseg = None
         self.wave = None
         self.wind = None
+        self.wran = None  # Wavelength range of each section
         # Observation
         self.sob = None
         self.uob = None
@@ -346,25 +369,25 @@ class SME_Struct(Param):
         self.cintb = None
         self.cintr = None
         # Fit results
-        self.maxiter = None
-        self.chirat = None
+        self.fitresults = Fitresults(
+            maxiter=kwargs.pop("maxiter", None),
+            chirat=kwargs.pop("chirat", None),
+            chisq=kwargs.pop("chisq", None),
+            rchisq=kwargs.pop("rchisq", None),
+            crms=kwargs.pop("crms", None),
+            lrms=kwargs.pop("lrms", None),
+            punc=kwargs.pop("punc", None),
+            psig_l=kwargs.pop("psig_l", None),
+            psig_r=kwargs.pop("psig_r", None),
+            covar=kwargs.pop("covar", None),
+        )
         self.smod_orig = None
-        self.smod = None
         self.cmod_orig = None
+        self.smod = None
         self.cmod = None
         self.jint = None
         self.wint = None
         self.sint = None
-        self.chisq = None
-        self.rchisq = None
-        self.crms = None
-        self.lrms = None
-        self.pfree = None
-        self.punc = None
-        self.psig_l = None
-        self.psig_r = None
-        self.pname = None
-        self.covar = None
         # Substructures
         self.idlver = Version(idlver)
         self.atmo = Atmo(atmo)
@@ -378,6 +401,14 @@ class SME_Struct(Param):
     @feh.setter
     def feh(self, value):
         self.monh = value
+
+    @property
+    def atomic(self):
+        return self.linelist.atomic
+
+    @property
+    def species(self):
+        return self.linelist.species
 
     def __getitem__(self, key):
         if key[-5:].casefold() == "abund":

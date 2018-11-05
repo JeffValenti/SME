@@ -44,7 +44,7 @@ def sme_update_depcoeffs(sme, debug=False):
         # Silent fail to do LTE only.
         print("Running in LTE")
         return  # no NLTE routine available
-    if "line_extra" not in sme:
+    if sme.linelist.lineformat == "short":
         print("--- ")
         print("NLTE line formation was requested, but VALD3 long-format linedata ")
         print("are required in order to relate line terms to NLTE level corrections!")

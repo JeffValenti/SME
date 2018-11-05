@@ -236,7 +236,10 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
     # TODO: Set up a sparsity scheme for the jacobian (if some parameters are sufficiently independent)
     # TODO: create more efficient jacobian function
-    bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1]}
+
+    param_names = [p if p.casefold() != "grav" else "logg" for p in param_names]
+
+    bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1], "vmic": [-10, 10]}
     bounds.update({"%s abund" % el.casefold(): [-10, 10] for el in Abund._elem})
 
     nparam = len(param_names)
