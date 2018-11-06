@@ -21,7 +21,7 @@ from .abund import Abund
 from .interpolate_atmosphere import interp_atmo_grid
 from .rtint import rdpop, rtint
 from .sme_crvmatch import match_rv_continuum
-from .update_depcoeff import sme_update_depcoeffs
+from .nlte import update_depcoeffs
 
 warnings.simplefilter("ignore", FutureWarning)
 warnings.simplefilter("ignore", OptimizeWarning)
@@ -375,7 +375,7 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
         # TODO ???
         if "atmo_pro" in sme:
             pass_nlte(sme)
-        sme_update_depcoeffs(sme)
+        update_depcoeffs(sme)
 
     # Loop over segments
     #   Input Wavelength range and Opacity

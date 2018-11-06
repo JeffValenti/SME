@@ -1,11 +1,14 @@
+"""
+NLTE module of SME
+reads and interpolates departure coefficients from library files
+"""
 
 import os.path
 import itertools
 import numpy as np
 
-from scipy.interpolate import griddata, interpn
-
-from SME.src.sme.abund import Abund
+from .abund import Abund
+from . import sme_synth
 
 
 class DirectAccessFile:
@@ -290,33 +293,23 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
         )
     ]
 
-    iblevels = np.argsort(level_labels)
-    illevels = np.argsort(line_label_low)
-    iulevels = np.argsort(line_label_upp)
+    level_labels = np.sort(level_labels)
+    line_label_low = np.sort(line_label_low)
+    line_label_upp = np.sort(line_label_upp)
 
     nlines = parts_low.shape[0]
     linelevels = np.full((nlines, 2), -1)
-    levels_used = np.zeros(len(species))
+    levels_used = np.zeros(len(species), dtype=int)
 
     # Loop through the NLTE levels:
-    l = u = 0
-    nl, nu = len(line_label_low), len(line_label_upp)
     for i, level in enumerate(level_labels):
-        # Skip through the line levels up to current nlte level
-        while l < nl and line_label_low[illevels[l]] < level_labels[iblevels[i]]:
-            l += 1
-        while u < nu and line_label_upp[iulevels[u]] < level_labels[iblevels[i]]:
-            u += 1
+        idx_l = line_label_low == level
+        linelevels[idx_l, 0] = i
+        levels_used[i] += np.count_nonzero(idx_l)
 
-        # Now match all corresponding nlte-line levels to current nlte level
-        while l < nl and line_label_low[illevels[l]] == level_labels[iblevels[i]]:
-            linelevels[illevels[l], 0] = iblevels[i]
-            levels_used[iblevels[i]] += 1
-            l += 1
-        while u < nu and line_label_upp[iulevels[u]] == level_labels[iblevels[i]]:
-            linelevels[iulevels[u], 1] = iblevels[i]
-            levels_used[iblevels[i]] += 1
-            u += 1
+        idx_u = line_label_upp == level
+        linelevels[idx_u, 1] = i
+        levels_used[i] += np.count_nonzero(idx_u)
 
     iused = levels_used > 0
     # Remap the previous indices into a collapsed sequence:
@@ -324,10 +317,8 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     level_labels = level_labels[iused]
 
     # Remap the linelevel references:
-    imatched0 = linelevels[:, 0] >= 0
-    imatched1 = linelevels[:, 1] >= 0
-    linelevels[imatched0, 0] = iremap[linelevels[imatched0, 0]]
-    linelevels[imatched1, 1] = iremap[linelevels[imatched1, 1]]
+    imatched = linelevels >= 0
+    linelevels[imatched] = iremap[linelevels[imatched]]
 
     # Reduce the stored data to only relevant energy levels
     bgrid = bgrid[iused, ...]
@@ -377,10 +368,9 @@ def interpolate_grid(sme, elem, nlte_grid):
     # find target depth
     target_depth = sme.atmo[sme.atmo.interp]
 
-    # TODO use some scipy method for interpolation
+    # TODO use some scipy method for interpolation on a grid ?
 
     # Linear interpolation, between nearest grid points
-    nbd = bgrid.shape[0]
     nd = len(target_depth)
 
     xi, xfrac = get_gridindices(nlte_grid["xfe"], abund, 0, name="abund")
@@ -398,7 +388,6 @@ def interpolate_grid(sme, elem, nlte_grid):
     for x, t, g, f, l in itertools.product(
         range(nabund), range(nteff), range(ngrav), range(nfeh), range(nl)
     ):
-        #  bgrid[:, :, i, j, k, l] = keys[f[l], g[k], t[j], x[i]]
         xp = depth[fi[f], gi[g], ti[t], :]
         yp = bgrid[l, :, xi[x], ti[t], gi[g], fi[f]]
         subgrid[:, l, x, t, g, f] = np.interp(np.log10(target_depth), np.log10(xp), yp)
@@ -425,6 +414,59 @@ def nlte(sme, elem):
     return subgrid, linerefs, lineindices
 
 
+# TODO should this be in sme_synth instead ?
+def update_depcoeffs(sme):
+    """ pass departure coefficients to C library """
+    # # Common block keeps track of the currently stored subgrid,
+    # #  i.e. that which surrounds a previously used grid points,
+    # #  as well as the current matrix of departure coefficients.
+
+    ## Reset departure coefficients from any previous call, to ensure LTE as default:
+    sme_synth.ResetNLTE()
+
+    if not "nlte" in sme:
+        return sme  # no NLTE is requested
+    if (
+        "nlte_pro" not in sme.nlte
+        or "nlte_elem_flags" not in sme.nlte
+        or "nlte_grids" not in sme.nlte
+        or np.all(sme.nlte.nlte_grids == "")
+    ):
+        # Silent fail to do LTE only.
+        print("Running in LTE")
+        return sme  # no NLTE routine available
+    if sme.linelist.lineformat == "short":
+        print("--- ")
+        print("NLTE line formation was requested, but VALD3 long-format linedata ")
+        print("are required in order to relate line terms to NLTE level corrections!")
+        print("Line formation will proceed under LTE.")
+        return sme  # no NLTE line data available
+    print("Running in NLTE")
+
+    # TODO store results for later reuse
+
+    elements = sme.nlte.nlte_elem_flags
+    elements = [elem for elem, i in zip(Abund._elem, elements) if i == 1]
+
+    # Call each element to update and return its set of departure coefficients
+    for elem in elements:
+        # Call function to retrieve interpolated NLTE departure coefficients
+        bmat, linerefs, lineindices = nlte(sme, elem)
+
+        if len(linerefs) < 2 or bmat is None:
+            # no data were returned. Don't bother?
+            pass
+        else:
+            # Put corrections into the nlte_b matrix, don't cache the data
+            for lr, li in zip(linerefs, lineindices):
+                # loop through the list of relevant _lines_, substitute both their levels into the main b matrix
+                # Make sure both levels have corrections available
+                if lr[0] != -1 and lr[1] != -1:
+                    sme_synth.InputNLTE(bmat[lr, :].T, li)
+
+    return sme
+
+
 if __name__ == "__main__":
     in_file = "sme.npy"
 
@@ -433,12 +475,5 @@ if __name__ == "__main__":
 
     sme = np.load(in_file)
     sme = np.atleast_1d(sme)[0]
-    # sme.nlte = lambda: None
-    # sme.nlte.nlte_grids = {"Na": "marcs2012_Na.grd"}
-    # sme.nlte.nlte_subgrid_size = [2, 2, 2, 2]
-    # sme.teff = 5000
-    # sme.logg = 2.2
-    # sme.feh = 0.3
-    # sme.abund = {"Na": 0.1}
 
     grid = nlte(sme, "Na")
