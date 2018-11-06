@@ -5,36 +5,97 @@ from .bezier import bezier_interp
 
 
 def apply_broadening(ipres, x_seg, y_seg, type="gauss", sme=None):
+    """
+    Broaden a spectrum by instrument resolution, with a given broadening type
+
+    Parameters
+    ----------
+    ipres : float
+        instrument resolution
+    x_seg : array (npoints,)
+        x values (wavelength) of the spectrum to broaden
+    y_seg : array (npoints,)
+        y values (intensities) of the spectrum to broaden
+    type : {str, None}, optional
+        broadening type to apply. Options are "gauss", "sinc", "table", None. If None, will try to use sme.iptype to determine type.
+        "table" requires keyword sme to be passed as well. See functions the respective for details.
+        (default: "gauss")
+    sme : SME_Struct, optional
+        sme structure with instrument profile data, required only for type="table" or type=None (default: None)
+
+    Raises
+    ------
+    AttributeError
+        if type requires SME_Struct, but its missing
+        passed type not recognized
+
+    Returns
+    -------
+    y_seg : array (npoints,)
+        broadened intensity spectrum
+    """
+
+    if sme is None and type in ["table", None]:
+        raise AttributeError(f"SME structure needs to be passed when using type={type}")
+
     # Using the log-linear wavelength grid requires using the first point
     # for specifying the the width of the instrumental profile
     hwhm = 0.5 * x_seg[0] / ipres if ipres > 0 else 0
 
-    if sme.iptype == "table":
+    if type is None:
+        type = sme.iptype
+        type = type.casefold()
+
+    if type == "table":
         y_seg = tablebroad(x_seg, y_seg, sme.ip_x, sme.ip_y)
-    elif sme.iptype == "gauss":
+    elif type == "gauss":
         y_seg = gaussbroad(x_seg, y_seg, hwhm)
-    elif sme.iptype == "sinc":
+    elif type == "sinc":
         y_seg = sincbroad(x_seg, y_seg, hwhm)
     else:
-        raise AttributeError("Unknown IP type - " + sme.iptype)
+        raise AttributeError(f"Unknown instrument profile type - {type}")
 
     return y_seg
 
 
 def tablebroad(w, s, xip, yip):
-    """ Convolves a spectrum with an instrumental profile.
-    22-May-92 JAV	Switched instrumental profile from multiple gaussians
-    		 to gaussian with power-law wings.
-    04-Aug-92 JAV	Renamed from ipsmo.pro# changed f/ procedure to function.
-    		 Switched f/ 10 to 15 Hamilton pixels in each wing.
-    20-Oct-92 JAV	Switched from gpfunc to ipfun (4 to 5 par).
-    23-Aug-94 JAV	Switched to explicitly passed IPs.
+    """
+    Convolves a spectrum with an arbitrary instrumental profile.
+
+    Input:
+    -------
+    w : array of size (n,)
+        wavelength scale of spectrum to be smoothed
+    s : array of size (n,)
+        spectrum to be smoothed
+    xip : array of size (m,)
+        x points of the instrument profile
+    yip : array of size (m,)
+        y points of the instrument profile
+    Output:
+    -------
+    sout: array[n]
+        the smoothed spectrum.
+
+    History:
+    -------
+        22-May-92 JAV
+            Switched instrumental profile from multiple gaussians
+            to gaussian with power-law wings.
+        04-Aug-92 JAV
+            Renamed from ipsmo.pro# changed f/ procedure to function.
+            Switched f/ 10 to 15 Hamilton pixels in each wing.
+        20-Oct-92 JAV
+            Switched from gpfunc to ipfun (4 to 5 par).
+        23-Aug-94 JAV
+            Switched to explicitly passed IPs.
+        Oct-18  AW
+            Python version
     """
 
     dsdh = s
 
     # Define sizes.
-    ns = len(s)  ## points in spectrum
     nip = 2 * int(15 / dsdh) + 1  ## profile points
 
     # Generate instrumental profile on model pixel scale.
@@ -46,27 +107,41 @@ def tablebroad(w, s, xip, yip):
     ip = ip / np.sum(ip)  # ensure unit area
 
     # Pad spectrum ends to minimize impact of Fourier ringing.
-    snew = convolve(s, ip, mode="nearest")
-    # npad = nip + 2  ## pad pixels on each end
-    # snew = np.pad(s, pad_width=npad, mode="edge")  # add lots of end padding
+    sout = convolve(s, ip, mode="nearest")
 
-    # # Convolve and trim.
-    # snew = np.convolve(snew, ip)  # convolve with gaussian
-    # snew = snew[npad : -npad]  # trim to original data/length
-    return snew  # return convolved spectrum
+    return sout  # return convolved spectrum
 
 
 def gaussbroad(w, s, hwhm):
-    """ #Smooths a spectrum by convolution with a gaussian of specified hwhm.
-    # w (input vector) wavelength scale of spectrum to be smoothed
-    # s (input vector) spectrum to be smoothed
-    # hwhm (input scalar) half width at half maximum of smoothing gaussian.
-    #Returns a vector containing the gaussian-smoothed spectrum.
-    #Edit History:
-    #  -Dec-90 GB,GM Rewrote with fourier convolution algorithm.
-    #  -Jul-91 AL	Translated from ANA to IDL.
-    #22-Sep-91 JAV	Relaxed constant dispersion check# vectorized, 50% faster.
-    #05-Jul-92 JAV	Converted to function, handle nonpositive hwhm.
+    """
+    Smooths a spectrum by convolution with a gaussian of specified hwhm.
+
+    Input:
+    -------
+    w : array[n]
+        wavelength scale of spectrum to be smoothed
+    s : array[n]
+        spectrum to be smoothed
+    hwhm : float
+        half width at half maximum of smoothing gaussian.
+
+    Output:
+    -------
+    sout: array[n]
+        the gaussian-smoothed spectrum.
+
+    History:
+    --------
+        Dec-90 GB,GM
+            Rewrote with fourier convolution algorithm.
+        Jul-91 AL
+            Translated from ANA to IDL.
+        22-Sep-91 JAV
+            Relaxed constant dispersion check# vectorized, 50% faster.
+        05-Jul-92 JAV
+            Converted to function, handle nonpositive hwhm.
+        Oct-18 AW
+            Python version
     """
 
     # Warn user if hwhm is negative.
@@ -97,31 +172,45 @@ def gaussbroad(w, s, hwhm):
 
     # Pad spectrum ends to minimize impact of Fourier ringing.
     sout = convolve(s, gpro, mode="nearest")
-    # npad = nhalf + 2  ## pad pixels on each end
-    # spad = np.pad(s, npad, mode="edge")
 
-    # # Convolve and trim.
-    # sout = np.convolve(spad, gpro)  # convolve with gaussian
-    # sout = sout[npad : -npad]  # trim to original data/length
-    return sout  # return broadened spectrum.
+    return sout
 
 
 def sincbroad(w, s, hwhm):
     """
-    #Smooths a spectrum by convolution with a sinc function of specified hwhm.
-    # w (input vector) wavelength scale of spectrum to be smoothed
-    # s (input vector) spectrum to be smoothed
-    # hwhm (input scalar) half width at half maximum of smoothing gaussian.
-    #Returns a vector containing the gaussian-smoothed spectrum.
-    #Edit History:
-    #  -Dec-90 GB,GM Rewrote with fourier convolution algorithm.
-    #  -Jul-91 AL	Translated from ANA to IDL.
-    #22-Sep-91 JAV	Relaxed constant dispersion check# vectorized, 50% faster.
-    #05-Jul-92 JAV	Converted to function, handle nonpositive hwhm.
-    #14-Nov-93 JAV	Adapted from macbro.pro
-    #23-Apr-93 JAV	Verified that convolution kernel has specified hwhm. For IR FTS
-    #		 spectra: hwhm=0.0759 Angstroms, max change in profile is 0.4%
-    #		 of continuum.
+    Smooths a spectrum by convolution with a sinc function of specified hwhm.
+
+    Input:
+    ------
+    w : array of size (n,)
+        wavelength scale of spectrum to be smoothed
+    s : array of size (n,)
+        spectrum to be smoothed
+    hwhm : float
+        half width at half maximum of smoothing gaussian.
+
+    Output:
+    -------
+    sout : array of size (n,)
+        the sinc-smoothed spectrum.
+
+    History:
+    -------
+    Dec-90 GB,GM
+        Rewrote with fourier convolution algorithm.
+    Jul-91 AL
+        Translated from ANA to IDL.
+    22-Sep-91 JAV
+        Relaxed constant dispersion check# vectorized, 50% faster.
+    05-Jul-92 JAV
+        Converted to function, handle nonpositive hwhm.
+    14-Nov-93 JAV
+        Adapted from macbro.pro
+    23-Apr-93 JAV
+        Verified that convolution kernel has specified hwhm. For IR FTS
+        spectra: hwhm=0.0759 Angstroms, max change in profile is 0.4% of continuum.
+    Oct-18 AW
+        Python Version
     """
 
     # Warn user if hwhm is negative.
@@ -155,10 +244,5 @@ def sincbroad(w, s, hwhm):
 
     # Pad spectrum ends to minimize impact of Fourier ringing.
     sout = convolve(s, sinc, mode="nearest")
-    # npad = nhalf + 2  ## pad pixels on each end
-    # spad = np.pad(s, npad, mode="edge")
 
-    # # Convolve and trim.
-    # sout = np.convolve(spad, sinc)  # convolve with gaussian
-    # sout = sout[npad:-npad]  # trim to original data/length
-    return sout  # return broadened spectrum.
+    return sout
