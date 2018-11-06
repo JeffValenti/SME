@@ -195,15 +195,49 @@ def get_wavelengthrange(wran, vrad, vsini):
     return wbeg, wend
 
 
-def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineList=True):
+def synthetize_spectrum(wavelength, param, sme, save=True):
+    """
+    Create a synthetic spectrum, with a given wavelength
+    
+    Parameters
+    ----------
+    wavelength : array (npoints,)
+        wavelength grid
+    param : array (nparam,)
+        parameter values to use. Only parameters that are varied need to be set. Which parameter is in which position is determined by param_names
+    sme : SME_Struct
+        input sme structure
+    param_names : list
+        names of parameters in param
+    save : {bool, str}, optional
+        wether to save the sme structure. If save is a string it will be used as the filename (default: True)
+    
+    Returns
+    -------
+    spec : array (npoints,)
+        synthetic spectrum
+    """
 
     # change parameters
-    for name, value in zip(param_names, param):
+    for name, value in param.items():
         sme[name] = value
 
     # run spectral synthesis
-    sme = sme_func(sme, setLineList=setLineList)
-    sme.save()
+    sme2 = sme_func(sme)
+
+    # Return values by reference to sme
+    sme.wave = sme2.wave
+    sme.smod = sme2.smod
+    sme.vrad = sme2.vrad
+    sme.cscale = sme.cscale
+
+    # Also save intermediary results, because we can
+    if isinstance(save, bool):
+        if save:
+            # use default name
+            sme2.save()
+    else:
+        sme2.save(save)
 
     mask = (sme.mob != 0) & (sme.uob != 0)
     if not np.allclose(wavelength, sme.wave[mask]):
@@ -215,26 +249,27 @@ def synthetize_spectrum(wavelength, *param, sme=None, param_names=[], setLineLis
     return res
 
 
-def linelist_errors(sme, linelist):
+def linelist_errors(wave, spec, linelist):
     # make linelist errors
-    mask = (sme.mob != 0) & (sme.uob != 0)
     rel_error = linelist.error
-    width = sme_synth.GetLineRange(len(linelist))  # TODO
-    sig_syst = np.zeros(np.count_nonzero(mask), dtype=float)
-    wave = sme.wave[mask]
+    width = sme_synth.GetLineRange(len(linelist))
 
-    for i, line in enumerate(linelist):
+    sig_syst = np.zeros(wave.size, dtype=float)
+
+    for i, line_range in enumerate(width):
         # find closest wavelength region
-        w = (wave >= width[i, 0]) & (wave <= width[i, 1])
+        w = (wave >= line_range[0]) & (wave <= line_range[1])
         sig_syst[w] += rel_error[i]
 
-    sig_syst *= np.clip(1 - sme.sob[mask], 0, 1)
+    sig_syst *= np.clip(1 - spec, 0, 1)
     return sig_syst
 
 
-def solve(sme, param_names=["teff", "logg", "feh"]):
+def solve(sme, param_names=["teff", "logg", "feh"], filename="sme.npy"):
     """
     Find the least squares fit parameters to an observed spectrum
+
+    NOTE: intermediary results will be saved in "sme.npy", which is also used to transfer data
 
     Parameters
     ----------
@@ -242,6 +277,8 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
         sme struct containing all input (and output) parameters
     param_names : list, optional
         the names of the parameters to fit (default: ["teff", "logg", "feh"])
+    filename : str, optional
+        the sme structure will be saved to this file, use None to suppress this behaviour (default: "sme.npy")
 
     Returns
     -------
@@ -268,16 +305,19 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
 
     p0 = [sme[s] for s in param_names]
     bounds = np.array([bounds[s.casefold()] for s in param_names]).T
-    # func = (model - obs) / sigma
+    # Get constant data from sme structure
+    mask = (sme.mob != 0) & (sme.uob != 0)
+    wave = sme.wave[mask]
+    spec = sme.sob[mask]
+    uncs = sme.uob[mask]
 
-    def residuals(param):
-        mask = (sme.mob != 0) & (sme.uob != 0)
-        wave = sme.wave[mask]
-        spec = sme.sob[mask]
-        uncs = sme.uob[mask]
-
-        synth = synthetize_spectrum(wave, *param, param_names=param_names, sme=sme)
-        uncs2 = linelist_errors(sme, sme.linelist)
+    def residuals(param, param_names, wave, spec, uncs):
+        """ func = (model - obs) / sigma """
+        param = {n: v for n, v in zip(param_names, param)}
+        synth = synthetize_spectrum(wave, param, sme)
+        # linelist uncertainties might change depending
+        # on the parameters, as the range of each line changes
+        uncs2 = linelist_errors(wave, spec, sme.linelist)
         resid = (synth - spec) / (uncs + uncs2)
         return np.nan_to_num(resid, copy=False)
 
@@ -288,10 +328,13 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
         bounds=bounds,
         loss="linear",
         verbose=2,
-        method="dogbox",
+        args=(param_names, wave, spec, uncs),
+        # method="dogbox", #method "dogbox" might be faster than "trf" ???
     )
 
-    sme = SME.SME_Struct.load("sme.npy")
+    # SME structure is updated inside synthetize_spectrum to contain the results of the calculation
+    # If for some reason that should not work, one can load the intermediary "sme.npy" file
+    # sme = SME.SME_Struct.load("sme.npy")
 
     popt = res.x
     sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
@@ -308,11 +351,12 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
     VT = VT[: s.size]
     pcov = np.dot(VT.T / s ** 2, VT)
 
-    # Alternative for determining the Covariance
+    # Alternative for determining the Covariance, with the exact same result
     # hess = res.jac.T.dot(res.jac) # hessian == fisher information matrix
     # covar = np.linalg.pinv(hess)
     # sig = np.sqrt(covar.diag())
 
+    sme.fitresults.clear()
     sme.fitresults.covar = pcov
     sme.fitresults.grad = res.grad
     sme.fitresults.pder = res.jac
@@ -324,9 +368,11 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
         tmp = np.abs(res.fun) / np.median(np.abs(res.jac[:, i]))
         sme.fitresults.punc[param_names[i]] = np.median(tmp)
 
+    # alternative errors based on covariance matrix
     sme.fitresults.punc2 = np.sqrt(np.diag(pcov))
 
-    sme.save()
+    if filename is not None:
+        sme.save(filename)
 
     print(res.message)
     for name, value, unc in zip(param_names, popt, sme.fitresults.punc.values()):
@@ -440,8 +486,8 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
         if sme.wave is None:
             seg_wave = None
         else:
-            seg_wind = [0, *(sme.wind + 1)]
-            seg_wave = sme.wave[seg_wind[il] : seg_wind[il + 1]]
+            seg_wind = [0, *(sme.wind + 1)][il : il + 2]
+            seg_wave = sme.wave[seg_wind[0] : seg_wind[1]]
 
         #   Calculate spectral synthesis for each
         nw, wint[il], sint[il], cint[il] = sme_synth.Transf(
@@ -453,7 +499,7 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
             wave=seg_wave,
         )
 
-        # Interpolate onto geomspaced wavelength grid
+        # Create new geomspaced wavelength grid, to be used for intermediary steps
         x_seg, vstep = new_wavelength_grid(wint[il])
 
         # Continuum
@@ -473,21 +519,18 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
                 ipres, x_seg, y_seg, type=sme["iptype"], sme=sme
             )
 
+        # Divide calculated spectrum by continuum
         y_seg /= yc_seg
 
         if "wave" in sme:  # wavelengths already defined
             # first pixel in current segment
-            ibeg = 0 if il == 0 else sme.wind[il - 1] + 1
-            # last pixel in current segment
-            iend = sme.wind[il]
+            ibeg, iend = seg_wind
             wind[il] = iend - ibeg
-            if il > 0:
-                wind[il] += 1
-            wave[il] = sme.wave[ibeg : iend + 1]  # wavelengths for current segment
 
-            sob_seg = sme.sob[ibeg : iend + 1]  # observed spectrum
-            uob_seg = sme.uob[ibeg : iend + 1]  # associated uncertainties
-            mob_seg = sme.mob[ibeg : iend + 1]  # ignore/line/cont mask
+            wave[il] = sme.wave[ibeg:iend]  # wavelengths for current segment
+            sob_seg = sme.sob[ibeg:iend]  # observed spectrum
+            uob_seg = sme.uob[ibeg:iend]  # associated uncertainties
+            mob_seg = sme.mob[ibeg:iend]  # ignore/line/cont mask
 
         else:  # else must build wavelengths
             itrim = (x_seg > wran_seg[0]) & (x_seg < wran_seg[1])  # trim padding
@@ -525,7 +568,7 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
     sme.smod = smod = np.concatenate(smod)
     # if sme already has a wavelength this should be the same
     sme.wave = wave = np.concatenate(wave)
-    sme.wind = wind = np.cumsum(wind)
+    sme.wind = wind = np.cumsum(wind) - 1
 
     sme.vrad = np.array(vrad)
     sme.cscale = np.stack(cscale)
@@ -583,51 +626,3 @@ def fisher(sme):
     np.save("fisher_matrix", fisher_matrix)
     print(fisher_matrix)
     return fisher_matrix
-
-
-def sme_main(sme, only_func=False):
-
-    flags = get_flags(sme)
-
-    # Decide which global parameters, if any, are free parameters.
-    freep = []
-
-    if "glob_free" in sme:
-        freep += sme.glob_free
-
-    # Decide which log(gf), if any, are free parameters.
-    if flags["gf"]:
-        igf = sme.gf_free > 0
-        freep += [
-            "%s %i LOGGF" % (s, i)
-            for s, i in np.zip(sme.species[igf], sme.atomic.T[2, igf])
-        ]
-
-    # Decide which van der Waal's constants, if any, are free parameters.
-    if flags["vw"]:
-        ivw = sme.vw_free > 0
-        freep += [
-            "%s%i %i LOGVW " % (s, i, j)
-            for s, i, j in zip(
-                elements[sme.atomic.T[0, ivw] - 1],
-                sme.atomic.T[1, ivw],
-                sme.atomic.T[2, ivw],
-            )
-        ]
-
-    # Decide which abundances, if any, are free parameters.
-    if flags["ab"]:
-        iab = sme.ab_free > 0
-        freep += [s + " ABUND" for s in elements[iab]]
-
-    # TODO: sme_nlte_reset
-
-    # Call model evaluator/solver.
-    if len(freep) > 0 and not only_func:  # true: call gradient solver
-        sme = solve(sme, param_names=freep)  # solve for best parameters
-    else:  # else: parameters known
-        sme = sme_func(sme)  # just evaluate model once
-
-    sme.save()
-
-    return sme
