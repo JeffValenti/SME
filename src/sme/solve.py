@@ -255,7 +255,13 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
 
     param_names = [p if p.casefold() != "grav" else "logg" for p in param_names]
 
-    bounds = {"teff": [3500, 7000], "logg": [3, 5], "feh": [-5, 1], "vmic": [-10, 10]}
+    bounds = {
+        "teff": [3500, 7000],
+        "logg": [3, 5],
+        "feh": [-5, 1],
+        "vmic": [0, np.inf],
+        "vmac": [0, np.inf],
+    }
     bounds.update({"%s abund" % el.casefold(): [-10, 10] for el in Abund._elem})
 
     nparam = len(param_names)
@@ -316,14 +322,14 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
     sme.fitresults.punc = {name: 0 for name in param_names}
     for i in range(nparam):
         tmp = np.abs(res.fun) / np.median(np.abs(res.jac[:, i]))
-        sme.fitresults.punc[param_names[i]] = tmp
+        sme.fitresults.punc[param_names[i]] = np.median(tmp)
 
     sme.fitresults.punc2 = np.sqrt(np.diag(pcov))
 
     sme.save()
 
     print(res.message)
-    for name, value, unc in zip(param_names, popt, sme.punc.values()):
+    for name, value, unc in zip(param_names, popt, sme.fitresults.punc.values()):
         print("%s\t%.5f +- %.5f" % (name, value, unc))
 
     return sme
