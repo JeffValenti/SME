@@ -89,7 +89,8 @@ def match_rv_continuum(
 
         lines = mask == 1
 
-        # Then minimize the least squares
+        # Then minimize the least squares for a better fit
+        # as cross correlation can only find
         def func(x):
             tmp = np.interp(x_obs[lines] * (1 - x / c_light), x_syn, y_syn)
             return np.sum((y_obs[lines] - tmp) ** 2 * u_obs[lines] ** -2)

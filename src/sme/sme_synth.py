@@ -269,6 +269,10 @@ def GetLineRange(nlines):
 @check_error
 def InputNLTE(bmat, lineindices):
     """ Input NLTE departure coefficients """
+    s = bmat.shape
+    assert s[0] == 2
+    # assert(s[1] == nrhox)
+
     return idl_call_external("InputDepartureCoefficients", bmat, lineindices)
 
 

@@ -17,7 +17,7 @@ class MaskPlot:
     """ A plot that can be used to define the mask """
 
     # Controls:
-    # Left, Right Arrow keys: Switch between segments
+    # a, d keys: Switch between segments
     # Left, Right Mouse button: Select sections to change the mask depending on current mode
     #       mode == "good/bad" : left  -> line mask
     #                            right -> bad mask
@@ -70,11 +70,11 @@ class MaskPlot:
                 self.mode = "good/bad"
             print("Switch to mode: %s" % self.mode)
 
-        if event.key == "left":
+        if event.key in ["a", "left"]:
             if self.segment > 0:
                 self.segment -= 1
                 self.update(reset_view=True)
-        if event.key == "right":
+        if event.key in ["d", "right"]:
             if self.segment < len(self.wave) - 1:
                 self.segment += 1
                 self.update(reset_view=True)

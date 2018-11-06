@@ -33,7 +33,7 @@ class Iliffe_vector:
         else:
             if index[0] != 0:
                 index = [0, *index]
-            self.__idx__ = np.asarray(index).ravel()
+            self.__idx__ = np.asarray(index)
             sizes = index[-1]
         # this stores the actual data
         if values is None:
@@ -41,7 +41,7 @@ class Iliffe_vector:
         else:
             if np.size(values) != np.sum(sizes):
                 raise ValueError("Size of values and sizes do not fit")
-            self.__values__ = np.asarray(values).ravel()
+            self.__values__ = np.asarray(values)
 
     def __len__(self):
         return len(self.__idx__) - 1
@@ -49,6 +49,13 @@ class Iliffe_vector:
     def __getitem__(self, index):
         if not hasattr(index, "__len__"):
             index = (index,)
+
+        if isinstance(index, str):
+            # This happens for example for np.recarrays
+            return Iliffe_vector(
+                None, index=self.__idx__, values=self.__values__[index]
+            )
+
         if len(index) == 0:
             return self.__values__
         i0 = self.__idx__[index[0]]
@@ -62,6 +69,9 @@ class Iliffe_vector:
     def __setitem__(self, index, value):
         if not hasattr(index, "__len__"):
             index = (index,)
+
+        if isinstance(index, str):
+            self.__values__[index] = value
 
         if len(index) == 0:
             self.__values__ = value
@@ -86,6 +96,13 @@ class Iliffe_vector:
     @property
     def dtype(self):
         return self.__values__.dtype
+
+    @property
+    def flat(self):
+        return self.__values__.flat
+
+    def flatten(self):
+        return self.__values__
 
 
 class Collection(object):
@@ -310,6 +327,19 @@ class Fitresults(Collection):
         self.psig_r = kwargs.pop("psig_r", None)
         self.covar = kwargs.pop("covar", None)
         super().__init__(**kwargs)
+
+    def clear(self):
+        """ reset all values to None """
+        self.maxiter = None
+        self.chirat = None
+        self.chisq = None
+        self.rchisq = None
+        self.crms = None
+        self.lrms = None
+        self.punc = None
+        self.psig_l = None
+        self.psig_r = None
+        self.covar = None
 
 
 class SME_Struct(Param):
