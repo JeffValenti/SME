@@ -143,6 +143,7 @@ def InputAbund(abund, feh):
     Introduced limiter in case the proposed step in abundance is too large [2018-Apr-25].
     """
     # Convert abundances to the right format
+    # metallicity is included in the abundance class, ignored in function call
     abund = abund("sme", raw=True)
 
     # abund = np.copy(abund.get_pattern("H=12", raw=True))
@@ -214,7 +215,7 @@ def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000, wave
     else:
         nw = len(wave)
         nwmax = nw
-        wint_seg = wave
+        wint_seg = np.asarray(wave, float)
 
     nmu = len(mu)
 

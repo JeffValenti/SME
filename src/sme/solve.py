@@ -233,6 +233,22 @@ def linelist_errors(sme, linelist):
 
 
 def solve(sme, param_names=["teff", "logg", "feh"]):
+    """
+    Find the least squares fit parameters to an observed spectrum
+
+    Parameters
+    ----------
+    sme : SME_Struct
+        sme struct containing all input (and output) parameters
+    param_names : list, optional
+        the names of the parameters to fit (default: ["teff", "logg", "feh"])
+
+    Returns
+    -------
+    sme : SME_Struct
+        same sme structure with fit results in sme.fitresults, and best fit spectrum in sme.smod
+    """
+
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
     # TODO: Set up a sparsity scheme for the jacobian (if some parameters are sufficiently independent)
     # TODO: create more efficient jacobian function
@@ -259,12 +275,14 @@ def solve(sme, param_names=["teff", "logg", "feh"]):
         resid = (synth - spec) / (uncs + uncs2)
         return np.nan_to_num(resid, copy=False)
 
-    # Prepare LineList only once
-    sme_synth.SetLibraryPath()
-    sme_synth.InputLineList(sme.atomic, sme.species)
-
     res = least_squares(
-        residuals, x0=p0, jac="2-point", bounds=bounds, loss="linear", verbose=2
+        residuals,
+        x0=p0,
+        jac="2-point",
+        bounds=bounds,
+        loss="linear",
+        verbose=2,
+        method="dogbox",
     )
 
     sme = SME.SME_Struct.load("sme.npy")
@@ -322,9 +340,8 @@ def new_wavelength_grid(wint):
     vstep = max(vstep1, vstep2, vstep3)  # select the largest
 
     # Generate model wavelength scale X, with uniform wavelength step.
-    #
     nx = int(
-        np.log10(wint[-1] / wint[0]) / np.log10(1 + vstep / clight) + 1
+        np.abs(np.log10(wint[-1] / wint[0])) / np.log10(1 + vstep / clight) + 1
     )  # number of wavelengths
     if nx % 2 == 0:
         nx += 1  # force nx to be odd
@@ -334,6 +351,33 @@ def new_wavelength_grid(wint):
 
 # @memory.cache
 def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
+    """
+    Calculate the synthetic spectrum based on the parameters passed in the SME structure
+    The wavelength range of each segment is set in sme.wran
+    The specific wavelength grid is given by sme.wave, or is generated on the fly if sme.wave is None
+
+    Will try to fit radial velocity RV and continuum to observed spectrum, depending on vrad_flag and cscale_flag
+
+    Other important fields:
+    sme.iptype: instrument broadening type
+
+    Parameters
+    ----------
+    sme : SME_Struct
+        sme structure, with all necessary parameters for the calculation
+    setLineList : bool, optional
+        wether to pass the linelist to the c library (default: True)
+    passAtmosphere : bool, optional
+        wether to pass the atmosphere to the c library (default: True)
+    passNLTE : bool, optional
+        wether to pass NLTE departure coefficients to the c library (default:True)
+
+    Returns
+    -------
+    sme : SME_Struct
+        same sme structure with synthetic spectrum in sme.smod
+    """
+
     # Define constants
     n_segments = sme.nseg
     nmu = len(sme.mu)
@@ -348,7 +392,6 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
     wint = [None for _ in range(n_segments)]
     sint = [None for _ in range(n_segments)]
     cint = [None for _ in range(n_segments)]
-    jint = [None for _ in range(n_segments)]
     vrad = [None for _ in range(n_segments)]
 
     cscale = [None for _ in range(n_segments)]
@@ -363,10 +406,6 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
     if passAtmosphere:
         sme = sme_func_atmo(sme)
         sme_synth.InputModel(sme.teff, sme.logg, sme.vmic, sme.atmo)
-        # Compile the table of departure coefficients if NLTE flag is set
-        if "nlte" in sme and "atmo_pro" in sme:
-            pass_nlte(sme)
-
         sme_synth.InputAbund(sme.abund, sme.feh)
         sme_synth.Ionization(0)
         sme_synth.SetVWscale(sme.gam6)
@@ -392,13 +431,23 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
         sme_synth.InputWaveRange(wbeg, wend)
         sme_synth.Opacity()
 
+        if sme.wave is None:
+            seg_wave = None
+        else:
+            seg_wind = [0, *(sme.wind + 1)]
+            seg_wave = sme.wave[seg_wind[il] : seg_wind[il + 1]]
+
         #   Calculate spectral synthesis for each
         nw, wint[il], sint[il], cint[il] = sme_synth.Transf(
-            sme.mu, sme.accrt, sme.accwi, keep_lineop=il != 0, long_continuum=1
+            sme.mu,
+            sme.accrt,
+            sme.accwi,
+            keep_lineop=il != 0,
+            long_continuum=1,
+            wave=seg_wave,
         )
-        jint[il] = jint[il - 1] + nw if il != 0 else nw - 1
 
-        #   Interpolate onto geomspaced wavelength grid
+        # Interpolate onto geomspaced wavelength grid
         x_seg, vstep = new_wavelength_grid(wint[il])
 
         # Continuum

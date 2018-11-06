@@ -462,7 +462,7 @@ def update_depcoeffs(sme):
                 # loop through the list of relevant _lines_, substitute both their levels into the main b matrix
                 # Make sure both levels have corrections available
                 if lr[0] != -1 and lr[1] != -1:
-                    sme_synth.InputNLTE(bmat[lr, :].T, li)
+                    sme_synth.InputNLTE(bmat[:, lr].T, li)
 
     return sme
 
