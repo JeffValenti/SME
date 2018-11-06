@@ -1,7 +1,4 @@
-from collections import OrderedDict
-
 import numpy as np
-import numpy.lib.recfunctions
 
 from .abund import Abund
 
@@ -11,151 +8,126 @@ class FileError(Exception):
     """
 
 
-class Line:
-    """Atomic data for a single spectral line.
-    """
-
-    def __init__(
-        self,
-        species,
-        wlcent,
-        excit,
-        gflog,
-        gamrad,
-        gamqst,
-        gamvw,
-        lulande=None,
-        extra=None,
-    ):
-        self.species = str(species)
-        self.wlcent = float(wlcent)
-        self.excit = float(excit)
-        self.gflog = float(gflog)
-        self.gamrad = float(gamrad)
-        self.gamqst = float(gamqst)
-        self.gamvw = float(gamvw)
-        self.lulande = lulande
-        self.extra = extra
-
-        if self.lulande is not None:
-            self.lulande = [float(l) for l in self.lulande]
-        if self.extra is not None:
-            self.extra = [float(e) for e in self.extra]
-
-    def __str__(self):
-        return "'{}',{:10.4f},{:7.4f},{:7.3f},{:6.3f},{:7.3f},{:8.3f}".format(
-            self.species,
-            self.wlcent,
-            self.excit,
-            self.gflog,
-            self.gamrad,
-            self.gamqst,
-            self.gamvw,
-        )
-
-
 class LineList:
     """Atomic data for a list of spectral lines.
     """
 
+    @staticmethod
+    def from_IDL_SME(**kwargs):
+        """ extract LineList from IDL SME structure keywords """
+        species = kwargs.pop("species").astype("U")
+        atomic = kwargs.pop("atomic")
+        lande = kwargs.pop("lande")
+        depth = kwargs.pop("depth")
+        lineref = kwargs.pop("lineref").astype("U")
+        short_line_format = kwargs.pop("short_line_format")
+        if short_line_format == 2:
+            line_extra = kwargs.pop("line_extra")
+            line_lulande = kwargs.pop("line_lulande")
+            line_term_low = kwargs.pop("line_term_low").astype("U")
+            line_term_upp = kwargs.pop("line_term_upp").astype("U")
+
+        arrays = [species, *[atomic[:, i] for i in range(8)], lande, depth, lineref]
+        names = [
+            "species",
+            "atom_number",
+            "ionization",
+            "wlcent",
+            "excit",
+            "gflog",
+            "gamrad",
+            "gamqst",
+            "gamvw",
+            "lande",
+            "depth",
+            "ref",
+        ]
+
+        if short_line_format == 1:
+            lineformat = "short"
+            term_lower = term_upper = error = comment = None
+        if short_line_format == 2:
+            lineformat = "long"
+            arrays = arrays + [
+                line_lulande[:, 0],
+                line_lulande[:, 1],
+                line_extra[:, 0],
+                line_extra[:, 1],
+                line_extra[:, 2],
+            ]
+            names = names + ["lande_lower", "lande_upper", "j_lo", "e_upp", "j_up"]
+            term_lower = line_term_low
+            term_upper = line_term_upp
+            comment = lineref
+            error = [s[0:11].strip() for s in lineref]
+            error = ValdFile.parse_line_error(error, depth)
+
+        linedata = np.rec.fromarrays(arrays, names=names)
+        ionization = linedata["ionization"]
+        atom_number = linedata["atom_number"]
+
+        return (
+            linedata,
+            lineformat,
+            ionization,
+            atom_number,
+            term_lower,
+            term_upper,
+            comment,
+            error,
+        )
+
+    @staticmethod
+    def fromList(linedata):
+        """ extract data from """
+        names = [
+            "species",
+            "wlcent",
+            "excit",
+            "vmic",
+            "gflog",
+            "gamrad",
+            "gamqst",
+            "gamvw",
+            "lande",
+            "depth",
+            "ref",
+        ]
+        linedata = np.rec.fromrecords(linedata, names=names)
+        return linedata
+
     def __init__(self, linedata, lineformat="short", **kwargs):
         if linedata is None:
             # everything is in the kwargs (usually by loading from old SME file)
-            species = kwargs.pop("species").astype("U")
-            atomic = kwargs.pop("atomic")
-            lande = kwargs.pop("lande")
-            depth = kwargs.pop("depth")
-            lineref = kwargs.pop("lineref").astype("U")
-            short_line_format = kwargs.pop("short_line_format")
-            if short_line_format == 2:
-                line_extra = kwargs.pop("line_extra")
-                line_lulande = kwargs.pop("line_lulande")
-                line_term_low = kwargs.pop("line_term_low").astype("U")
-                line_term_upp = kwargs.pop("line_term_upp").astype("U")
-
-            arrays = [species, *[atomic[:, i] for i in range(8)], lande, depth, lineref]
-            names = [
-                "species",
-                "atom_number",
-                "ionization",
-                "wlcent",
-                "excit",
-                "gflog",
-                "gamrad",
-                "gamqst",
-                "gamvw",
-                "lande",
-                "depth",
-                "ref",
-            ]
-
-            if short_line_format == 1:
-                lineformat = "short"
-            if short_line_format == 2:
-                lineformat = "long"
-                arrays = arrays + [
-                    line_lulande[:, 0],
-                    line_lulande[:, 1],
-                    line_extra[:, 0],
-                    line_extra[:, 1],
-                    line_extra[:, 2],
-                ]
-                names = names + ["lande_lower", "lande_upper", "j_lo", "e_upp", "j_up"]
-                self.term_lower = line_term_low
-                self.term_upper = line_term_upp
-                self.comment = lineref
-                self.error = [s[0:11].strip() for s in lineref]
-                self.error = ValdFile.parse_line_error(self.error, depth)
-
-            linedata = np.rec.fromarrays(arrays, names=names)
-
-        if isinstance(linedata, list):
-            names = [
-                "species",
-                "wlcent",
-                "excit",
-                "vmic",
-                "gflog",
-                "gamrad",
-                "gamqst",
-                "gamvw",
-                "lande",
-                "depth",
-                "ref",
-            ]
-            linedata = np.rec.fromrecords(linedata, names=names)
-
-        self._lines = linedata
-        self.lineformat = lineformat
-
-        if "ionization" not in kwargs.keys():
-            if "ionization" not in linedata.dtype.names:
-                self.ionization = [int(s[-1]) for s in linedata["species"]]
-            else:
-                self.ionization = linedata["ionization"]
+            ld, lf, ion, an, tl, tu, com, err = LineList.from_IDL_SME(**kwargs)
         else:
-            self.ionization = kwargs["ionization"]
-
-        if "atom_number" not in kwargs.keys():
-            if "atom_number" not in linedata.dtype.names:
-                # self.atom_number = [s[0:2].strip() for s in linedata["species"]]
-                self.atom_number = [1 for _ in linedata]
+            if not isinstance(linedata, np.recarray):
+                linedata = LineList.fromList(linedata)
+            ld = linedata
+            lf = lineformat
+            if "atom_number" in kwargs.keys():
+                an = kwargs["atom_number"]
             else:
-                self.atom_number = linedata["atom_number"]
-        else:
-            self.atom_number = kwargs["atom_number"]
+                an = np.ones(linedata.shape, dtype=int)
 
-        if "term_upper" in kwargs.keys():
-            self.term_upper = np.asarray(kwargs["term_upper"])
-        if "term_lower" in kwargs.keys():
-            self.term_lower = np.asarray(kwargs["term_lower"])
-        if "comment" in kwargs.keys():
-            self.comment = np.asarray(kwargs["comment"])
-        if "error" in kwargs.keys():
-            self.error = np.asarray(kwargs["error"])
+            if "ionization" in kwargs.keys():
+                ion = kwargs["ionization"]
+            else:
+                ion = np.array([int(s[-1]) for s in linedata["species"]])
 
-        # for key, value in kwargs.items():
-        # setattr(self, key, value)
+            tu = kwargs.get("term_upper")
+            tl = kwargs.get("term_lower")
+            com = kwargs.get("comment")
+            err = kwargs.get("error")
+
+        self._lines = ld
+        self.lineformat = lf
+        self.ionization = np.asarray(ion)
+        self.atom_number = np.asarray(an)
+        self.term_lower = np.asarray(tl)
+        self.term_upper = np.asarray(tu)
+        self.comment = np.asarray(com)
+        self.error = np.asarray(err)
 
     def __len__(self):
         return len(self._lines)
@@ -380,8 +352,9 @@ class ValdFile:
 
         if fmt == "long":
             # Convert from cm^-1 to eV
-            linelist["excit"] /= 8065.544
-            linelist["e_upp"] /= 8065.544
+            conversion_factor = 8065.544
+            linelist["excit"] /= conversion_factor
+            linelist["e_upp"] /= conversion_factor
 
             # extract error data
             error = np.array([s[1:11].strip() for s in comment])
@@ -414,8 +387,8 @@ class ValdFile:
         abstr = "".join(["".join(line.split()) for line in lines])
         words = [w[1:-1] for w in abstr.split(",")]
         if len(words) != 100 or words[99] != "END":
-            raise FileError(f"error parsing abundances: {abstr}")
+            raise FileError(f"Error parsing abundances: {abstr}")
         pattern = [w.split(":") for w in words[:-1]]
-        pattern = OrderedDict([(el, float(ab)) for el, ab in pattern])
-        monh = 0.0
+        pattern = {el: float(ab) for el, ab in pattern}
+        monh = 0
         return Abund(monh, pattern, type="sme")
