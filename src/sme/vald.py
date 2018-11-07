@@ -141,6 +141,9 @@ class LineList:
     def __next__(self):
         return self._lines.__next__()
 
+    def __getitem__(self, index):
+        return self._lines[index]
+
     @property
     def species(self):
         return self._lines["species"]
