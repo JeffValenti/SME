@@ -1,6 +1,11 @@
 import numpy as np
-from matplotlib.widgets import SpanSelector
+import matplotlib as mpl
+from matplotlib.widgets import SpanSelector, Button
 import matplotlib.pyplot as plt
+
+from scipy.constants import c
+
+clight = c * 1e-3
 
 # from ..sme.sme import SME_Struct
 
@@ -35,6 +40,9 @@ class MaskPlot:
         self.wind = [0, *(sme.wind + 1)]
         self.mode = "line/cont"
         self.lines = sme.linelist
+        self.vrad = np.atleast_1d(sme.vrad)[-1]
+        self.line_plot = None
+        self.lock = False
 
         if axes is None:
             self.im = plt.subplots()[1]
@@ -58,9 +66,41 @@ class MaskPlot:
         )
 
         self.im.figure.canvas.mpl_connect("key_press_event", self.key_event)
+        self.im.callbacks.connect("xlim_changed", self.resize_event)
+
+        ax_next = plt.axes([0.8, 0.025, 0.1, 0.04])
+        self.button_next = Button(ax_next, "-->")
+        self.button_next.on_clicked(self.next_segment)
+
+        ax_prev = plt.axes([0.7, 0.025, 0.1, 0.04])
+        self.button_prev = Button(ax_prev, "<--")
+        self.button_prev.on_clicked(self.previous_segment)
 
         self.plot()
         plt.show()
+
+    def resize_event(self, event):
+        if self.line_plot is not None and not self.lock:
+            xlim = np.array(self.im.get_xlim())
+            xlim *= 1 - self.vrad / clight
+            idx = (self.lines_segment.wlcent >= xlim[0]) & (
+                self.lines_segment.wlcent <= xlim[1]
+            )
+            importance = self.lines_segment.depth - min(self.lines_segment.depth[idx])
+            if max(importance[idx]) != 0:
+                importance /= max(importance[idx])
+            else:
+                importance[idx] = 1
+
+            for i in np.where(idx)[0]:
+                self.line_plot[i][0].set_visible(True)
+                self.line_plot[i][1].set_visible(True)
+                self.line_plot[i][0].set_alpha(importance[i])
+                self.line_plot[i][1].set_alpha(importance[i])
+
+            for i in np.where(~idx)[0]:
+                self.line_plot[i][0].set_visible(False)
+                self.line_plot[i][1].set_visible(False)
 
     def key_event(self, event):
         if event.key in ["shift"]:
@@ -71,13 +111,9 @@ class MaskPlot:
             print("Switch to mode: %s" % self.mode)
 
         if event.key in ["a", "left"]:
-            if self.segment > 0:
-                self.segment -= 1
-                self.update(reset_view=True)
+            self.goto_segment(self.segment - 1)
         if event.key in ["d", "right"]:
-            if self.segment < len(self.wave) - 1:
-                self.segment += 1
-                self.update(reset_view=True)
+            self.goto_segment(self.segment + 1)
 
     def section_line_callback(self, min, max):
         mask_type = "line" if self.mode == "line/cont" else "good"
@@ -109,13 +145,15 @@ class MaskPlot:
         self.mask[self.segment][idx] = mask_value
 
         # update plot
+        self.lock = True
         self.update()
+        self.lock = False
 
-    def plot(self):
+    def plot(self, update=False):
         if self.mask is not None:
             mask = self.mask[self.segment]
 
-        if self.spec is not None:
+        if self.spec is not None and not update:
             self.im.plot(
                 self.wave[self.segment],
                 self.spec[self.segment],
@@ -123,7 +161,7 @@ class MaskPlot:
                 **fmt["Obs"],
             )
 
-        if self.smod is not None:
+        if self.smod is not None and not update:
             self.im.plot(
                 self.wmod[self.segment],
                 self.smod[self.segment],
@@ -132,7 +170,7 @@ class MaskPlot:
             )
 
         if self.spec is not None:
-            self.im.fill_between(
+            self.fill_line = self.im.fill_between(
                 self.wave[self.segment],
                 0,
                 self.spec[self.segment],
@@ -140,18 +178,53 @@ class MaskPlot:
                 label="Mask Line",
                 **fmt["LineMask"],
             )
-            self.im.fill_between(
+
+            m = mask == 2
+            m[1:] = m[:-1] | m[1:]
+            m[:-1] = m[:-1] | m[1:]
+            self.fill_cont = self.im.fill_between(
                 self.wave[self.segment],
                 0,
                 self.spec[self.segment],
-                where=mask == 2,
+                where=m,
                 label="Mask Continuum",
                 **fmt["ContMask"],
             )
 
+        if self.lines is not None and not update:
+            self.lock = True
+            xlim = self.wave[self.segment][[0, -1]]
+            xlim *= 1 - self.vrad / clight
+            self.lines_segment = self.lines[
+                (self.lines.wlcent >= xlim[0]) & (self.lines.wlcent <= xlim[1])
+            ]
+
+            importance = self.lines_segment.depth - min(self.lines_segment.depth)
+            importance /= max(importance)
+            self.line_plot = [[None, None] for _ in self.lines_segment]
+            for i, line in enumerate(self.lines_segment):
+                # if i > threshold:
+                wl = line.wlcent * (1 + self.vrad / clight)
+                self.line_plot[i][0] = self.im.text(
+                    wl,
+                    1.1,
+                    f"{line.species} {line.wlcent:.2f}",
+                    rotation="vertical",
+                    horizontalalignment="right",
+                    verticalalignment="top",
+                    alpha=importance[i],
+                )
+                depth = np.interp(wl, self.wave[self.segment], self.smod[self.segment])
+                self.line_plot[i][1] = self.im.vlines(
+                    wl, ymin=depth, ymax=1.1, alpha=importance[i]
+                )
+            self.lock = False
+
         self.im.figure.suptitle("SME Fit\nSegment %i" % self.segment)
         self.im.set_xlabel("Wavelength [Å]")
         self.im.set_ylabel("normalized Intensity")
+        self.im.set_ylim((0, 1.2))
+        self.im.set_xlim(self.im.get_xlim())
         self.im.legend(loc="lower left")
 
         self.im.figure.canvas.draw()
@@ -161,9 +234,32 @@ class MaskPlot:
             xlim = self.im.get_xlim()
             ylim = self.im.get_ylim()
 
-        self.im.clear()
-        self.plot()
+        # Remove filled between
+        if reset_view:
+            self.im.collections.clear()
+        elif isinstance(self.im.collections[0], mpl.collections.PolyCollection):
+            del self.im.collections[:2]
+        else:
+            del self.im.collections[-2:]
+        # del self.im.collections[:2]
+        self.plot(update=True)
 
         if not reset_view:
             self.im.set_xlim(xlim)
             self.im.set_ylim(ylim)
+
+    def connect_axes(self):
+        self.im.callbacks.connect("xlim_changed", self.resize_event)
+
+    def goto_segment(self, segment):
+        if segment >= 0 and segment < len(self.wave) - 1:
+            self.segment = segment
+            self.im.cla()
+            self.plot()
+            self.connect_axes()
+
+    def next_segment(self, _=None):
+        self.goto_segment(self.segment + 1)
+
+    def previous_segment(self, _=None):
+        self.goto_segment(self.segment - 1)
