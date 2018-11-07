@@ -441,7 +441,11 @@ def update_depcoeffs(sme):
         print("are required in order to relate line terms to NLTE level corrections!")
         print("Line formation will proceed under LTE.")
         return sme  # no NLTE line data available
-    print("Running in NLTE")
+
+    # Only print "Running in NLTE" message on the first run each time
+    if not hasattr(update_depcoeffs, "first"):
+        setattr(update_depcoeffs, "first", False)
+        print("Running in NLTE")
 
     # TODO store results for later reuse
 
