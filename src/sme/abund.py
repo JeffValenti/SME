@@ -114,7 +114,7 @@ class Abund:
         if isinstance(pattern, dict):
             abund = np.array([pattern[el] for el in elem], dtype=float)
         else:
-            abund = np.copy(pattern)
+            abund = np.array(pattern, dtype=float)
 
         if np.isnan(abund[0]):
             raise ValueError("pattern must define abundance of H")
@@ -276,7 +276,7 @@ class Abund:
         for key in updates:
             if key in self._elem:
                 pos = self._elem_dict[key]
-                self._pattern[pos] = float(updates[key])
+                self._pattern[pos] = updates[key]
             else:
                 raise KeyError(
                     "got element abbreviation '{}'".format(key)

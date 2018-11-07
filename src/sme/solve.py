@@ -198,7 +198,7 @@ def get_wavelengthrange(wran, vrad, vsini):
 def synthetize_spectrum(wavelength, param, sme, save=True):
     """
     Create a synthetic spectrum, with a given wavelength
-    
+
     Parameters
     ----------
     wavelength : array (npoints,)
@@ -211,7 +211,7 @@ def synthetize_spectrum(wavelength, param, sme, save=True):
         names of parameters in param
     save : {bool, str}, optional
         wether to save the sme structure. If save is a string it will be used as the filename (default: True)
-    
+
     Returns
     -------
     spec : array (npoints,)
@@ -265,7 +265,7 @@ def linelist_errors(wave, spec, linelist):
     return sig_syst
 
 
-def solve(sme, param_names=["teff", "logg", "feh"], filename="sme.npy"):
+def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy"):
     """
     Find the least squares fit parameters to an observed spectrum
 
@@ -290,7 +290,11 @@ def solve(sme, param_names=["teff", "logg", "feh"], filename="sme.npy"):
     # TODO: Set up a sparsity scheme for the jacobian (if some parameters are sufficiently independent)
     # TODO: create more efficient jacobian function
 
-    param_names = [p if p.casefold() != "grav" else "logg" for p in param_names]
+    param_names = [p.casefold() for p in param_names]
+    param_names = [p.capitalize() if p[-5:] == "abund" else p for p in param_names]
+
+    # replace "grav" with equivalent logg fit
+    param_names = [p if p != "grav" else "logg" for p in param_names]
 
     bounds = {
         "teff": [3500, 7000],
@@ -299,12 +303,12 @@ def solve(sme, param_names=["teff", "logg", "feh"], filename="sme.npy"):
         "vmic": [0, np.inf],
         "vmac": [0, np.inf],
     }
-    bounds.update({"%s abund" % el.casefold(): [-10, 10] for el in Abund._elem})
+    bounds.update({"%s abund" % el: [-10, 10] for el in Abund._elem})
 
     nparam = len(param_names)
 
     p0 = [sme[s] for s in param_names]
-    bounds = np.array([bounds[s.casefold()] for s in param_names]).T
+    bounds = np.array([bounds[s] for s in param_names]).T
     # Get constant data from sme structure
     mask = (sme.mob != 0) & (sme.uob != 0)
     wave = sme.wave[mask]

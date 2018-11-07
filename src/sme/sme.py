@@ -443,12 +443,14 @@ class SME_Struct(Param):
     def __getitem__(self, key):
         if key[-5:].casefold() == "abund":
             element = key.split(" ", 1)[0]
+            element = element.capitalize()
             return self.abund[element]
         return super().__getitem__(key)
 
     def __setitem__(self, key, value):
         if key[-5:].casefold() == "abund":
             element = key.split(" ", 1)[0]
+            element = element.capitalize()
             self.abund.update_pattern({element: value})
             return
         return super().__setitem__(key, value)
