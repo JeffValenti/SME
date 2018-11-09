@@ -87,34 +87,44 @@ class SME_Structure:
             return "2"
         if dtype.name == "int32":
             return "3"
+        if dtype.name == "uint8":
+            return "1"
+        if dtype.name == "int64":
+            return "14"
         if dtype.name == "float32":
             return "4"
         if dtype.name == "float64":
             return "5"
         if dtype.name[:3] == "str":
             return dtype.name[3:]
+        else:
+            raise ValueError(f"Unknown dtype {dtype}")
 
+    @staticmethod
     def __write__(self, file):
-        """ 
+        """
         Write SME structure into and idl format 
         data arrays are stored in seperate temp files, and only the filename is passed to idl
         """
         iterator = list(self.__dict__.items())
         sep = ""
-
+        temps = []
         for key, value in iterator:
-            if key in ["__temps__", "filename"]:
+            if key[0] == "_":
                 continue
-            if isinstance(value, SME_Structure):
+            if hasattr(value, "__dict__") and not isinstance(value, np.recarray):
+                # i.e. any kind of Structure, e.g. Linelist, NLTE
                 file.write(",{key!s}:{{".format(key=key))
-                value.__write__(file)
-                self.__temps__ += value.__temps__
+                temps += SME_Structure.__write__(value, file)
                 file.write("}$\n")
             else:
                 if isinstance(value, np.ndarray):
                     if value.dtype.name[:3] == "str":
                         value = value.astype(bytes)
                         shape = (value.dtype.itemsize, len(value))
+                    elif np.issubdtype(value.dtype, np.object_):
+                        if value.size == 1 and value == None:
+                            continue
                     else:
                         shape = value.shape[::-1]
                     with tempfile.NamedTemporaryFile(
@@ -124,23 +134,24 @@ class SME_Structure:
                         value = [
                             temp.name,
                             str(list(shape)),
-                            self.__get_typecode__(value.dtype),
+                            SME_Structure.__get_typecode__(self, value.dtype),
                         ]
-                        self.__temps__.append(temp.name)
+                        temps.append(temp.name)
+                elif isinstance(value, list) and len(value) == 0:
+                    value = -1
 
                 field = "{sep}{key!s}:{value!r} $\n".format(
                     key=key, value=value, sep=sep
                 )
                 sep = ","
                 file.write(field)
+        return temps
 
-    def __clean_temp__(self):
+    def __clean_temp__(self, temps):
         """ Clean temporary files, created for saving """
-        for temp in self.__temps__:
+        for temp in temps:
             if os.path.exists(temp):
                 os.remove(temp)
-
-        self.__temps__ = []
 
     def get(self, key, alt=None):
         if key in self.names:
@@ -181,11 +192,13 @@ class SME_Structure:
 
         with tempfile.NamedTemporaryFile("w+", suffix=".pro") as temp:
             tempname = temp.name
+            temp.write("None = -1\n")
             temp.write("sme = {")
-            self.__write__(temp)
+            temps = SME_Structure.__write__(self, temp)
             temp.write("} \n")
             temp.write(
-                """tags = tag_names(sme)
+                """
+tags = tag_names(sme)
 new_sme = {}
 
 for i =0, n_elements(tags)-1 do begin
@@ -233,7 +246,7 @@ sme = new_sme\n"""
 
             # with open(os.devnull, 'w') as devnull:
             subprocess.run(["idl", "-e", ".r %s" % tempname])
-            self.__clean_temp__()
+            SME_Structure.__clean_temp__(self, temps)
 
     def check(self):
         """Check a SME input file for validity
@@ -316,9 +329,6 @@ sme = new_sme\n"""
 
         self.mob[np.abs(spec - synt) > threshold] = BAD
         # sme.save(join(dir, 'wasp29_7_tmp.out'))
-
-
-
 
 
 def read(filename):
