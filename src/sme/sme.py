@@ -119,6 +119,9 @@ class Collection(object):
                 value = value.astype(str)
             if isinstance(value, np.ndarray):
                 value = np.require(value, requirements="WO")
+
+            self.__temps__ = []
+
             setattr(self, key, value)
 
     def __getattribute__(self, name):
@@ -233,19 +236,21 @@ class Param(Collection):
 class NLTE(Collection):
     """ NLTE data """
 
-    def __init__(self, *args, nlte_grids=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         if len(args) != 0 and args[0] is not None:
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
             args.update(kwargs)
             kwargs = args
         # TODO: nlte_subgrid_size, should be a dictionary similar to
-        self.nlte_pro = "sme_nlte"
+        self.nlte_pro = "nlte"
         self.nlte_elem_flags_byte = []
         self.nlte_subgrid_size = []
 
+        nlte_grids = kwargs.pop("nlte_grids", None)
+
         if nlte_grids is not None and isinstance(nlte_grids, (list, np.ndarray)):
             nlte_grids = {
-                Abund._elem_dict[i]: name
+                Abund._elem[i]: name.decode()
                 for i, name in enumerate(nlte_grids)
                 if name != ""
             }

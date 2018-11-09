@@ -3,12 +3,14 @@ NLTE module of SME
 reads and interpolates departure coefficients from library files
 """
 
-import os.path
 import itertools
-import numpy as np
+import os.path
 
-from .abund import Abund
+import numpy as np
+from scipy import interpolate
+
 from . import sme_synth
+from .abund import Abund
 
 
 class DirectAccessFile:
@@ -65,7 +67,28 @@ class DirectAccessFile:
 
     @staticmethod
     def idl_typecode(i):
-        typecode = {0: "V", 1: "B", 2: "i2", 3: "i4", 4: "f4", 5: "f8"}
+        """
+        relevant IDL typecodes and corresponding Numpy Codes
+        Most specify a byte size, but not all 
+        """
+        typecode = {
+            0: "V",
+            1: "B",
+            2: "i2",
+            3: "i4",
+            4: "f4",
+            5: "f8",
+            6: "c4",
+            7: "S",
+            8: "O",
+            9: "c8",
+            10: "i8",
+            11: "O",
+            12: "u2",
+            13: "u4",
+            14: "i8",
+            15: "u8",
+        }
         return typecode[i]
 
     @staticmethod
@@ -80,7 +103,9 @@ class DirectAccessFile:
                     ("ndir", "<i2"),
                 ]
             )
-            dir_dtype = np.dtype("S256, (23)<i4, <i8")
+            dir_dtype = np.dtype(
+                [("key", "S256"), ("size", "<i4", 23), ("pointer", "<i8")]
+            )
 
             header = np.fromfile(file, header_dtype, count=1)
             version = header["version"][0].decode().strip()
@@ -89,17 +114,17 @@ class DirectAccessFile:
             directory = np.fromfile(file, dir_dtype, count=ndir)
 
         # Decode bytes to strings
-        key = directory["f0"]
+        key = directory["key"]
         key = np.char.strip(np.char.decode(key))
         # Get relevant info from size parameter
         # ndim, n1, n2, ..., typecode, size
         dtype = np.array(
-            [DirectAccessFile.idl_typecode(d[1 + d[0]]) for d in directory["f1"]],
+            [DirectAccessFile.idl_typecode(d[1 + d[0]]) for d in directory["size"]],
             dtype="U5",
         )
-        shape = np.array([tuple(d[1 : d[0] + 1]) for d in directory["f1"]])
+        shape = np.array([tuple(d[1 : d[0] + 1]) for d in directory["size"]])
         # Pointer to data arrays
-        pointer = directory["f2"]
+        pointer = directory["pointer"]
 
         # Bytes (which represent strings) get special treatment to get the dimensions right
         # And to properly convert them to strings
@@ -112,30 +137,53 @@ class DirectAccessFile:
 
 
 def read_grid(sme, elem):
+    """ Read the NLTE coefficients from the nlte_grid files for the given element
+
+    Parameters
+    ----------
+    sme : SME_Struct
+        sme structure with parameters and nlte grid locations
+    elem : str
+        current element name
+
+    Returns
+    -------
+    nlte_grid : dict
+        collection of nlte coefficient data (memmapped)
+    linerefs : array (nlines,)
+        linelevel descriptions (Energy level terms)
+    lineindices: array (nlines,)
+        indices of the used lines in the linelist
+    """
+
     # array[4] = abund, teff, logg, feh
+    # subgridsize > 2, doesn't really matter,
+    # as we are just going to linearly interpolate between the closest pointsanyway
     subgrid_size = sme.nlte.nlte_subgrid_size
-    sme_values = sme.abund[elem], sme.teff, sme.logg, sme.feh
+    subgrid_size[:] = 2
+    solar = Abund(0, "asplund2009")
+    relative_abundance = sme.abund[elem] - solar[elem]
+    sme_values = relative_abundance, sme.teff, sme.logg, sme.feh
 
     # Get NLTE filename
+    # TODO: external setting parameter for the location of the grids
     localdir = os.path.dirname(__file__)
-    if isinstance(sme.nlte.nlte_grids, np.ndarray):
-        elem_num = Abund._elem_dict[elem]
-    else:
-        elem_num = elem
-    fname = os.path.join(localdir, "nlte_grids", sme.nlte.nlte_grids[elem_num])
+    fname = os.path.join(localdir, "nlte_grids", sme.nlte.nlte_grids[elem])
 
     # Get data from file
     directory = DirectAccessFile(fname)
     teff = directory["teff"]
-    t_limits = np.min(teff), np.max(teff)
     grav = directory["grav"]
-    g_limits = np.min(grav), np.max(grav)
     feh = directory["feh"]
-    f_limits = np.min(feh), np.max(feh)
     xfe = directory["abund"]
-    x_limits = np.min(xfe), np.max(xfe)
     keys = directory["models"].astype("U")
     depth = directory[str.lower(sme.atmo.interp)]
+
+    # Determine parameter limits
+    # x_limits = np.min(xfe), np.max(xfe)
+    # t_limits = np.min(teff), np.max(teff)
+    # g_limits = np.min(grav), np.max(grav)
+    # f_limits = np.min(feh), np.max(feh)
 
     # find the n nearest parameter values in the grid (n == subgrid_size)
     x = np.argsort(np.abs(sme_values[0] - xfe))[: subgrid_size[0]]
@@ -158,15 +206,9 @@ def read_grid(sme, elem):
 
     bgrid = np.zeros((ndepths, nlevel, nabund, nteff, ngrav, nfeh))
 
-    for i, j, k, l in itertools.product(
-        range(nabund), range(nteff), range(ngrav), range(nfeh)
-    ):
+    for i, j, k, l in np.ndindex(nabund, nteff, ngrav, nfeh):
         model = keys[f[l], g[k], t[j], x[i]]
         if model != "":
-            # print(
-            #     f"T={teff[t[j]]}, logg={grav[g[k]]}, feh={feh[f[l]]}, abund={xfe[x[i]]:.2f}"
-            # )
-            # print(model)
             bgrid[:, :, i, j, k, l] = directory[model]
         else:
             print(
@@ -189,13 +231,13 @@ def read_grid(sme, elem):
         sme, elem, bgrid, conf, term, species, rotnum
     )
 
-    # store results in nlte_grid as a dictionary ?
+    # store results in nlte_grid as a dictionary
     nlte_grid = {
         # Parameter Limits
-        "Tlims": t_limits,  # min/max Teff
-        "glims": g_limits,  # min/max logg
-        "flims": f_limits,  # min/max metallicity
-        "xlims": x_limits,  # min/max elemental abundance
+        # "Tlims": t_limits,  # min/max Teff
+        # "glims": g_limits,  # min/max logg
+        # "flims": f_limits,  # min/max metallicity
+        # "xlims": x_limits,  # min/max elemental abundance
         # Parameters of the subgrid
         "teff": teff[t],
         "grav": grav[g],
@@ -214,41 +256,49 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     Match our NLTE terms to transitions in the vald3-format linelist.
 
     Level descriptions in the vald3 long format look like this:
-    ;		'LS                                                           2p6.3s                   2S'
-    ;		'LS                                                             2p6.3p                2P*'
-    ; These are stored in line3_term_low and line3_term_upp.
-    ; The array line3_extra has dimensions [3 x nline3s]. It stores
-    ;	J_low, E_up, J_up
-    ; The sme.atomic array stores:
-    ; 	0) atomic number, 1) ionization state, 2) wavelength (in A), 
-    ; 	3) excitation energy of lower level (in eV), 4) log(gf), 5) radiative, 
-    ;	6) Stark, 7) and van der Waals damping parameters
+    	'LS                                                           2p6.3s                   2S'
+    	'LS                                                             2p6.3p                2P*'
+    These are stored in line3_term_low and line3_term_upp.
+    The array line3_extra has dimensions [3 x nline3s]. It stores J_low, E_up, J_up
+    The sme.atomic array stores:
+        0) atomic number, 1) ionization state, 2) wavelength (in A), 
+        3) excitation energy of lower level (in eV), 4) log(gf), 5) radiative, 
+        6) Stark, 7) and van der Waals damping parameters
 
-    ; Input:
-    ;	sme (struct): SME input structure. Communicates the linelist.
-    ;	elem: index of atomic element for which departure coefficients are given, 
-    ;	  i.e., atomic number minus 1.
-    ; (Terms describing the provided departure coefficients - one per atomic level):
-    ;	bgrid (vector[nd, nl, nx, nt, ng, nf]): grid of departure coefficients
-    ;	nl: Number of atomic levels
-    ; (Terms describing the atomic levels, for matching lines in the SME linelist):
-    ;	conf (vector[nl]): electronic configuration (for identification), e.g., 2p6.5s
-    ;	term (vector[nl]): term designations (for identification), e.g., a5F
-    ;	species (vector[nl]): Element and ion for each atomic level (for identification), e.g. Na 1.
-    ;	J (vector[nl]): rotational number of atomic state (for identification).
-    ;
-    ; Output:
-    ;	level_labels (vector[nl]): string descriptions of each atomic level, usually
-    ;	  "[species]_[conf]_[term]_[2*J+1]", according to definitions above
-    ;	linelevels (vector[2,nlines]): Cross references for the lower and upper level
-    ;	  in each transition, to their indices in the list of atomic levels.
-    ;	  Missing levels use indices of -1.
+    Parameters:
+    ----------
+    sme : SME_Struct
+        SME input structure. Communicates the linelist.
+    elem: str
+        atomic element for which departure coefficients are given
+    bgrid : array (nd, nl, nx, nt, ng, nf,)
+        grid of departure coefficients
+    conf : array (nl,)
+        electronic configuration (for identification), e.g., 2p6.5s
+    term : array (nl,)
+        term designations (for identification), e.g., a5F
+    species : array (nl,)
+        Element and ion for each atomic level (for identification), e.g. Na 1.
+    rotnum : array (nl,)
+        rotational number J of atomic state (for identification).
+
+    Returns:
+    -------
+    bgrid : array (nd, nlines, nx, nt, ng, nf,)
+        grid of departure coefficients, reduced to the lines used
+    level_labels : array (nl,)
+        string descriptions of each atomic level, usually
+        "[species]_[conf]_[term]_[2*J+1]", according to definitions above
+    linelevels : array (2, nlines,)
+        Cross references for the lower and upper level in each transition,
+        to their indices in the list of atomic levels.
+        Missing levels use indices of -1.
+    lineindices : array (nl,)
+        Indices of the used lines in the linelist
     """
 
     # TODO there must be a better way of doing this
     # just compare the values instead of using string ?
-
-    # TODO check line_extra format, should it really be that small?
 
     # ion = np.array([s[-1] for s in species], dtype=int)
     lineindices = np.char.startswith(sme.species, elem)
@@ -326,91 +376,76 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     return bgrid, level_labels, linelevels, np.where(lineindices)[0]
 
 
-def get_gridindices(points, param, var, name=""):
-    if param <= np.min(points):
-        return [np.argmin(points)], 0
-    if param >= np.max(points):
-        return [np.argmax(points)], 0
-
-    below = np.where(points <= param)[0][-1]
-    above = np.where(points > param)[0][0]
-
-    i = np.array([below, above])
-    x = points[i]
-    frac = (param - x[0]) / (x[1] - x[0])
-    return i, frac
-
-
-def interpolate_grid_param(grid, frac, dim):
-    if len(grid[0, 0, :]) == 1:
-        # Only one grid point
-        return np.reshape(grid[:, :, 0, ...], dim)
-
-    # Interpolate linearly
-    tmp = grid[:, :, 0] * (1 - frac) + grid[:, :, 1] * frac
-    return np.reshape(tmp, dim)
-
-
 def interpolate_grid(sme, elem, nlte_grid):
+    """
+    interpolate nlte coefficients on the model grid
+
+    Parameters
+    ----------
+    sme : SME_Struct
+        sme structure with parameters and atmosphere
+    elem : str
+        Name of the NLTE element element
+    nlte_grid : dict
+        NLTE parameter grid (usually from read_grid)
+
+    Returns
+    -------
+    subgrid : array (ndepth, nlines)
+        interpolated grid values
+    """
     # Get parameters from sme structure
     teff = sme.teff
     grav = sme.logg
     feh = sme.feh
-    abund = sme.abund[elem]
-
-    # Retrieve grid data
-    bgrid = nlte_grid["bgrid"]
-    blevels = nlte_grid["levels"]
-    depth = nlte_grid["depth"]
-
-    nl = len(blevels)
+    solar = Abund(0, "asplund2009")
+    abund = sme.abund[elem] - solar[elem]
 
     # find target depth
     target_depth = sme.atmo[sme.atmo.interp]
+    target_depth = np.log10(target_depth)
 
-    # TODO use some scipy method for interpolation on a grid ?
+    bgrid = nlte_grid["bgrid"]
+    depth = nlte_grid["depth"]
 
-    # Linear interpolation, between nearest grid points
-    nd = len(target_depth)
+    # Interpolation in 2 steps:
+    # first interpolate the depth scale to the target depth, this is unstructured data
+    # i.e. each combination of parameters has a different depth scale (given in depth)
+    # Second interpolate on the grid of parameters, to get the value we want
 
-    xi, xfrac = get_gridindices(nlte_grid["xfe"], abund, 0, name="abund")
-    ti, tfrac = get_gridindices(nlte_grid["teff"], teff, 1, name="teff")
-    gi, gfrac = get_gridindices(nlte_grid["grav"], grav, 2, name="grav")
-    fi, ffrac = get_gridindices(nlte_grid["feh"], feh, 3, name="feh")
+    nparam = bgrid.shape[2:]  # dimensions of the parameters
+    ndepth = len(target_depth)  # number of target depth layers
+    nlines = bgrid.shape[0]  # number of nlte line transitions
 
-    nabund = len(xi)
-    nteff = len(ti)
-    ngrav = len(gi)
-    nfeh = len(fi)
+    # have grid parameters first, and values second
+    grid = np.empty((*nparam, ndepth, nlines), float)
+    for l, x, t, g, f in np.ndindex(nlines, *nparam):
+        xp = depth[f, g, t, :]
+        yp = bgrid[l, :, x, t, g, f]
 
-    subgrid = np.full((nd, nl, nabund, nteff, ngrav, nfeh), -1.)
+        xp = np.log10(xp)
+        cubic = interpolate.interp1d(
+            xp, yp, bounds_error=False, fill_value=(yp[0], yp[-1]), kind="cubic"
+        )(target_depth)
+        grid[x, t, g, f, :, l] = cubic
 
-    for x, t, g, f, l in itertools.product(
-        range(nabund), range(nteff), range(ngrav), range(nfeh), range(nl)
-    ):
-        xp = depth[fi[f], gi[g], ti[t], :]
-        yp = bgrid[l, :, xi[x], ti[t], gi[g], fi[f]]
-        subgrid[:, l, x, t, g, f] = np.interp(np.log10(target_depth), np.log10(xp), yp)
+    # Interpolate on the grid
+    points = (nlte_grid["xfe"], nlte_grid["teff"], nlte_grid["grav"], nlte_grid["feh"])
+    target = (abund, teff, grav, feh)
+    subgrid = interpolate.interpn(
+        points, grid, target, bounds_error=False, fill_value=None
+    )
 
-    subgrid = interpolate_grid_param(subgrid, xfrac, [nd, nl, nteff, ngrav, nfeh])
-    subgrid = interpolate_grid_param(subgrid, tfrac, [nd, nl, ngrav, nfeh])
-    subgrid = interpolate_grid_param(subgrid, gfrac, [nd, nl, nfeh])
-    subgrid = interpolate_grid_param(subgrid, ffrac, [nd, nl])
-
-    return subgrid
+    return subgrid[0]
 
 
 def nlte(sme, elem):
-    if isinstance(sme.nlte.nlte_grids, np.ndarray):
-        elem_num = Abund._elem_dict[elem]
-    else:
-        elem_num = elem
-
-    if sme.nlte.nlte_grids[elem_num] is None:
+    if sme.nlte.nlte_grids[elem] is None:
         raise ValueError(f"Element {elem} has not been prepared for NLTE")
 
     nlte_grid, linerefs, lineindices = read_grid(sme, elem)
     subgrid = interpolate_grid(sme, elem, nlte_grid)
+
     return subgrid, linerefs, lineindices
 
 
@@ -436,7 +471,7 @@ def update_depcoeffs(sme):
         print("Running in LTE")
         return sme  # no NLTE routine available
     if sme.linelist.lineformat == "short":
-        print("--- ")
+        print("---")
         print("NLTE line formation was requested, but VALD3 long-format linedata ")
         print("are required in order to relate line terms to NLTE level corrections!")
         print("Line formation will proceed under LTE.")
