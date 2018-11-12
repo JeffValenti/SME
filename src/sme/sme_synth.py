@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from ctypes import c_short
 from .cwrapper import idl_call_external
 
 
@@ -115,21 +116,6 @@ def InputModel(teff, grav, vturb, atmo):
         args = args[:5] + [radius] + args[5:] + [height]
 
     return idl_call_external("InputModel", *args)
-
-
-def InputDepartureCoefficients(n, *args):
-    """ """
-    raise NotImplementedError()
-
-
-def GetDepartureCoefficients(n, *args):
-    """ Get NLTE b's for specific line """
-    raise NotImplementedError()
-
-
-def ResetDepartureCoefficients(n, *args):
-    """ Reset LTE """
-    raise NotImplementedError()
 
 
 @check_error
@@ -269,11 +255,15 @@ def GetLineRange(nlines):
 @check_error
 def InputNLTE(bmat, lineindices):
     """ Input NLTE departure coefficients """
-    s = bmat.shape
-    assert s[0] == 2
-    # assert(s[1] == nrhox)
+    return idl_call_external("InputDepartureCoefficients", bmat, int(lineindices))
 
-    return idl_call_external("InputDepartureCoefficients", bmat, lineindices)
+
+def GetNLTE(nrhox, line):
+    bmat = np.full((2, nrhox), -1, dtype=float)
+    error = idl_call_external("GetDepartureCoefficients", bmat, nrhox, line)
+    if error != b"":
+        raise ValueError(f"ERROR {error.decode()}")
+    return bmat
 
 
 @check_error
@@ -282,6 +272,15 @@ def ResetNLTE():
     return idl_call_external("ResetDepartureCoefficients")
 
 
-def GetNLTEflags():
+def GetNLTEflags(linelist):
     """ """
-    raise NotImplementedError()
+    nlines = len(linelist)
+    nlte_flags = np.zeros(nlines, dtype=np.int16)
+
+    error = idl_call_external(
+        "GetNLTEflags", nlte_flags, nlines, inttype=("short", "int")
+    )
+    if error != b"":
+        raise ValueError(f"GetNLTEflags (call external): {error.decode()}")
+
+    return nlte_flags.astype(bool)

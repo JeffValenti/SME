@@ -12,16 +12,16 @@ import numpy as np
 from joblib import Memory
 from scipy.constants import speed_of_light
 from scipy.optimize import OptimizeWarning, least_squares
+from scipy.optimize._numdiff import approx_derivative
 
-from . import broadening
-from . import sme as SME
-from . import sme_synth
-from .abund import Abund
-
+from . import broadening, sme_synth
 from .interpolate_atmosphere import interp_atmo_grid
 from .rtint import rdpop, rtint
 from .sme_crvmatch import match_rv_continuum
 from .nlte import update_depcoeffs
+from .abund import Abund
+
+# from . import sme as SME
 
 warnings.simplefilter("ignore", FutureWarning)
 warnings.simplefilter("ignore", OptimizeWarning)
@@ -53,7 +53,7 @@ def pass_nlte(sme):
     return error
 
 
-@memory.cache
+# @memory.cache
 def sme_func_atmo(sme):
     """
     Purpose:
@@ -195,7 +195,7 @@ def get_wavelengthrange(wran, vrad, vsini):
     return wbeg, wend
 
 
-def synthetize_spectrum(wavelength, param, sme, save=True):
+def synthetize_spectrum(wavelength, param, sme, save=True, update=True):
     """
     Create a synthetic spectrum, with a given wavelength
 
@@ -226,10 +226,11 @@ def synthetize_spectrum(wavelength, param, sme, save=True):
     sme2 = sme_func(sme)
 
     # Return values by reference to sme
-    sme.wave = sme2.wave
-    sme.smod = sme2.smod
-    sme.vrad = sme2.vrad
-    sme.cscale = sme.cscale
+    if update:
+        sme.wave = sme2.wave
+        sme.smod = sme2.smod
+        sme.vrad = sme2.vrad
+        sme.cscale = sme2.cscale
 
     # Also save intermediary results, because we can
     if isinstance(save, bool):
@@ -239,12 +240,12 @@ def synthetize_spectrum(wavelength, param, sme, save=True):
     else:
         sme2.save(save)
 
-    mask = (sme.mob != 0) & (sme.uob != 0)
-    if not np.allclose(wavelength, sme.wave[mask]):
+    mask = (sme2.mob != 0) & (sme2.uob != 0)
+    if not np.allclose(wavelength, sme2.wave[mask]):
         # interpolate to required wavelenth grid
-        res = np.interp(wavelength, sme.wave[mask], sme.smod[mask])
+        res = np.interp(wavelength, sme2.wave[mask], sme2.smod[mask])
     else:
-        res = sme.smod[mask]
+        res = sme2.smod[mask]
 
     return res
 
@@ -265,7 +266,20 @@ def linelist_errors(wave, spec, linelist):
     return sig_syst
 
 
-def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy"):
+def determine_continuum(wave, spec, linelist, deg=2):
+    width = sme_synth.GetLineRange(len(linelist))
+    mask = np.full(wave.size, True)
+
+    for line in width:
+        w = (wave >= line[0]) & (wave <= line[1])
+        mask[w] = False
+
+    coeff = np.polyfit(wave[mask], spec[mask], deg=deg)
+
+    return coeff
+
+
+def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy", **kwargs):
     """
     Find the least squares fit parameters to an observed spectrum
 
@@ -287,8 +301,7 @@ def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy"):
     """
 
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
-    # TODO: Set up a sparsity scheme for the jacobian (if some parameters are sufficiently independent)
-    # TODO: create more efficient jacobian function
+    # TODO: create more efficient jacobian function ?
 
     param_names = [p.casefold() for p in param_names]
     param_names = [p.capitalize() if p[-5:] == "abund" else p for p in param_names]
@@ -328,13 +341,19 @@ def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy"):
     res = least_squares(
         residuals,
         x0=p0,
-        jac="2-point",
+        jac="3-point",  # is 2-point good enough or do we need 3-point ?
         bounds=bounds,
         loss="linear",
         verbose=2,
         args=(param_names, wave, spec, uncs),
-        # method="dogbox", #method "dogbox" might be faster than "trf" ???
+        method="trf",  # method "dogbox" does not fit properly ???
+        max_nfev=kwargs.get("maxiter"),
     )
+
+    # The values in the last call are usually from the jacobian, i.e. not with the exactly correct parameters
+    for i, name in enumerate(param_names):
+        sme[name] = res.x[i]
+    sme = sme_func(sme)
 
     # SME structure is updated inside synthetize_spectrum to contain the results of the calculation
     # If for some reason that should not work, one can load the intermediary "sme.npy" file
@@ -349,38 +368,41 @@ def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy"):
 
     # Determine the covariance matrix of the fit
     # Do Moore-Penrose inverse discarding zero singular values.
-    _, s, VT = np.linalg.svd(res.jac, full_matrices=False)
-    threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
-    s = s[s > threshold]
-    VT = VT[: s.size]
-    pcov = np.dot(VT.T / s ** 2, VT)
+    # _, s, VT = np.linalg.svd(res.jac, full_matrices=False)
+    # threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
+    # s = s[s > threshold]
+    # VT = VT[: s.size]
+    # pcov = np.dot(VT.T / s ** 2, VT)
 
     # Alternative for determining the Covariance, with the exact same result
-    # hess = res.jac.T.dot(res.jac) # hessian == fisher information matrix
-    # covar = np.linalg.pinv(hess)
-    # sig = np.sqrt(covar.diag())
+    fisher = res.jac.T.dot(res.jac)  # hessian == fisher information matrix
+    covar = np.linalg.pinv(fisher)
+    sig = np.sqrt(covar.diagonal())
 
     sme.fitresults.clear()
-    sme.fitresults.covar = pcov
+    sme.fitresults.covar = covar
     sme.fitresults.grad = res.grad
     sme.fitresults.pder = res.jac
     sme.fitresults.resid = res.fun
     sme.fitresults.chisq = res.cost * 2 / (sme.sob.size - nparam)
 
-    sme.fitresults.punc = {name: 0 for name in param_names}
+    sme.fitresults.punc = {}
+    sme.fitresults.punc2 = {}
     for i in range(nparam):
+        # Errors based on covariance matrix
+        sme.fitresults.punc[param_names[i]] = sig[i]
+        # Errors based on ad-hoc metric
         tmp = np.abs(res.fun) / np.median(np.abs(res.jac[:, i]))
-        sme.fitresults.punc[param_names[i]] = np.median(tmp)
+        sme.fitresults.punc2[param_names[i]] = np.median(tmp)
 
-    # alternative errors based on covariance matrix
-    sme.fitresults.punc2 = np.sqrt(np.diag(pcov))
+    sme.nlte.flags = sme_synth.GetNLTEflags(sme.linelist)
 
     if filename is not None:
         sme.save(filename)
 
     print(res.message)
     for name, value, unc in zip(param_names, popt, sme.fitresults.punc.values()):
-        print("%s\t%.5f +- %.5f" % (name, value, unc))
+        print(f"{name}\t{value:.5f} +- {unc:.5g}")
 
     return sme
 
