@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.lib.recfunctions
 
 from .abund import Abund
 
@@ -40,42 +41,42 @@ class LineList:
             "gamvw",
             "lande",
             "depth",
-            "ref",
+            "reference",
         ]
 
         if short_line_format == 1:
             lineformat = "short"
-            term_lower = term_upper = error = comment = None
+            term_lower = term_upper = error = None
         if short_line_format == 2:
             lineformat = "long"
+            error = [s[0:11].strip() for s in lineref]
+            error = ValdFile.parse_line_error(error, depth)
             arrays = arrays + [
                 line_lulande[:, 0],
                 line_lulande[:, 1],
                 line_extra[:, 0],
                 line_extra[:, 1],
                 line_extra[:, 2],
+                line_term_low,
+                line_term_upp,
+                error,
             ]
-            names = names + ["lande_lower", "lande_upper", "j_lo", "e_upp", "j_up"]
-            term_lower = line_term_low
-            term_upper = line_term_upp
-            comment = lineref
-            error = [s[0:11].strip() for s in lineref]
-            error = ValdFile.parse_line_error(error, depth)
+            names = names + [
+                "lande_lower",
+                "lande_upper",
+                "j_lo",
+                "e_upp",
+                "j_up",
+                "term_lower",
+                "term_upper",
+                "error",
+            ]
 
         linedata = np.rec.fromarrays(arrays, names=names)
         ionization = linedata["ionization"]
         atom_number = linedata["atom_number"]
 
-        return (
-            linedata,
-            lineformat,
-            ionization,
-            atom_number,
-            term_lower,
-            term_upper,
-            comment,
-            error,
-        )
+        return (linedata, lineformat)
 
     @staticmethod
     def fromList(linedata):
@@ -91,7 +92,7 @@ class LineList:
             "gamvw",
             "lande",
             "depth",
-            "ref",
+            "reference",
         ]
         linedata = np.rec.fromrecords(linedata, names=names)
         return linedata
@@ -99,35 +100,47 @@ class LineList:
     def __init__(self, linedata, lineformat="short", **kwargs):
         if linedata is None:
             # everything is in the kwargs (usually by loading from old SME file)
-            ld, lf, ion, an, tl, tu, com, err = LineList.from_IDL_SME(**kwargs)
+            ld, lf = LineList.from_IDL_SME(**kwargs)
         else:
             if not isinstance(linedata, np.recarray):
                 linedata = LineList.fromList(linedata)
             ld = linedata
             lf = lineformat
-            if "atom_number" in kwargs.keys():
-                an = kwargs["atom_number"]
-            else:
-                an = np.ones(linedata.shape, dtype=int)
 
-            if "ionization" in kwargs.keys():
-                ion = kwargs["ionization"]
-            else:
-                ion = np.array([int(s[-1]) for s in linedata["species"]])
+            if len(kwargs) != 0:
+                if "atom_number" in kwargs.keys():
+                    an = kwargs["atom_number"]
+                else:
+                    an = np.ones(linedata.shape, dtype=float)
 
-            tu = kwargs.get("term_upper")
-            tl = kwargs.get("term_lower")
-            com = kwargs.get("comment")
-            err = kwargs.get("error")
+                if "ionization" in kwargs.keys():
+                    ion = kwargs["ionization"]
+                else:
+                    ion = np.array(
+                        [int(s[-1]) for s in linedata["species"]], dtype=float
+                    )
 
-        self._lines = ld
+                tu = kwargs.get("term_upper")
+                tl = kwargs.get("term_lower")
+                com = kwargs.get("lineref")
+                err = kwargs.get("error")
+
+                names = [
+                    "ionization",
+                    "atom_number",
+                    "term_upper",
+                    "term_lower",
+                    "reference",
+                    "error",
+                ]
+                data = [ion, an, tu, tl, com, err]
+
+                ld = np.lib.recfunctions.append_fields(
+                    ld, names, data, asrecarray=True, usemask=False
+                )
+
         self.lineformat = lf
-        self.ionization = np.asarray(ion)
-        self.atom_number = np.asarray(an)
-        self.term_lower = np.asarray(tl)
-        self.term_upper = np.asarray(tu)
-        self.comment = np.asarray(com)
-        self.error = np.asarray(err)
+        self._lines = ld  # should have all the fields (20)
 
     def __len__(self):
         return len(self._lines)
@@ -142,11 +155,11 @@ class LineList:
         return self._lines.__next__()
 
     def __getitem__(self, index):
-        return self._lines[index]
-
-    @property
-    def species(self):
-        return self._lines["species"]
+        if not isinstance(index, str):
+            # just pass on a subsection of the linelist data, but keep it a linelist object
+            return LineList(self._lines[index], self.lineformat)
+        else:
+            return self._lines[index]
 
     @property
     def wlcent(self):
@@ -173,13 +186,49 @@ class LineList:
         return self._lines["gamvw"]
 
     @property
+    def species(self):
+        return self._lines["species"]
+
+    @property
+    def depth(self):
+        return self._lines["depth"]
+
+    @property
+    def reference(self):
+        return self._lines["reference"]
+
+    @property
+    def lande(self):
+        return self._lines["lande"]
+
+    @property
+    def error(self):
+        if self.lineformat == "long":
+            return self._lines["error"]
+        raise AttributeError("'error' is only available in the long line format")
+
+    @property
+    def term_lower(self):
+        if self.lineformat == "long":
+            return self._lines["term_lower"]
+        raise AttributeError("'term_lower' is only available in the long line format")
+
+    @property
+    def term_upper(self):
+        if self.lineformat == "long":
+            return self._lines["term_upper"]
+        raise AttributeError("'term_upper' is only available in the long line format")
+
+    @property
     def lulande(self):
         if self.lineformat == "short":
             raise AttributeError("LuLande is only available in the long line format")
 
             # additional data arrays for sme
         tmp = self._lines[["lande_lower", "lande_upper"]]
-        tmp = np.array(tmp.tolist())
+        tmp = tmp.astype([("lande_lower", float), ("lande_upper", float)], copy=False)
+        tmp = tmp.view(float, np.ndarray)
+        tmp.shape = len(self), -1
         return tmp
 
     @property
@@ -187,18 +236,32 @@ class LineList:
         if self.lineformat == "short":
             raise AttributeError("Extra is only available in the long line format")
         tmp = self._lines[["j_lo", "e_upp", "j_up"]]
-        tmp = np.array(tmp.tolist())
+        tmp = tmp.astype(
+            [("j_lo", float), ("e_upp", float), ("j_upp", float)], copy=False
+        )
+        tmp = tmp.view(float, np.ndarray)
+        tmp.shape = len(self), -1
         return tmp
 
     @property
     def atomic(self):
-        names = ["wlcent", "excit", "gflog", "gamrad", "gamqst", "gamvw"]
+        names = [
+            "ionization",
+            "atom_number",
+            "wlcent",
+            "excit",
+            "gflog",
+            "gamrad",
+            "gamqst",
+            "gamvw",
+        ]
+        dtype = [(n, float) for n in names]
         # Select fields
-        tmp = [self.atom_number, self.ionization]
-        tmp += [self._lines[n] for n in names]
-        # Convert to 2D array
-        tmp = np.array(tmp)
-        return tmp.T
+        tmp = self._lines[names]
+        tmp = tmp.astype(dtype, copy=False)
+        tmp = tmp.view(float, np.ndarray)
+        tmp.shape = len(self), -1
+        return tmp
 
 
 class ValdFile:
@@ -320,7 +383,7 @@ class ValdFile:
                     ("gamvw", float),
                     ("lande", float),
                     ("depth", float),
-                    ("ref", "<U100"),
+                    ("lineref", "<U100"),
                 ]
             )
         elif fmt == "long":
@@ -368,7 +431,7 @@ class ValdFile:
                 lineformat=fmt,
                 term_lower=term_lower,
                 term_upper=term_upper,
-                reference=comment,
+                lineref=comment,
                 error=error,
             )
         else:
