@@ -19,7 +19,63 @@ def get_lib_name():
     return f"sme_synth.so.{system}.{arch}.{bits}"
 
 
-def idl_call_external(funcname, *args, restype="str", inttype="int"):
+def get_typenames(arg):
+    if isinstance(arg, (str, np.str)) or (
+        isinstance(arg, np.ndarray) and np.issubdtype(arg.dtype, np.str)
+    ):
+        return "unicode"
+    if isinstance(arg, (float, np.floating)) or (
+        isinstance(arg, np.ndarray) and np.issubdtype(arg.dtype, np.floating)
+    ):
+        return "double"
+    if isinstance(arg, (int, np.integer)) or (
+        isinstance(arg, np.ndarray) and np.issubdtype(arg.dtype, np.integer)
+    ):
+        return "int"
+
+    raise ValueError(f"argument datatype not understood")
+
+
+def get_dtype(type):
+    if type in ["i", "int", int]:
+        return ct.c_int
+    elif type in ["s", "short"]:
+        return ct.c_short
+    elif type in ["l", "long"]:
+        return ct.c_long
+    elif type in ["f", "float"]:
+        return ct.c_float
+    elif type in ["d", "double", float]:
+        return ct.c_double
+    elif type in ["u", "unicode", "str", str]:
+        return IDL_String
+    else:
+        raise ValueError(f"Data type {type} not understood")
+
+
+def idl_call_external(funcname, *args, restype="str", type=None):
+    """Call an external C library (here the SME lib) function that uses the IDL type interface
+    i.e. restype func(int n, void *args[]), where n is the number of arguments, and args is a list of pointers to the arguments
+
+    Note that all strings are converted into IDL_String objects, even those that are in arrays
+
+    Parameters
+    ----------
+    funcname : str
+        Name of the function to call in the library
+    restype : str, optional
+        expected type of the return value (default: "str")
+    type : str, list(str), optional
+        type of the input parameters, will default to int/double for all integer/floating point values.
+        Accepted values are ('short', 'int', 'long', 'float', 'double', 'unicode') or their respective first letters.
+        This means one can use a string as shorthand, e.g. "iidds"
+
+    Returns
+    -------
+    value : restype
+        return value of the function call
+    """
+
     # Load library if that wasn't done yet
     if not hasattr(idl_call_external, "lib"):
         localdir = os.path.dirname(__file__)
@@ -31,71 +87,37 @@ def idl_call_external(funcname, *args, restype="str", inttype="int"):
     # Parse arguments into c values
     # keep Python elements in staying alive, so they are not discarded by the garbage collection
 
-    # funcname = "IDLtest"
-    # from awlib.sme import sme as SME
-    # file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
-    # sme = SME.read(file)
-    # linelist = sme.species
-    # args = [len(linelist), linelist]
-
     args = list(args)
     staying_alive = [a for a in args]
-    if isinstance(inttype, str):
-        inttype = [inttype for i in range(len(args))]
+
+    # datatype is determined by passed type keyword
+    # defaults to 'int' for all integer type values and 'double' for all floating point values
+    if type is None:
+        type = [get_typenames(a) for a in args]
+    elif type in ["short", "int", "long", "float", "double"]:
+        type = [type for i in range(len(args))]
 
     for i in range(len(args)):
-        if isinstance(args[i], int):
-            if inttype[i] == "int":
-                staying_alive[i] = np.array(args[i]).astype(ct.c_int, copy=False).ctypes
-            elif inttype[i] == "short":
-                staying_alive[i] = (
-                    np.array(args[i]).astype(ct.c_short, copy=False).ctypes
-                )
-            else:
-                raise ValueError("Integer type must be 'int' or 'short'")
-            args[i] = staying_alive[i].data
-        elif isinstance(args[i], np.integer):
-            # if integers are passed as numpy integers, assume the type was chosen for a reason
-            if np.issubdtype(args[i], np.int64):
-                staying_alive[i] = (
-                    np.array(args[i]).astype(ct.c_long, copy=False).ctypes
-                )
-            if np.issubdtype(args[i], np.int32):
-                staying_alive[i] = np.array(args[i]).astype(ct.c_int, copy=False).ctypes
-            elif np.issubdtype(args[i], np.int16):
-                staying_alive[i] = (
-                    np.array(args[i]).astype(ct.c_short, copy=False).ctypes
-                )
-            else:
-                staying_alive[i] = np.array(args[i]).ctypes
-            args[i] = staying_alive[i].data
-        if isinstance(args[i], float) or isinstance(args[i], np.floating):
-            staying_alive[i] = np.array(args[i]).astype(ct.c_double, copy=False).ctypes
+        # Single values
+        if isinstance(args[i], (int, float, np.number)):
+            dtype = get_dtype(type[i])
+            staying_alive[i] = np.array(args[i]).astype(dtype, copy=False).ctypes
             args[i] = staying_alive[i].data
         elif isinstance(args[i], str):
             staying_alive[i] = IDL_String(
                 slen=len(args[i]), stype=1, s=args[i].encode()
             )
             args[i] = ct.addressof(staying_alive[i])
+        # Arrays
         elif isinstance(args[i], np.ndarray):
-            if np.issubdtype(args[i].dtype, np.integer):
-                if inttype[i] == "int":
-                    args[i] = np.require(
-                        args[i], dtype=ct.c_int, requirements=["C", "A", "W", "O"]
-                    )
-                elif inttype[i] == "short":
-                    args[i] = np.require(
-                        args[i], dtype=ct.c_short, requirements=["C", "A", "W", "O"]
-                    )
-                staying_alive[i] = args[i].ctypes
-                args[i] = staying_alive[i].data
-            elif np.issubdtype(args[i].dtype, np.floating):
+            if np.issubdtype(args[i].dtype, np.number):
+                dtype = get_dtype(type[i])
                 args[i] = np.require(
-                    args[i], dtype=ct.c_double, requirements=["C", "A", "W", "O"]
+                    args[i], dtype=dtype, requirements=["C", "A", "W", "O"]
                 )
                 staying_alive[i] = args[i].ctypes
                 args[i] = staying_alive[i].data
-            elif np.issubdtype(args[i].dtype, np.dtype(str).type):
+            elif np.issubdtype(args[i].dtype, np.str):
                 args[i] = args[i].astype("S")
                 staying_alive.append(args[i])
                 length = len(args[i][0])
@@ -114,10 +136,8 @@ def idl_call_external(funcname, *args, restype="str", inttype="int"):
     func.argtypes = (ct.c_int, ct.POINTER(ct.c_void_p))
     if restype in ["str", str]:
         func.restype = ct.c_char_p
-    elif restype in ["int", int]:
-        func.restype = ct.c_int
     else:
-        func.restype = restype
+        func.restype = get_dtype(restype)
 
     a = np.array(args, dtype=ct.c_void_p)
     a = np.ascontiguousarray(a)

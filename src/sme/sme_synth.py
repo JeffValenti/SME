@@ -1,6 +1,5 @@
 import os
 import numpy as np
-from ctypes import c_short
 from .cwrapper import idl_call_external
 
 
@@ -31,15 +30,13 @@ def SetLibraryPath():
 @check_error
 def InputWaveRange(wfirst, wlast):
     """ Read in Wavelength range """
-    wfirst, wlast = float(wfirst), float(wlast)
-    return idl_call_external("InputWaveRange", wfirst, wlast)
+    return idl_call_external("InputWaveRange", wfirst, wlast, type="double")
 
 
 @check_error
 def SetVWscale(gamma6):
     """ Set van der Waals scaling factor """
-    gamma6 = float(gamma6)
-    return idl_call_external("SetVWscale", gamma6)
+    return idl_call_external("SetVWscale", gamma6, type="double")
 
 
 @check_error
@@ -68,7 +65,9 @@ def InputLineList(atomic, species):
 
     atomic = atomic.T.astype(float, copy=False)
     species = species.astype(str, copy=False)
-    return idl_call_external("InputLineList", nlines, species, atomic)
+    return idl_call_external(
+        "InputLineList", nlines, species, atomic, type=("int", "double", "double")
+    )
 
 
 def OutputLineList(atomic, copy=False):
@@ -77,7 +76,9 @@ def OutputLineList(atomic, copy=False):
     atomic = atomic.astype(float)
     if copy:
         atomic = np.copy(atomic)
-    error = idl_call_external("OutputLineList", nlines, atomic.T)
+    error = idl_call_external(
+        "OutputLineList", nlines, atomic.T, type=("int", "double")
+    )
     if error != b"":
         raise ValueError(f"{__name__} (call external): {error.decode()}")
     return atomic
@@ -87,9 +88,15 @@ def OutputLineList(atomic, copy=False):
 def UpdateLineList(atomic, species, index):
     """ Change line list parameters """
     nlines = atomic.shape[0]
-    atomic = atomic.astype(float)
     species = species.astype("S")
-    return idl_call_external("UpdateLineList", nlines, species, atomic.T, index)
+    return idl_call_external(
+        "UpdateLineList",
+        nlines,
+        species,
+        atomic.T,
+        index,
+        type=("int", "str", "double", "short"),
+    )
 
 
 @check_error
@@ -108,14 +115,16 @@ def InputModel(teff, grav, vturb, atmo):
         "opflag", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0]
     )
     args = [ndepth, teff, grav, wlstd, motype, opflag, depth, t, xne, xna, rho, vt]
+    type = "sdddusdddddd"  # s : short, d: double, u: unicode (string)
 
     if atmo.geom == "SPH":
         radius = atmo.radius
         height = float(atmo.height)
         motype = "SPH"
         args = args[:5] + [radius] + args[5:] + [height]
+        type = type[:5] + "d" + type[5:] + "d"
 
-    return idl_call_external("InputModel", *args)
+    return idl_call_external("InputModel", *args, type=type)
 
 
 @check_error
@@ -139,7 +148,7 @@ def InputAbund(abund, feh):
     # abund /= np.sum(abund)        #normalize sum of fractions
     # abund[1:] = np.log10(abund[1:])       #convert fraction to log(fraction)
 
-    return idl_call_external("InputAbund", abund)
+    return idl_call_external("InputAbund", abund, type="double")
 
 
 @check_error
@@ -172,7 +181,7 @@ def Ionization(ion=0):
     in the model atmosphere (usually scaled solar) and SME (may be non-solar)
     can affect line shape, e.g. shape of hydrogen lines.
     """
-    error = idl_call_external("Ionization", ion, inttype="short")
+    error = idl_call_external("Ionization", ion, type="short")
     if error != b"":
         print(f"{__name__} (call external): {error.decode()}")
 
@@ -210,9 +219,11 @@ def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000, wave
     cint_seg = np.zeros((nwmax, nmu))  # all continuum intensities
     cintr_seg = np.zeros((nmu))  # red continuum intensity
 
+    type = "sdddiiddddssu"  # s: short, d:double, i:int, u:unicode (string)
+
     error = idl_call_external(
         "Transf",
-        np.int16(nmu),
+        nmu,
         mu,
         cint_seg,
         cintr_seg,
@@ -222,8 +233,9 @@ def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000, wave
         sint_seg,
         accrt,
         accwi,
-        np.int16(keep_lineop),
-        np.int16(long_continuum),
+        keep_lineop,
+        long_continuum,
+        type=type,
     )
     if error != b"":
         raise ValueError(f"Transf (call external): {error.decode()}")
@@ -245,7 +257,7 @@ def GetLineRange(nlines):
     """ """
     linerange = np.zeros((nlines, 2), dtype=float)
 
-    error = idl_call_external("GetLineRange", linerange, nlines)
+    error = idl_call_external("GetLineRange", linerange, nlines, type=("double", "int"))
     if error != b"":
         raise ValueError(f"GetLineRange (call external): {error.decode()}")
 
@@ -255,12 +267,16 @@ def GetLineRange(nlines):
 @check_error
 def InputNLTE(bmat, lineindices):
     """ Input NLTE departure coefficients """
-    return idl_call_external("InputDepartureCoefficients", bmat, int(lineindices))
+    return idl_call_external(
+        "InputDepartureCoefficients", bmat, lineindices, type=("double", "int")
+    )
 
 
 def GetNLTE(nrhox, line):
     bmat = np.full((2, nrhox), -1, dtype=float)
-    error = idl_call_external("GetDepartureCoefficients", bmat, nrhox, line)
+    error = idl_call_external(
+        "GetDepartureCoefficients", bmat, nrhox, line, type=("double", "int", "int")
+    )
     if error != b"":
         raise ValueError(f"ERROR {error.decode()}")
     return bmat
@@ -277,9 +293,7 @@ def GetNLTEflags(linelist):
     nlines = len(linelist)
     nlte_flags = np.zeros(nlines, dtype=np.int16)
 
-    error = idl_call_external(
-        "GetNLTEflags", nlte_flags, nlines, inttype=("short", "int")
-    )
+    error = idl_call_external("GetNLTEflags", nlte_flags, nlines, type=("short", "int"))
     if error != b"":
         raise ValueError(f"GetNLTEflags (call external): {error.decode()}")
 
