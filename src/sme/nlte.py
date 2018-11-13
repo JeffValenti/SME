@@ -297,83 +297,73 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
         Indices of the used lines in the linelist
     """
 
-    # TODO there must be a better way of doing this
-    # just compare the values instead of using string ?
-
-    # ion = np.array([s[-1] for s in species], dtype=int)
     lineindices = np.char.startswith(sme.species, elem)
     if not np.any(lineindices):
         print(f"No NLTE transitions for {elem} found")
         return None, None, None
 
-    parts_low = sme.linelist.term_lower[lineindices]
-    parts_upp = sme.linelist.term_upper[lineindices]
+    sme_species = sme.species[lineindices]
 
+    # Extract data from linelist
+    parts_low = sme.linelist["term_lower"][lineindices]
+    parts_upp = sme.linelist["term_upper"][lineindices]
     # Remove quotation marks (if any are there)
     parts_low = [s.replace("'", "") for s in parts_low]
     parts_upp = [s.replace("'", "") for s in parts_upp]
-
+    # Get only the relevant part
     parts_low = np.array([s.split()[1:] for s in parts_low])
     parts_upp = np.array([s.split()[1:] for s in parts_upp])
 
-    level_labels = np.array(
-        [
-            f"{s}_{c}_{t}_{round(2*j+1):.0f}"
-            for s, c, t, j in zip(species, conf, term, rotnum)
-        ]
+    # Transform into term symbol J (2*S+1) ?
+    extra = sme.linelist.extra[lineindices]
+    extra = extra[:, [0, 2]] * 2 + 1
+    extra = np.rint(extra).astype("i8")
+
+    # Transform into term symbol J (2*S+1) ?
+    rotnum = np.rint(2 * rotnum + 1).astype(int)
+
+    # Create record arrays for each set of labels
+    dtype = [
+        ("species", sme.species.dtype),
+        ("configuration", parts_upp.dtype),
+        ("term", parts_upp.dtype),
+        ("J", extra.dtype),
+    ]
+    level_labels = np.rec.fromarrays((species, conf, term, rotnum), dtype=dtype)
+    line_label_low = np.rec.fromarrays(
+        (sme_species, parts_low[:, 0], parts_low[:, 1], extra[:, 0]), dtype=dtype
+    )
+    line_label_upp = np.rec.fromarrays(
+        (sme_species, parts_upp[:, 0], parts_upp[:, 1], extra[:, 1]), dtype=dtype
     )
 
-    line_label_low = [
-        f"{s}_{c}_{t}_{round(2*j+1):.0f}"
-        for s, c, t, j, in zip(
-            sme.species[lineindices],
-            parts_low[:, 0],
-            parts_low[:, 1],
-            sme.linelist.extra[lineindices, 0],
-        )
-    ]
-
-    line_label_upp = [
-        f"{s}_{c}_{t}_{round(2*j+1):.0f}"
-        for s, c, t, j, in zip(
-            sme.species[lineindices],
-            parts_upp[:, 0],
-            parts_upp[:, 1],
-            sme.linelist.extra[lineindices, 2],
-        )
-    ]
-
-    level_labels = np.sort(level_labels)
-    line_label_low = np.sort(line_label_low)
-    line_label_upp = np.sort(line_label_upp)
-
+    # Prepare arrays
     nlines = parts_low.shape[0]
     linelevels = np.full((nlines, 2), -1)
-    levels_used = np.zeros(len(species), dtype=int)
+    iused = np.zeros(len(species), dtype=bool)
 
-    # Loop through the NLTE levels:
+    # Loop through the NLTE levels
+    # and match line levels
     for i, level in enumerate(level_labels):
         idx_l = line_label_low == level
         linelevels[idx_l, 0] = i
-        levels_used[i] += np.count_nonzero(idx_l)
+        iused[i] = iused[i] or np.any(idx_l)
 
         idx_u = line_label_upp == level
         linelevels[idx_u, 1] = i
-        levels_used[i] += np.count_nonzero(idx_u)
-
-    iused = levels_used > 0
-    # Remap the previous indices into a collapsed sequence:
-    iremap = np.cumsum(iused) - 1  # increments by one wherever levels_used is true.
-    level_labels = level_labels[iused]
-
-    # Remap the linelevel references:
-    imatched = linelevels >= 0
-    linelevels[imatched] = iremap[linelevels[imatched]]
+        iused[i] = iused[i] or np.any(idx_u)
 
     # Reduce the stored data to only relevant energy levels
+    # Remap the previous indices into a collapsed sequence
+    level_labels = level_labels[iused]
     bgrid = bgrid[iused, ...]
+    lineindices = np.where(lineindices)[0]
 
-    return bgrid, level_labels, linelevels, np.where(lineindices)[0]
+    # Remap the linelevel references
+    for j, i in enumerate(np.where(iused)[0]):
+        linelevels[linelevels == i] = j
+
+    return bgrid, level_labels, linelevels, lineindices
 
 
 def interpolate_grid(sme, elem, nlte_grid):
@@ -502,6 +492,8 @@ def update_depcoeffs(sme):
                 # Make sure both levels have corrections available
                 if lr[0] != -1 and lr[1] != -1:
                     sme_synth.InputNLTE(bmat[:, lr].T, li)
+
+    # flags = sme_synth.GetNLTEflags(sme.linelist)
 
     return sme
 
