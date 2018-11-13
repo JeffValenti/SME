@@ -58,13 +58,7 @@ def ClearH2broad():
 def InputLineList(atomic, species):
     """ Read in line list """
     nlines = species.size
-
-    # _, sort = np.unique(atomic[2], return_index=True)
-    # atomic = atomic[:, sort]
-    # species = species[sort]
-
-    atomic = atomic.T.astype(float, copy=False)
-    species = species.astype(str, copy=False)
+    atomic = atomic.T
     return idl_call_external(
         "InputLineList", nlines, species, atomic, type=("int", "double", "double")
     )
@@ -73,7 +67,6 @@ def InputLineList(atomic, species):
 def OutputLineList(atomic, copy=False):
     """ Return line list """
     nlines = atomic.shape[0]
-    atomic = atomic.astype(float)
     if copy:
         atomic = np.copy(atomic)
     error = idl_call_external(
@@ -88,7 +81,6 @@ def OutputLineList(atomic, copy=False):
 def UpdateLineList(atomic, species, index):
     """ Change line list parameters """
     nlines = atomic.shape[0]
-    species = species.astype("S")
     return idl_call_external(
         "UpdateLineList",
         nlines,
@@ -119,7 +111,7 @@ def InputModel(teff, grav, vturb, atmo):
 
     if atmo.geom == "SPH":
         radius = atmo.radius
-        height = float(atmo.height)
+        height = atmo.height
         motype = "SPH"
         args = args[:5] + [radius] + args[5:] + [height]
         type = type[:5] + "d" + type[5:] + "d"
@@ -140,14 +132,6 @@ def InputAbund(abund, feh):
     # Convert abundances to the right format
     # metallicity is included in the abundance class, ignored in function call
     abund = abund("sme", raw=True)
-
-    # abund = np.copy(abund.get_pattern("H=12", raw=True))
-    # abund[2:] += feh     #apply metallicity, except to H He
-    # abund[2:] = np.clip(abund[2:], None, -1.)         #make sure we do not go berserk here
-    # abund[1:] = 10.0**abund[1:]          #convert log(fraction) to fraction
-    # abund /= np.sum(abund)        #normalize sum of fractions
-    # abund[1:] = np.log10(abund[1:])       #convert fraction to log(fraction)
-
     return idl_call_external("InputAbund", abund, type="double")
 
 
@@ -255,7 +239,7 @@ def CentralDepth():
 
 def GetLineRange(nlines):
     """ """
-    linerange = np.zeros((nlines, 2), dtype=float)
+    linerange = np.zeros((nlines, 2))
 
     error = idl_call_external("GetLineRange", linerange, nlines, type=("double", "int"))
     if error != b"":
@@ -273,7 +257,7 @@ def InputNLTE(bmat, lineindices):
 
 
 def GetNLTE(nrhox, line):
-    bmat = np.full((2, nrhox), -1, dtype=float)
+    bmat = np.full((2, nrhox), -1., dtype=float)
     error = idl_call_external(
         "GetDepartureCoefficients", bmat, nrhox, line, type=("double", "int", "int")
     )
