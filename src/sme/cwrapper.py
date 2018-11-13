@@ -57,6 +57,10 @@ def idl_call_external(funcname, *args, restype="str", type=None):
     """Call an external C library (here the SME lib) function that uses the IDL type interface
     i.e. restype func(int n, void *args[]), where n is the number of arguments, and args is a list of pointers to the arguments
 
+    Input arrays will be converted to the required datatype for the C function (see type keyword),
+    and any changes to input arrays will be written back if possible.
+    Input arrays that are already in the correct datatype will not be copied (and the values can therefore change in the C call)
+
     Note that all strings are converted into IDL_String objects, even those that are in arrays
 
     Parameters
@@ -84,11 +88,10 @@ def idl_call_external(funcname, *args, restype="str", type=None):
         libfile = os.path.join(localdir, "dll", libfile)
         idl_call_external.lib = ct.CDLL(libfile)
 
-    # Parse arguments into c values
-    # keep Python elements in staying alive, so they are not discarded by the garbage collection
-
+    # prepare input arguments
     args = list(args)
     staying_alive = [a for a in args]
+    original = [a for a in args]
 
     # datatype is determined by passed type keyword
     # defaults to 'int' for all integer type values and 'double' for all floating point values
@@ -97,6 +100,8 @@ def idl_call_external(funcname, *args, restype="str", type=None):
     elif type in ["short", "int", "long", "float", "double"]:
         type = [type for i in range(len(args))]
 
+    # Parse arguments into c values
+    # keep Python elements in staying alive, so they are not discarded by the garbage collection
     for i in range(len(args)):
         # Single values
         if isinstance(args[i], (int, float, np.number)):
@@ -110,7 +115,9 @@ def idl_call_external(funcname, *args, restype="str", type=None):
             args[i] = ct.addressof(staying_alive[i])
         # Arrays
         elif isinstance(args[i], np.ndarray):
-            if np.issubdtype(args[i].dtype, np.number):
+            if np.issubdtype(args[i].dtype, np.number) or np.issubdtype(
+                args[i].dtype, np.bool_
+            ):
                 dtype = get_dtype(type[i])
                 args[i] = np.require(
                     args[i], dtype=dtype, requirements=["C", "A", "W", "O"]
@@ -139,13 +146,41 @@ def idl_call_external(funcname, *args, restype="str", type=None):
     else:
         func.restype = get_dtype(restype)
 
+    # Convert input parameters to list of void pointers
     a = np.array(args, dtype=ct.c_void_p)
     a = np.ascontiguousarray(a)
 
     argc = len(args)
     argv = a.ctypes.data_as(ct.POINTER(ct.c_void_p))
 
+    # C function call
     res = func(argc, argv)
+
+    # Try to copy back data to the original array memory (if necessary)
+    for i in range(len(original)):
+        if isinstance(original[i], np.ndarray):
+            if np.issubdtype(original[i].dtype, np.number) or np.issubdtype(
+                original[i].dtype, np.bool_
+            ):
+                # do nothing if its the same array
+                if original[i] is staying_alive[i]._arr:
+                    continue
+                arr = staying_alive[i]._arr
+            elif np.issubdtype(original[i].dtype, np.str):
+                # For string arrays recover the strings from the IDL_String structure
+                arr = [s.s.decode() for s in staying_alive[i]]
+            else:
+                # Shouldn't happen
+                continue
+
+            # If nothing was changed then all is good
+            if not np.all(original[i] == arr):
+                try:
+                    original[i][:] = arr
+                except ValueError as ve:
+                    print(
+                        f"WARNING: Array values changed, but could not be written back to the original array\n{str(ve)}"
+                    )
 
     return res
 
