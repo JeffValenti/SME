@@ -308,11 +308,11 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     parts_low = sme.linelist["term_lower"][lineindices]
     parts_upp = sme.linelist["term_upper"][lineindices]
     # Remove quotation marks (if any are there)
-    parts_low = [s.replace("'", "") for s in parts_low]
-    parts_upp = [s.replace("'", "") for s in parts_upp]
+    # parts_low = [s.replace("'", "") for s in parts_low]
+    # parts_upp = [s.replace("'", "") for s in parts_upp]
     # Get only the relevant part
-    parts_low = np.array([s.split()[1:] for s in parts_low])
-    parts_upp = np.array([s.split()[1:] for s in parts_upp])
+    parts_low = np.array([s.split() for s in parts_low])
+    parts_upp = np.array([s.split() for s in parts_upp])
 
     # Transform into term symbol J (2*S+1) ?
     extra = sme.linelist.extra[lineindices]

@@ -1,6 +1,9 @@
 import numpy as np
 import numpy.lib.recfunctions
 
+from io import StringIO
+import pandas as pd
+
 from .abund import Abund
 
 
@@ -20,7 +23,7 @@ class LineList:
         atomic = kwargs.pop("atomic")
         lande = kwargs.pop("lande")
         depth = kwargs.pop("depth")
-        lineref = kwargs.pop("lineref").astype("U")
+        lineref = kwargs.pop("reference").astype("U")
         short_line_format = kwargs.pop("short_line_format")
         if short_line_format == 2:
             line_extra = kwargs.pop("line_extra")
@@ -28,119 +31,68 @@ class LineList:
             line_term_low = kwargs.pop("line_term_low").astype("U")
             line_term_upp = kwargs.pop("line_term_upp").astype("U")
 
-        arrays = [species, *[atomic[:, i] for i in range(8)], lande, depth, lineref]
-        names = [
-            "species",
-            "atom_number",
-            "ionization",
-            "wlcent",
-            "excit",
-            "gflog",
-            "gamrad",
-            "gamqst",
-            "gamvw",
-            "lande",
-            "depth",
-            "reference",
-        ]
+        data = {
+            "species": species,
+            "atom_number": atomic[:, 0],
+            "ionization": atomic[:, 1],
+            "wlcent": atomic[:, 2],
+            "excit": atomic[:, 3],
+            "gflog": atomic[:, 4],
+            "gamrad": atomic[:, 5],
+            "gamqst": atomic[:, 6],
+            "gamvw": atomic[:, 7],
+            "lande": lande,
+            "depth": depth,
+            "reference": lineref,
+        }
 
         if short_line_format == 1:
             lineformat = "short"
-            term_lower = term_upper = error = None
         if short_line_format == 2:
             lineformat = "long"
             error = [s[0:11].strip() for s in lineref]
             error = ValdFile.parse_line_error(error, depth)
-            arrays = arrays + [
-                line_lulande[:, 0],
-                line_lulande[:, 1],
-                line_extra[:, 0],
-                line_extra[:, 1],
-                line_extra[:, 2],
-                line_term_low,
-                line_term_upp,
-                error,
-            ]
-            names = names + [
-                "lande_lower",
-                "lande_upper",
-                "j_lo",
-                "e_upp",
-                "j_up",
-                "term_lower",
-                "term_upper",
-                "error",
-            ]
+            data["error"] = error
+            data["lande_lower"] = line_lulande[:, 0]
+            data["lande_upper"] = line_lulande[:, 1]
+            data["j_lo"] = line_extra[:, 0]
+            data["e_upp"] = line_extra[:, 1]
+            data["j_up"] = line_extra[:, 2]
+            data["term_lower"] = [t[10:].strip() for t in line_term_low]
+            data["term_upper"] = [t[10:].strip() for t in line_term_upp]
 
-        linedata = np.rec.fromarrays(arrays, names=names)
-        ionization = linedata["ionization"]
-        atom_number = linedata["atom_number"]
+        linedata = pd.DataFrame.from_dict(data)
 
         return (linedata, lineformat)
-
-    @staticmethod
-    def fromList(linedata):
-        """ extract data from """
-        names = [
-            "species",
-            "wlcent",
-            "excit",
-            "vmic",
-            "gflog",
-            "gamrad",
-            "gamqst",
-            "gamvw",
-            "lande",
-            "depth",
-            "reference",
-        ]
-        linedata = np.rec.fromrecords(linedata, names=names)
-        return linedata
 
     def __init__(self, linedata, lineformat="short", **kwargs):
         if linedata is None:
             # everything is in the kwargs (usually by loading from old SME file)
-            ld, lf = LineList.from_IDL_SME(**kwargs)
+            linedata, lineformat = LineList.from_IDL_SME(**kwargs)
         else:
-            if not isinstance(linedata, np.recarray):
-                linedata = LineList.fromList(linedata)
-            ld = linedata
-            lf = lineformat
+            if "atom_number" in kwargs.keys():
+                linedata["atom_number"] = kwargs["atom_number"]
+            elif "atom_number" not in linedata.columns:
+                linedata["atom_number"] = np.ones(len(linedata), dtype=float)
 
-            if len(kwargs) != 0:
-                if "atom_number" in kwargs.keys():
-                    an = kwargs["atom_number"]
-                else:
-                    an = np.ones(linedata.shape, dtype=float)
-
-                if "ionization" in kwargs.keys():
-                    ion = kwargs["ionization"]
-                else:
-                    ion = np.array(
-                        [int(s[-1]) for s in linedata["species"]], dtype=float
-                    )
-
-                tu = kwargs.get("term_upper")
-                tl = kwargs.get("term_lower")
-                com = kwargs.get("lineref")
-                err = kwargs.get("error")
-
-                names = [
-                    "ionization",
-                    "atom_number",
-                    "term_upper",
-                    "term_lower",
-                    "reference",
-                    "error",
-                ]
-                data = [ion, an, tu, tl, com, err]
-
-                ld = np.lib.recfunctions.append_fields(
-                    ld, names, data, asrecarray=True, usemask=False
+            if "ionization" in kwargs.keys():
+                linedata["ionization"] = kwargs["ionization"]
+            elif "ionization" not in linedata.columns:
+                linedata["ionization"] = np.array(
+                    [int(s[-1]) for s in linedata["species"]], dtype=float
                 )
 
-        self.lineformat = lf
-        self._lines = ld  # should have all the fields (20)
+            if "term_upper" in kwargs.keys():
+                linedata["term_upper"] = kwargs["term_upper"]
+            if "term_lower" in kwargs.keys():
+                linedata["term_lower"] = kwargs["term_lower"]
+            if "reference" in kwargs.keys():
+                linedata["reference"] = kwargs["reference"]
+            if "error" in kwargs.keys():
+                linedata["error"] = kwargs["error"]
+
+        self.lineformat = lineformat
+        self._lines = linedata  # should have all the fields (20)
 
     def __len__(self):
         return len(self._lines)
@@ -149,75 +101,26 @@ class LineList:
         return str(self._lines)
 
     def __iter__(self):
-        return self._lines.__iter__()
+        return self._lines.itertuples(index=False)
 
-    def __next__(self):
-        return self._lines.__next__()
+    # def __next__(self):
+    # return self._lines.__next__()
 
     def __getitem__(self, index):
-        if not isinstance(index, str):
+        if isinstance(index, (list, str)):
+            return self._lines[index].values
+        else:
             # just pass on a subsection of the linelist data, but keep it a linelist object
             return LineList(self._lines[index], self.lineformat)
-        else:
-            return self._lines[index]
 
-    @property
-    def wlcent(self):
-        return self._lines["wlcent"]
-
-    @property
-    def excit(self):
-        return self._lines["excit"]
-
-    @property
-    def gflog(self):
-        return self._lines["gflog"]
-
-    @property
-    def gamrad(self):
-        return self._lines["gamrad"]
-
-    @property
-    def gamqst(self):
-        return self._lines["gamqst"]
-
-    @property
-    def gamvw(self):
-        return self._lines["gamvw"]
+    def __getattribute__(self, name):
+        if name[0] != "_" and name not in dir(self):
+            return self._lines[name].values
+        return super().__getattribute__(name)
 
     @property
     def species(self):
-        return self._lines["species"]
-
-    @property
-    def depth(self):
-        return self._lines["depth"]
-
-    @property
-    def reference(self):
-        return self._lines["reference"]
-
-    @property
-    def lande(self):
-        return self._lines["lande"]
-
-    @property
-    def error(self):
-        if self.lineformat == "long":
-            return self._lines["error"]
-        raise AttributeError("'error' is only available in the long line format")
-
-    @property
-    def term_lower(self):
-        if self.lineformat == "long":
-            return self._lines["term_lower"]
-        raise AttributeError("'term_lower' is only available in the long line format")
-
-    @property
-    def term_upper(self):
-        if self.lineformat == "long":
-            return self._lines["term_upper"]
-        raise AttributeError("'term_upper' is only available in the long line format")
+        return self._lines["species"].values.astype("U")
 
     @property
     def lulande(self):
@@ -225,23 +128,15 @@ class LineList:
             raise AttributeError("LuLande is only available in the long line format")
 
             # additional data arrays for sme
-        tmp = self._lines[["lande_lower", "lande_upper"]]
-        tmp = tmp.astype([("lande_lower", float), ("lande_upper", float)], copy=False)
-        tmp = tmp.view(float, np.ndarray)
-        tmp.shape = len(self), -1
-        return tmp
+        names = ["lande_lower", "lande_upper"]
+        return self._lines[names].values
 
     @property
     def extra(self):
         if self.lineformat == "short":
             raise AttributeError("Extra is only available in the long line format")
-        tmp = self._lines[["j_lo", "e_upp", "j_up"]]
-        tmp = tmp.astype(
-            [("j_lo", float), ("e_upp", float), ("j_upp", float)], copy=False
-        )
-        tmp = tmp.view(float, np.ndarray)
-        tmp.shape = len(self), -1
-        return tmp
+        names = ["j_lo", "e_upp", "j_up"]
+        return self._lines[names].values
 
     @property
     def atomic(self):
@@ -255,13 +150,8 @@ class LineList:
             "gamqst",
             "gamvw",
         ]
-        dtype = [(n, float) for n in names]
         # Select fields
-        tmp = self._lines[names]
-        tmp = tmp.astype(dtype, copy=False)
-        tmp = tmp.view(float, np.ndarray)
-        tmp.shape = len(self), -1
-        return tmp
+        return self._lines[names].values
 
 
 class ValdFile:
@@ -295,16 +185,12 @@ class ValdFile:
     def read(self, filename):
         """Read line data file from the VALD extract stellar service.
         """
+
         with open(filename, "r") as file:
             lines = file.readlines()
         self.parse_header(lines[0])
-
         # TODO how to recognise extended format
-        # and what to do about it
-        if lines[4][:2] == "' ":
-            fmt = "long"
-        else:
-            fmt = "short"
+        fmt = "long" if lines[4][:2] == "' " else "short"
 
         if fmt == "long":
             linedata = lines[3 : 3 + self.n * 4]
@@ -371,50 +257,52 @@ class ValdFile:
         """
 
         if fmt == "short":
-            dtype = np.dtype(
-                [
-                    ("species", "<U6"),
-                    ("wlcent", float),
-                    ("excit", float),
-                    ("vmic", float),
-                    ("gflog", float),
-                    ("gamrad", float),
-                    ("gamqst", float),
-                    ("gamvw", float),
-                    ("lande", float),
-                    ("depth", float),
-                    ("lineref", "<U100"),
-                ]
-            )
+            names = [
+                "species",
+                "wlcent",
+                "excit",
+                "vmic",
+                "gflog",
+                "gamrad",
+                "gamqst",
+                "gamvw",
+                "lande",
+                "depth",
+                "reference",
+            ]
+
         elif fmt == "long":
-            dtype = np.dtype(
-                [
-                    ("species", "<U5"),
-                    ("wlcent", float),
-                    ("gflog", float),
-                    ("excit", float),
-                    ("j_lo", float),
-                    ("e_upp", float),
-                    ("j_up", float),
-                    ("lande_lower", float),
-                    ("lande_upper", float),
-                    ("lande", float),
-                    ("gamrad", float),
-                    ("gamqst", float),
-                    ("gamvw", float),
-                    ("depth", float),
-                ]
-            )
+            names = [
+                "species",
+                "wlcent",
+                "gflog",
+                "excit",
+                "j_lo",
+                "e_upp",
+                "j_up",
+                "lande_lower",
+                "lande_upper",
+                "lande",
+                "gamrad",
+                "gamqst",
+                "gamvw",
+                "depth",
+            ]
             term_lower = lines[1::4]
             term_upper = lines[2::4]
             comment = lines[3::4]
             lines = lines[::4]
 
-        # TODO assign correct dtype once and then fill values
-        linelist = np.genfromtxt(
-            lines, dtype=dtype, delimiter=",", converters={0: lambda s: s[1:-1]}
+        data = StringIO("".join(lines))
+        linelist = pd.read_table(
+            data,
+            sep=",",
+            names=names,
+            header=None,
+            quotechar="'",
+            skipinitialspace=True,
+            usecols=range(len(names)),
         )
-        linelist = linelist.view(np.recarray)
 
         if fmt == "long":
             # Convert from cm^-1 to eV
@@ -422,20 +310,21 @@ class ValdFile:
             linelist["excit"] /= conversion_factor
             linelist["e_upp"] /= conversion_factor
 
-            # extract error data
-            error = np.array([s[1:11].strip() for s in comment])
-            error = self.parse_line_error(error, linelist["depth"])
+            comment = [c.replace("'", "").strip() for c in comment]
+            linelist["reference"] = comment
 
-            linelist = LineList(
-                linelist,
-                lineformat=fmt,
-                term_lower=term_lower,
-                term_upper=term_upper,
-                lineref=comment,
-                error=error,
-            )
-        else:
-            linelist = LineList(linelist)
+            # Parse energy level terms
+            term_lower = [t.replace("'", "").split(maxsplit=1)[-1] for t in term_lower]
+            term_upper = [t.replace("'", "").split(maxsplit=1)[-1] for t in term_upper]
+            linelist["term_lower"] = term_lower
+            linelist["term_upper"] = term_upper
+
+            # extract error data
+            error = np.array([s[:10].strip() for s in comment])
+            error = self.parse_line_error(error, linelist["depth"])
+            linelist["error"] = error
+
+        linelist = LineList(linelist, lineformat=fmt)
 
         return linelist
 

@@ -373,7 +373,7 @@ class SME_Struct(Param):
             atomic=kwargs.pop("atomic"),
             lande=kwargs.pop("lande"),
             depth=kwargs.pop("depth"),
-            lineref=kwargs.pop("lineref"),
+            reference=kwargs.pop("lineref"),
             short_line_format=kwargs.pop("short_line_format"),
             line_extra=kwargs.pop("line_extra", None),
             line_lulande=kwargs.pop("line_lulande", None),
