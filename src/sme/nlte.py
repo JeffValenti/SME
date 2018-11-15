@@ -163,7 +163,7 @@ def read_grid(sme, elem):
     subgrid_size[:] = 2
     solar = Abund(0, "asplund2009")
     relative_abundance = sme.abund[elem] - solar[elem]
-    sme_values = relative_abundance, sme.teff, sme.logg, sme.feh
+    sme_values = relative_abundance, sme.teff, sme.logg, sme.monh
 
     # Get NLTE filename
     # TODO: external setting parameter for the location of the grids
@@ -387,7 +387,7 @@ def interpolate_grid(sme, elem, nlte_grid):
     # Get parameters from sme structure
     teff = sme.teff
     grav = sme.logg
-    feh = sme.feh
+    feh = sme.monh
     solar = Abund(0, "asplund2009")
     abund = sme.abund[elem] - solar[elem]
 

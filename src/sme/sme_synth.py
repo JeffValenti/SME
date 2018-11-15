@@ -131,6 +131,7 @@ def InputAbund(abund, feh):
     """
     # Convert abundances to the right format
     # metallicity is included in the abundance class, ignored in function call
+    assert abund.monh == feh
     abund = abund("n/nTot", raw=True)
     return idl_call_external("InputAbund", abund, type="double")
 

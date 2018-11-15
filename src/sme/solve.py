@@ -90,7 +90,7 @@ def sme_func_atmo(sme):
 
     if atmo.method == "grid":
         reload = msdi_save is None or atmo.source != prev_msdi[1]
-        atmo = interp_atmo_grid(sme.teff, sme.logg, sme.feh, sme.atmo, reload=reload)
+        atmo = interp_atmo_grid(sme.teff, sme.logg, sme.monh, sme.atmo, reload=reload)
         prev_msdi = [atmo.method, atmo.source, atmo.depth, atmo.interp]
         setattr(self, "prev_msdi", prev_msdi)
         setattr(self, "msdi_save", True)
@@ -241,7 +241,9 @@ def synthetize_spectrum(wavelength, param, sme, save=True, update=True):
         sme2.save(save)
 
     mask = (sme2.mob != 0) & (sme2.uob != 0)
-    if not np.allclose(wavelength, sme2.wave[mask]):
+    if wavelength.size != sme2.wave[mask].size or not np.allclose(
+        wavelength, sme2.wave[mask]
+    ):
         # interpolate to required wavelenth grid
         res = np.interp(wavelength, sme2.wave[mask], sme2.smod[mask])
     else:
@@ -279,7 +281,7 @@ def determine_continuum(wave, spec, linelist, deg=2):
     return coeff
 
 
-def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy", **kwargs):
+def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwargs):
     """
     Find the least squares fit parameters to an observed spectrum
 
@@ -290,7 +292,7 @@ def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy", **kwargs
     sme : SME_Struct
         sme struct containing all input (and output) parameters
     param_names : list, optional
-        the names of the parameters to fit (default: ["teff", "logg", "feh"])
+        the names of the parameters to fit (default: ["teff", "logg", "monh"])
     filename : str, optional
         the sme structure will be saved to this file, use None to suppress this behaviour (default: "sme.npy")
 
@@ -308,11 +310,12 @@ def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy", **kwargs
 
     # replace "grav" with equivalent logg fit
     param_names = [p if p != "grav" else "logg" for p in param_names]
+    param_names = [p if p != "feh" else "monh" for p in param_names]
 
     bounds = {
         "teff": [3500, 7000],
         "logg": [3, 5],
-        "feh": [-5, 1],
+        "monh": [-5, 1],
         "vmic": [0, np.inf],
         "vmac": [0, np.inf],
     }
@@ -353,7 +356,7 @@ def solve(sme, param_names=("teff", "logg", "feh"), filename="sme.npy", **kwargs
     # The values in the last call are usually from the jacobian, i.e. not with the exactly correct parameters
     for i, name in enumerate(param_names):
         sme[name] = res.x[i]
-    sme = sme_func(sme)
+    # sme = sme_func(sme)
 
     # SME structure is updated inside synthetize_spectrum to contain the results of the calculation
     # If for some reason that should not work, one can load the intermediary "sme.npy" file
@@ -484,7 +487,7 @@ def sme_func(sme, setLineList=True, passAtmosphere=True, passNLTE=True):
     if passAtmosphere:
         sme = sme_func_atmo(sme)
         sme_synth.InputModel(sme.teff, sme.logg, sme.vmic, sme.atmo)
-        sme_synth.InputAbund(sme.abund, sme.feh)
+        sme_synth.InputAbund(sme.abund, sme.monh)
         sme_synth.Ionization(0)
         sme_synth.SetVWscale(sme.gam6)
         sme_synth.SetH2broad(sme.h2broad)

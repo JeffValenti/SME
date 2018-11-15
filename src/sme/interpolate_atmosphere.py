@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, interpn, griddata
 from scipy.optimize import curve_fit
 from scipy.io import readsav
 from .sme import Atmo
@@ -415,6 +415,126 @@ def interp_atmo_pair(
     return atmo
 
 
+def load_atmopshere_grid(filename, reload=False):
+    self = interp_atmo_grid
+    prefix = os.path.dirname(__file__)
+
+    # TODO: remove reliance on atmo_in parameter
+    # Load values from previous call if they exist
+    if hasattr(self, "atmo_grid"):
+        atmo_grid = self.atmo_grid
+        atmo_grid_maxdep = self.atmo_grid_maxdep
+        atmo_grid_natmo = self.atmo_grid_natmo
+        atmo_grid_vers = self.atmo_grid_vers
+        atmo_grid_file = self.atmo_grid_file
+    else:
+        atmo_grid = None
+        atmo_grid_file = None
+
+    # Load atmosphere grid from disk, if not already loaded.
+    changed = filename is None or filename != atmo_grid_file
+    if changed or atmo_grid is None or reload:
+        path = os.path.join(prefix, "atmospheres", filename)
+        krz2 = readsav(path)
+        atmo_grid = krz2["atmo_grid"]
+        atmo_grid_maxdep = krz2["atmo_grid_maxdep"]
+        atmo_grid_natmo = krz2["atmo_grid_natmo"]
+        atmo_grid_vers = krz2["atmo_grid_vers"]
+        atmo_grid_file = filename
+
+        # Keep values around for next run
+        setattr(self, "atmo_grid", atmo_grid)
+        setattr(self, "atmo_grid_maxdep", atmo_grid_maxdep)
+        setattr(self, "atmo_grid_natmo", atmo_grid_natmo)
+        setattr(self, "atmo_grid_vers", atmo_grid_vers)
+        setattr(self, "atmo_grid_file", atmo_grid_file)
+
+    return atmo_grid
+
+
+def interpolate_atmosphere_grid(
+    atmo_grid, teff, logg, monh, interp, depth, atmo_in, atmogridfile
+):
+    # Select nearest points used for linear interpolation
+    # Should be 8 (corners of a cube)
+    M = np.unique(atmo_grid.teff)
+    M0, M1 = np.min(M[M >= teff]), np.max(M[M <= teff])
+    M_grid = (atmo_grid.teff == M0) | (atmo_grid.teff == M1)
+
+    M = np.unique(atmo_grid.logg)
+    M0, M1 = np.min(M[M >= logg]), np.max(M[M <= logg])
+    M_grid = M_grid & ((atmo_grid.logg == M0) | (atmo_grid.logg == M1))
+
+    M = np.unique(atmo_grid.monh)
+    M0, M1 = np.min(M[M >= monh]), np.max(M[M <= monh])
+    M_grid = M_grid & ((atmo_grid.monh == M0) | (atmo_grid.monh == M1))
+
+    atmo_grid = atmo_grid[M_grid]
+    assert len(atmo_grid) == 8
+
+    points = np.array((atmo_grid.teff, atmo_grid.logg, atmo_grid.monh)).T
+    xi = np.array((teff, logg, monh))
+
+    # Interpolate depth scale
+    depth_grid = np.array(atmo_grid[interp].tolist())
+    depth_grid = np.log10(depth_grid)
+    depth_scale = griddata(points, depth_grid, xi)[0]
+
+    # Interpolate values which vary with depth
+    var = ["TEMP", "XNE", "XNA", "RHO", "RHOX", "TAU"]
+    values = [np.array(atmo_grid[v].tolist()) for v in var]
+    values = np.stack(values).swapaxes(0, 1)
+
+    # Interpolate onto common depth scale
+    # fill values outside the range with nearest point inside the range
+    for i in range(values.shape[0]):
+        for j in range(len(var)):
+            interpolator = interp1d(
+                depth_grid[i],
+                values[i, j],
+                kind="cubic",
+                bounds_error=False,
+                fill_value=tuple(values[i, j][[0, -1]]),
+            )
+            values[i, j, :] = interpolator(depth_scale)
+
+    depth_data = griddata(points, values, xi)[0]
+
+    # Interpolate other values
+    lonh = griddata(points, atmo_grid.lonh, xi)[0]
+    vturb = griddata(points, atmo_grid.vturb, xi)[0]
+
+    opflag = np.array(atmo_grid.opflag.tolist())
+    opflag = griddata(points, opflag, xi)[0]
+
+    abund = np.array(atmo_grid.abund.tolist())
+    abund = griddata(points, abund, xi)[0]
+    abund[1] = np.log10(abund[1])  # Convert Helium into the right shape
+
+    atmo = Atmo(teff=teff, logg=logg, monh=monh)
+    atmo["RHOX"] = depth_data[4]
+    atmo["TAU"] = depth_data[5]
+    atmo["temp"] = depth_data[0]
+    atmo["xne"] = depth_data[1]
+    atmo["xna"] = depth_data[2]
+    atmo["rho"] = depth_data[3]
+    atmo["lonh"] = lonh
+    atmo.set_abund(monh, abund, "sme")
+
+    atmo.depth = depth
+    atmo.interp = interp
+    atmo.geom = atmo_in.geom
+    atmo.vmac = atmo_in.vmac
+    atmo.vmic = atmo_in.vmic
+    atmo.vsini = atmo_in.vsini
+    atmo.method = "grid"
+    atmo.source = atmogridfile
+    atmo.opflag = opflag
+    atmo.vturb = vturb
+
+    return atmo
+
+
 def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=False):
     """
     General routine to interpolate in 3D grid of model atmospheres
@@ -513,39 +633,8 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
     nb = 2  # number of bracket points
     itop = 1  # index of top depth to use on rhox scale
 
-    # Load common block variable "prefix" with directory containing atmospheric grids
-    prefix = os.path.dirname(__file__)
-
-    # TODO: remove reliance on atmo_in parameter
-    # Load values from previous call if they exist
-    self = interp_atmo_grid
-    if hasattr(self, "atmo_grid"):
-        atmo_grid = self.atmo_grid
-        atmo_grid_maxdep = self.atmo_grid_maxdep
-        atmo_grid_natmo = self.atmo_grid_natmo
-        atmo_grid_vers = self.atmo_grid_vers
-        atmo_grid_file = self.atmo_grid_file
-    else:
-        atmo_grid = None
-        atmo_grid_file = None
-
-    # Load atmosphere grid from disk, if not already loaded.
-    changed = atmo_grid_file is None or atmo_grid_file != atmo_in.source
-    if changed or atmo_grid is None or reload:
-        path = os.path.join(prefix, "atmospheres", atmo_in.source)
-        krz2 = readsav(path)
-        atmo_grid = krz2["atmo_grid"]
-        atmo_grid_maxdep = krz2["atmo_grid_maxdep"]
-        atmo_grid_natmo = krz2["atmo_grid_natmo"]
-        atmo_grid_vers = krz2["atmo_grid_vers"]
-        atmo_grid_file = atmo_in.source
-
-        # Keep values around for next run
-        setattr(self, "atmo_grid", atmo_grid)
-        setattr(self, "atmo_grid_maxdep", atmo_grid_maxdep)
-        setattr(self, "atmo_grid_natmo", atmo_grid_natmo)
-        setattr(self, "atmo_grid_vers", atmo_grid_vers)
-        setattr(self, "atmo_grid_file", atmo_grid_file)
+    atmo_file = atmo_in.source
+    atmo_grid = load_atmopshere_grid(atmo_file, reload=reload)
 
     # Get field names in ATMO and ATMO_GRID structures.
     atags = [s.upper() for s in atmo_in.names]
@@ -598,7 +687,9 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         raise ValueError(
             "ATMO.INTERP='%s', but ATMO. %s does not exist" % (interp, interp)
         )
-    interpvar = interp
+
+    # print("CHECK ATMOSPHERE INTERPOLATION")
+    # return interpolate_atmosphere_grid(atmo_grid, Teff, logg, MonH, interp, depth, atmo_in, atmo_file)
 
     # The purpose of the first major set of code blocks is to find values
     # of [M/H] in the grid that bracket the requested [M/H]. Then in this
@@ -790,7 +881,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         atmo_grid[icor[0, 0, 0]],
         atmo_grid[icor[1, 0, 0]],
         mfrac,
-        interpvar=interpvar,
+        interpvar=interp,
         itop=itop,
         verbose=verbose - 1,
         plot=plot and (mfrac != 0),
@@ -802,7 +893,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         atmo_grid[icor[0, 1, 0]],
         atmo_grid[icor[1, 1, 0]],
         mfrac,
-        interpvar=interpvar,
+        interpvar=interp,
         itop=itop,
         verbose=verbose - 1,
         plot=plot and (mfrac != 0),
@@ -814,7 +905,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         atmo_grid[icor[0, 0, 1]],
         atmo_grid[icor[1, 0, 1]],
         mfrac,
-        interpvar=interpvar,
+        interpvar=interp,
         itop=itop,
         verbose=verbose - 1,
         plot=plot and (mfrac != 0),
@@ -826,7 +917,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         atmo_grid[icor[0, 1, 1]],
         atmo_grid[icor[1, 1, 1]],
         mfrac,
-        interpvar=interpvar,
+        interpvar=interp,
         itop=itop,
         verbose=verbose - 1,
         plot=plot and (mfrac != 0),
@@ -841,7 +932,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         atmo00,
         atmo01,
         gfrac,
-        interpvar=interpvar,
+        interpvar=interp,
         verbose=verbose - 1,
         plot=plot and (gfrac != 0),
     )
@@ -852,7 +943,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         atmo10,
         atmo11,
         gfrac,
-        interpvar=interpvar,
+        interpvar=interp,
         verbose=verbose - 1,
         plot=plot and (gfrac != 0),
     )
@@ -866,7 +957,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         atmo0,
         atmo1,
         tfrac,
-        interpvar=interpvar,
+        interpvar=interp,
         verbose=verbose - 1,
         plot=plot * (tfrac != 0),
     )

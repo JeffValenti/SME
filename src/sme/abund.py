@@ -1,6 +1,5 @@
 import math
 import numpy as np
-from collections import OrderedDict
 
 
 class Abund:
@@ -41,12 +40,6 @@ class Abund:
         Apply current [M/H] value to the current abundance pattern.
         Transform the resulting abundances to the requested abundance type.
         """
-        # abund = OrderedDict(
-        #     (el, ab + self._monh if ab is not None else ab)
-        #     for el, ab in self._pattern.items()
-        # )
-        # for el in ["H", "He"]:
-        #     abund[el] = self._pattern[el]
         pattern = np.copy(self._pattern)
         pattern[2:] += self._monh
         return self.totype(pattern, type, raw=raw)

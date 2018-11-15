@@ -181,25 +181,31 @@ class Param(Collection):
         self.vsini = None
         self.vmac = None
         self.vmic = None
-        self.monh = monh
 
         # TODO: in the SME structure, the abundance values are in a different scheme than described in Abund
+        # Helium is also fractional
         if abund is not None and abund[1] > 0:
             abund = np.copy(abund)
             abund[1] = np.log10(abund[1])
 
-        self.set_abund(monh, abund, abund_pattern)
-
-        # asp = Abund(0, "asplund2009").get_pattern("sme", raw=True)
-        # temp = self.abund.get_pattern(abund_pattern, raw=True)
-
-        # if not np.allclose(abund, temp, 0.001):
-        #     raise ValueError("Abund messed up")
+        if abund is not None:
+            self.set_abund(monh, abund, abund_pattern)
+        else:
+            self.set_abund(monh, "asplund2009", "str")
 
         super().__init__(**kwargs)
 
     def __str__(self):
         return self.summary()
+
+    @property
+    def monh(self):
+        """ Metallicity """
+        return self.abund.monh
+
+    @monh.setter
+    def monh(self, value):
+        self.abund.monh = value
 
     @property
     def abund(self):
@@ -218,10 +224,7 @@ class Param(Collection):
             )
 
     def set_abund(self, monh, abpatt, abtype):
-        if abpatt is None:
-            self._abund = None
-        else:
-            self._abund = Abund(monh, abpatt, abtype)
+        self._abund = Abund(monh, abpatt, abtype)
 
     def summary(self):
         fmt = "Teff={} K,  logg={:.3f},  [M/H]={:.3f},  Vmic={:.2f},  Vmac={:.2f},  Vsini={:.1f}"
@@ -428,14 +431,6 @@ class SME_Struct(Param):
         self.atmo = Atmo(atmo)
         self.nlte = NLTE(nlte)
         super().__init__(**kwargs)
-
-    @property
-    def feh(self):
-        return self.monh
-
-    @feh.setter
-    def feh(self, value):
-        self.monh = value
 
     @property
     def atomic(self):
