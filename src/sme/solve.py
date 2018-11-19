@@ -10,6 +10,7 @@ from itertools import combinations, product
 import matplotlib.pyplot as plt
 import numpy as np
 from joblib import Memory
+from scipy.io import readsav
 from scipy.constants import speed_of_light
 from scipy.optimize import OptimizeWarning, least_squares
 from scipy.optimize._numdiff import approx_derivative
@@ -281,6 +282,28 @@ def determine_continuum(wave, spec, linelist, deg=2):
     return coeff
 
 
+def get_bounds(param_names, atmo_file):
+    bounds = {}
+
+    dir = os.path.dirname(__file__)
+    atmo_file = os.path.join(dir, "atmospheres", atmo_file)
+    atmo_grid = readsav(atmo_file)["atmo_grid"]
+
+    teff = np.unique(atmo_grid.teff)
+    teff = np.min(teff), np.max(teff)
+    bounds["teff"] = teff
+
+    logg = np.unique(atmo_grid.logg)
+    logg = np.min(logg), np.max(logg)
+    bounds["logg"] = logg
+
+    monh = np.unique(atmo_grid.monh)
+    monh = np.min(monh), np.max(monh)
+    bounds["monh"] = monh
+
+    return bounds
+
+
 def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwargs):
     """
     Find the least squares fit parameters to an observed spectrum
@@ -312,13 +335,8 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
     param_names = [p if p != "grav" else "logg" for p in param_names]
     param_names = [p if p != "feh" else "monh" for p in param_names]
 
-    bounds = {
-        "teff": [3500, 7000],
-        "logg": [3, 5],
-        "monh": [-5, 1],
-        "vmic": [0, np.inf],
-        "vmac": [0, np.inf],
-    }
+    bounds = get_bounds(param_names, sme.atmo.source)
+    bounds.update({"vmic": [0, np.inf], "vmac": [0, np.inf]})
     bounds.update({"%s abund" % el: [-10, 10] for el in Abund._elem})
 
     nparam = len(param_names)
@@ -331,22 +349,49 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
     spec = sme.sob[mask]
     uncs = sme.uob[mask]
 
-    def residuals(param, param_names, wave, spec, uncs):
+    plt.plot(wave, spec)
+
+    def residuals(param, param_names, wave, spec, uncs, isJacobian=False):
         """ func = (model - obs) / sigma """
+        self = residuals
+
         param = {n: v for n, v in zip(param_names, param)}
-        synth = synthetize_spectrum(wave, param, sme)
-        # linelist uncertainties might change depending
-        # on the parameters, as the range of each line changes
-        uncs2 = linelist_errors(wave, spec, sme.linelist)
-        resid = (synth - spec) / (uncs + uncs2)
-        return np.nan_to_num(resid, copy=False)
+        print(param)
+        print(f"Is Jacobian {isJacobian}")
+        synth = synthetize_spectrum(
+            wave, param, sme, update=not isJacobian, save=not isJacobian
+        )
+
+        # TODO: linelist uncertainties, how large should they be?
+        # uncs2 = linelist_errors(wave, spec, sme.linelist)
+        uncs_linelist = 0
+
+        resid = (synth - spec) / (uncs + uncs_linelist)
+        resid = np.nan_to_num(resid, copy=False)
+
+        if not isJacobian:
+            self.resid = resid
+            plt.plot(wave, synth)
+
+        return resid
+
+    def jacobian(param, *args):
+        return approx_derivative(
+            residuals,
+            param,
+            method="3-point",
+            f0=residuals.resid,
+            bounds=bounds,
+            args=args,
+            kwargs={"isJacobian": True},
+        )
 
     res = least_squares(
         residuals,
         x0=p0,
-        jac="3-point",  # is 2-point good enough or do we need 3-point ?
+        jac=jacobian,  # is 2-point good enough or do we need 3-point ?
         bounds=bounds,
-        loss="linear",
+        loss="soft_l1",  # linear or soft_l1 ?
         verbose=2,
         args=(param_names, wave, spec, uncs),
         method="trf",  # method "dogbox" does not fit properly ???
@@ -406,6 +451,8 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
     print(res.message)
     for name, value, unc in zip(param_names, popt, sme.fitresults.punc.values()):
         print(f"{name}\t{value:.5f} +- {unc:.5g}")
+
+    plt.show()
 
     return sme
 
