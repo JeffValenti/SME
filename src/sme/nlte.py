@@ -300,7 +300,7 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     lineindices = np.char.startswith(sme.species, elem)
     if not np.any(lineindices):
         print(f"No NLTE transitions for {elem} found")
-        return None, None, None
+        return None, None, None, None
 
     sme_species = sme.species[lineindices]
 
@@ -434,8 +434,10 @@ def nlte(sme, elem):
         raise ValueError(f"Element {elem} has not been prepared for NLTE")
 
     nlte_grid, linerefs, lineindices = read_grid(sme, elem)
-    subgrid = interpolate_grid(sme, elem, nlte_grid)
+    if nlte_grid["bgrid"] is None:
+        return None, None, None
 
+    subgrid = interpolate_grid(sme, elem, nlte_grid)
     return subgrid, linerefs, lineindices
 
 
@@ -482,7 +484,7 @@ def update_depcoeffs(sme):
         # Call function to retrieve interpolated NLTE departure coefficients
         bmat, linerefs, lineindices = nlte(sme, elem)
 
-        if len(linerefs) < 2 or bmat is None:
+        if bmat is None or len(linerefs) < 2:
             # no data were returned. Don't bother?
             pass
         else:

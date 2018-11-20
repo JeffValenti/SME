@@ -359,7 +359,8 @@ class SME_Struct(Param):
         # additional parameters
         self.vrad = None
         self.vrad_flag = None
-        self.cscale = None
+        self.cscale = kwargs.pop("cscale", None)
+        self.cscale = np.atleast_2d(self.cscale)
         self.cscale_flag = None
         self.gam6 = None
         self.h2broad = None
@@ -393,7 +394,9 @@ class SME_Struct(Param):
         self.nseg = None
         self.wave = None
         self.wind = None
-        self.wran = None  # Wavelength range of each section
+        # Wavelength range of each section
+        self.wran = kwargs.pop("wran", None)
+        self.wran = np.atleast_2d(self.wran)
         # Observation
         self.sob = None
         self.uob = None

@@ -8,6 +8,10 @@ import warnings
 from itertools import combinations, product
 
 import matplotlib.pyplot as plt
+
+# from matplotlib.animation import FuncAnimation
+# from ..gui.plotting import FitPlot
+
 import numpy as np
 from joblib import Memory
 from scipy.io import readsav
@@ -151,8 +155,8 @@ def get_cscale(cscale, flag, il):
     elif flag in [-1, -2]:
         cscale = flag
     elif flag == 0:
-        cscale = cscale[il]
-    elif flag == 1:
+        cscale = cscale[il, 0]
+    elif flag >= 1:
         cscale = cscale[il, :]
     else:
         raise AttributeError("invalid cscale_flag: %i" % flag)
@@ -349,7 +353,11 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
     spec = sme.sob[mask]
     uncs = sme.uob[mask]
 
-    plt.plot(wave, spec)
+    # plt.ion()
+    # fig, ax = plt.subplots()
+    # fp = FitPlot(ax, wave, spec)
+    # FuncAnimation(fig, fp, blit=True)
+    # plt.show()
 
     def residuals(param, param_names, wave, spec, uncs, isJacobian=False):
         """ func = (model - obs) / sigma """
@@ -357,7 +365,7 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
 
         param = {n: v for n, v in zip(param_names, param)}
         print(param)
-        print(f"Is Jacobian {isJacobian}")
+        # print(f"Is Jacobian {isJacobian}")
         synth = synthetize_spectrum(
             wave, param, sme, update=not isJacobian, save=not isJacobian
         )
@@ -371,7 +379,9 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
 
         if not isJacobian:
             self.resid = resid
-            plt.plot(wave, synth)
+            if not hasattr(self, "iteration"):
+                self.iteration = 0
+            self.iteration += 1
 
         return resid
 
@@ -451,8 +461,6 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
     print(res.message)
     for name, value, unc in zip(param_names, popt, sme.fitresults.punc.values()):
         print(f"{name}\t{value:.5f} +- {unc:.5g}")
-
-    plt.show()
 
     return sme
 
