@@ -325,8 +325,8 @@ class Abund:
                     "[M/H]={:.3f} applied to abundance pattern. "
                     "Values below are abundances.".format(self._monh)
                 )
-                a = self.get_pattern("H=12")
-                a = a[0:2] + [ab + self._monh for ab in a[2:]]
+                a = self.get_pattern("H=12", raw=True)
+                a = list(a[:2]) + [ab + self._monh for ab in a[2:]]
             for i in range(9):
                 estr = ""
                 astr = ""

@@ -234,6 +234,7 @@ class Param(Collection):
             )
         )
         self._abund.print()
+        return ""
 
 
 class NLTE(Collection):

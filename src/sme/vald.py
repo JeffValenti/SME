@@ -111,7 +111,7 @@ class LineList:
             return self._lines[index].values
         else:
             # just pass on a subsection of the linelist data, but keep it a linelist object
-            return LineList(self._lines[index], self.lineformat)
+            return LineList(self._lines.iloc[index], self.lineformat)
 
     def __getattribute__(self, name):
         if name[0] != "_" and name not in dir(self):
@@ -152,6 +152,10 @@ class LineList:
         ]
         # Select fields
         return self._lines[names].values
+
+    def sort(self, field, ascending=True):
+        self._lines = self._lines.sort_values(by=field, ascending=ascending)
+        return self._lines
 
 
 class ValdFile:

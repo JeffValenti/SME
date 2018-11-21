@@ -7,13 +7,7 @@ import os.path
 import warnings
 from itertools import combinations, product
 
-import matplotlib.pyplot as plt
-
-# from matplotlib.animation import FuncAnimation
-# from ..gui.plotting import FitPlot
-
 import numpy as np
-from joblib import Memory
 from scipy.io import readsav
 from scipy.constants import speed_of_light
 from scipy.optimize import OptimizeWarning, least_squares
@@ -30,8 +24,6 @@ from .abund import Abund
 
 warnings.simplefilter("ignore", FutureWarning)
 warnings.simplefilter("ignore", OptimizeWarning)
-
-memory = Memory("./__cache__", verbose=0)
 
 clight = speed_of_light * 1e-3  # km/s
 elements = Abund._elem
@@ -109,32 +101,6 @@ def sme_func_atmo(sme):
 
     sme.atmo = atmo
     return sme
-
-
-def get_flags(sme):
-    tags = np.array(list(sme.names))
-    f_ipro = "IPTYPE" in tags
-    f_opro = "sob" in tags
-    f_wave = "wave" in tags
-    f_h2broad = "h2broad" in tags and sme["h2broad"]
-    f_NLTE = False
-    f_glob = "glob_free" in tags
-    f_gf = "gf_free" in tags
-    f_vw = "vw_free" in tags
-    f_ab = "ab_free" in tags
-
-    flags = {
-        "opro": f_opro,
-        "glob": f_glob,
-        "wave": f_wave,
-        "h2broad": f_h2broad,
-        "nlte": f_NLTE,
-        "ipro": f_ipro,
-        "gf": f_gf,
-        "vw": f_vw,
-        "ab": f_ab,
-    }
-    return flags
 
 
 def get_cscale(cscale, flag, il):
@@ -308,7 +274,9 @@ def get_bounds(param_names, atmo_file):
     return bounds
 
 
-def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwargs):
+def solve(
+    sme, param_names=("teff", "logg", "monh"), filename="sme.npy", plot=False, **kwargs
+):
     """
     Find the least squares fit parameters to an observed spectrum
 
@@ -353,18 +321,15 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
     spec = sme.sob[mask]
     uncs = sme.uob[mask]
 
-    # plt.ion()
-    # fig, ax = plt.subplots()
-    # fp = FitPlot(ax, wave, spec)
-    # FuncAnimation(fig, fp, blit=True)
-    # plt.show()
+    # Divide the uncertainties by the spectrum, to improve the fit in the continuum
+    # Just as in IDL SME
+    uncs /= spec
 
     def residuals(param, param_names, wave, spec, uncs, isJacobian=False):
         """ func = (model - obs) / sigma """
         self = residuals
 
         param = {n: v for n, v in zip(param_names, param)}
-        print(param)
         # print(f"Is Jacobian {isJacobian}")
         synth = synthetize_spectrum(
             wave, param, sme, update=not isJacobian, save=not isJacobian
@@ -378,10 +343,13 @@ def solve(sme, param_names=("teff", "logg", "monh"), filename="sme.npy", **kwarg
         resid = np.nan_to_num(resid, copy=False)
 
         if not isJacobian:
+            print(param)
             self.resid = resid
             if not hasattr(self, "iteration"):
                 self.iteration = 0
             self.iteration += 1
+            if plot is not False:
+                plot.add(wave, synth, f"Iteration {self.iteration}")
 
         return resid
 

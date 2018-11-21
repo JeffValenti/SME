@@ -124,3 +124,10 @@ src/sme/dll/intel64_lin/*
 src/sme/nlte_grids/*
 src/sme/dll/idl_test.*
 fisher1.dat
+*.cprof
+*.sav
+uioenvfile.txt
+*.lin
+*.inp
+test.html
+beta.png
