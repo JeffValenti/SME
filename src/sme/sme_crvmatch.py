@@ -47,7 +47,7 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
     if "sob" not in sme:
         # No observation no radial velocity
         rvel = None
-    elif sme.vrad_flag in [-1, "none"]:
+    elif sme.vrad_flag in [-2, "none"]:
         # vrad_flag says don't determine radial velocity
         rvel = np.atleast_1d(sme.vrad)
         rvel = rvel[segment] if len(rvel) > 1 else rvel[0]
@@ -76,7 +76,7 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
 
             y_obs = y_obs / cont
 
-        elif sme.vrad_flag in [1, "whole"]:
+        elif sme.vrad_flag in [-1, "whole"]:
             # All segments
             if cscale is not None:
                 cscale = np.atleast_2d(cscale)
