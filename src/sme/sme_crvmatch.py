@@ -1,10 +1,8 @@
 import numpy as np
-from scipy.optimize import least_squares
 from scipy.signal import correlate
 from scipy.optimize import minimize
 from scipy.constants import speed_of_light
 
-from .bezier import bezier_interp
 
 c_light = speed_of_light * 1e-3  # speed of light in km/s
 
@@ -49,15 +47,18 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
     if "sob" not in sme:
         # No observation no radial velocity
         rvel = None
-    elif sme.vrad_flag < 0:
+    elif sme.vrad_flag in [-1, "none"]:
         # vrad_flag says don't determine radial velocity
         rvel = np.atleast_1d(sme.vrad)
         rvel = rvel[segment] if len(rvel) > 1 else rvel[0]
+    elif sme.vrad_flag in [-1, "whole"] and segment >= 0:
+        # We are inside a segment, but only want to determine rv at the end
+        rvel = 0
     else:
         # Fit radial velocity
         # Extract data
         x, y, m, u = sme.spectrum(return_uncertainty=True, return_mask=True)
-        if sme.vrad_flag > 0 and segment >= 0:
+        if sme.vrad_flag in [0, "each"]:
             # Only this one segment
             x_obs = x[segment]
             y_obs = y[segment]
@@ -75,23 +76,29 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
 
             y_obs = y_obs / cont
 
-        else:
+        elif sme.vrad_flag in [1, "whole"]:
             # All segments
-            x_obs = x.__values__
-            y_obs = y.__values__
-            u_obs = u.__values__
-            mask = m.__values__
-
             if cscale is not None:
-                cont = [np.polyval(c, x[segment]) for c in cscale]
+                cscale = np.atleast_2d(cscale)
+                cont = [np.polyval(c, x[i]) for i, c in enumerate(cscale)]
             else:
                 print(
                     "Warning: No continuum scale passed to radial velocity determination"
                 )
                 cont = [1 for _ in range(len(x))]
 
+            y = y.copy()
             for i in range(len(x)):
-                y_obs[i] = y_obs[i] / cont[i]
+                y[i] = y[i] / cont[i]
+
+            x_obs = x.__values__
+            y_obs = y.__values__
+            u_obs = u.__values__
+            mask = m.__values__
+        else:
+            raise ValueError(
+                f"Radial velocity flag {sme.vrad_flag} not recognised, expected one of 'each', 'whole', 'none'"
+            )
 
         y_tmp = np.interp(x_obs, x_syn, y_syn)
 

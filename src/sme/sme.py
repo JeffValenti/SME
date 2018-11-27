@@ -104,6 +104,11 @@ class Iliffe_vector:
     def flatten(self):
         return self.__values__
 
+    def copy(self):
+        idx = np.copy(self.__idx__)
+        values = np.copy(self.__values__)
+        return Iliffe_vector(None, index=idx, values=values)
+
 
 class Collection(object):
     """
@@ -361,7 +366,8 @@ class SME_Struct(Param):
         self.vrad = None
         self.vrad_flag = None
         self.cscale = kwargs.pop("cscale", None)
-        self.cscale = np.atleast_2d(self.cscale)
+        if self.cscale is not None:
+            self.cscale = np.atleast_2d(self.cscale)
         self.cscale_flag = None
         self.gam6 = None
         self.h2broad = None
@@ -371,7 +377,6 @@ class SME_Struct(Param):
         self.nmu = None
         self.mu = np.atleast_1d(kwargs.pop("mu"))
         # linelist
-        # TODO move class from vald.py to sme.py ?
         self.linelist = LineList(
             None,
             species=kwargs.pop("species"),
@@ -438,6 +443,10 @@ class SME_Struct(Param):
         self.nlte = NLTE(nlte)
         super().__init__(**kwargs)
 
+        # Apply final conversions from IDL to Python version
+        if "wave" in self:
+            self.__convert_cscale__()
+
     @property
     def atomic(self):
         return self.linelist.atomic
@@ -460,6 +469,20 @@ class SME_Struct(Param):
             self.abund.update_pattern({element: value})
             return
         return super().__setitem__(key, value)
+
+    def __convert_cscale__(self):
+        """
+        Convert IDL SME continuum scale to regular polynomial coefficients
+        Uses Taylor series approximation, as IDL version used the inverse of the continuum
+        """
+        wave, _ = self.spectrum()
+        self.cscale = np.require(self.cscale, requirements="W")
+        for i in range(len(self.cscale)):
+            c, d = self.cscale[i]
+            a, b = max(wave[i]), min(wave[i])
+            c0 = (a - b) * (c - d) / (a * c - b * d) ** 2
+            c1 = (a - b) / (a * c - b * d)
+            self.cscale[i] = [c0, c1]
 
     @staticmethod
     def load(filename="sme.npy"):

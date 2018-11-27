@@ -31,144 +31,6 @@ warnings.simplefilter("ignore", FutureWarning)
 warnings.simplefilter("ignore", OptimizeWarning)
 
 clight = speed_of_light * 1e-3  # km/s
-elements = Abund._elem
-
-
-def pass_nlte(sme):
-    nlines = len(sme.species)
-    ndep = len(sme.atmo.temp)
-    b_nlte = np.ones((ndep, nlines, 2))  # initialize the departure coefficient array
-    modname = os.path.basename(sme.atm_file[0] + ".krz")
-    poppath = os.path.dirname(sme.atm_file[0])
-    for iline in range(nlines):
-        bnlte = rdpop(
-            sme.species[iline],
-            sme.atomic[2, iline],
-            sme.atomic[3, iline],
-            modname,
-            pop_dir=poppath,
-        )
-        if len(bnlte) == 2 * ndep:
-            b_nlte[:, iline, :] = bnlte
-
-    error = sme_synth.InputNLTE(b_nlte, 0)
-    return error
-
-
-# @memory.cache
-def sme_func_atmo(sme):
-    """
-    Purpose:
-     Return an atmosphere based on specification in an SME structure
-
-    Inputs:
-     SME (structure) atmosphere specification
-
-    Outputs:
-     ATMO (structure) atmosphere structure
-     [.WLSTD] (scalar) wavelength for continuum optical depth scale [A]
-     [.TAU] (vector[ndep]) optical depth scale,
-     [.RHOX] (vector[ndep]) mass column scale
-      .TEMP (vector[ndep]) temperature vs. depth
-      .XNE (vector[ndep]) electron number density vs. depth
-      .XNA (vector[ndep]) atomic number density vs. depth
-      .RHO (vector[ndep]) mass density vs. depth
-
-    History:
-     2013-Sep-23 Valenti Extracted and adapted from sme_func.pro
-     2013-Dec-13 Valenti Bundle atmosphere variables in ATMO structure
-    """
-
-    # Handle atmosphere grid or user routine.
-    atmo = sme.atmo
-    self = sme_func_atmo
-
-    if hasattr(self, "msdi_save"):
-        msdi_save = self.msdi_save
-        prev_msdi = self.prev_msdi
-    else:
-        msdi_save = None
-        prev_msdi = None
-
-    if atmo.method == "grid":
-        reload = msdi_save is None or atmo.source != prev_msdi[1]
-        atmo = interp_atmo_grid(sme.teff, sme.logg, sme.monh, sme.atmo, reload=reload)
-        prev_msdi = [atmo.method, atmo.source, atmo.depth, atmo.interp]
-        setattr(self, "prev_msdi", prev_msdi)
-        setattr(self, "msdi_save", True)
-    elif atmo.method == "routine":
-        atmo = atmo.source(sme, atmo)
-    elif atmo.method == "embedded":
-        # atmo structure already extracted in sme_main
-        pass
-    else:
-        raise AttributeError("Source must be 'grid', 'routine', or 'file'")
-
-    sme.atmo = atmo
-    return sme
-
-
-def get_cscale(cscale, flag, il):
-    # Extract flag and value that specifies continuum normalization.
-    #
-    #  VALUE  IMPLICATION
-    #  -3     Return residual intensity. Continuum is unity. Ignore sme.cscale
-    #  -2     Return physical flux at stellar surface (units? erg/s/cm^2/A?)
-    #  -1     Determine one scalar normalization that applies to all segments
-    #   0     Determine separate scalar normalization for each spectral segment
-    #   1     Determine separate linear normalization for each spectral segment
-    #
-    # Don't solve for single scalar normalization (-1) if there is no observation
-    # CSCALE_FLAG is polynomial degree of continuum scaling, when fitting segments.
-
-    if flag == -3:
-        cscale = 1
-    elif flag in [-1, -2]:
-        cscale = flag
-    elif flag == 0:
-        cscale = cscale[il, 0]
-    elif flag >= 1:
-        cscale = cscale[il, :]
-    else:
-        raise AttributeError("invalid cscale_flag: %i" % flag)
-
-    if flag >= 0:
-        ndeg = flag
-    else:
-        ndeg = 0
-
-    return cscale, ndeg
-
-
-def get_rv(vrad, flag, il):
-    # Extract flag and value that specifies radial velocity.
-    #
-    #  VALUE  IMPLICATION
-    #  -2     Do not solve for radial velocity. Use input value(s).
-    #  -1     Determine global radial velocity that applies to all segments
-    #   0     Determine a separate radial velocity for each spectral segment
-    #
-    # Can't solve for radial velocities if there is no observation.
-    # Express radial velocities as dimensionless wavelength scale factor.
-    # Formula includes special relativity, though correction is negligible.
-
-    if flag == -2:
-        return 0, 1
-    else:
-        vrad = vrad if vrad.ndim == 0 else vrad[il]  # km/s
-        vfact = np.sqrt((1 + vrad / clight) / (1 - vrad / clight))
-        return vrad, vfact
-
-
-def get_wavelengthrange(wran, vrad, vsini):
-    # 30 km/s == maximum barycentric velocity
-    vrad_pad = 30.0 + 0.5 * np.clip(vsini, 0, None)  # km/s
-    vbeg = vrad_pad + np.clip(vrad, 0, None)  # km/s
-    vend = vrad_pad - np.clip(vrad, None, 0)  # km/s
-
-    wbeg = wran[0] * (1 - vbeg / clight)
-    wend = wran[1] * (1 + vend / clight)
-    return wbeg, wend
 
 
 def synthetize_spectrum(
@@ -457,9 +319,78 @@ def solve(
     return sme
 
 
+def sme_func_atmo(sme):
+    """
+    Purpose:
+     Return an atmosphere based on specification in an SME structure
+
+    Inputs:
+     SME (structure) atmosphere specification
+
+    Outputs:
+     ATMO (structure) atmosphere structure
+     [.WLSTD] (scalar) wavelength for continuum optical depth scale [A]
+     [.TAU] (vector[ndep]) optical depth scale,
+     [.RHOX] (vector[ndep]) mass column scale
+      .TEMP (vector[ndep]) temperature vs. depth
+      .XNE (vector[ndep]) electron number density vs. depth
+      .XNA (vector[ndep]) atomic number density vs. depth
+      .RHO (vector[ndep]) mass density vs. depth
+
+    History:
+     2013-Sep-23 Valenti Extracted and adapted from sme_func.pro
+     2013-Dec-13 Valenti Bundle atmosphere variables in ATMO structure
+    """
+
+    # Handle atmosphere grid or user routine.
+    atmo = sme.atmo
+    self = sme_func_atmo
+
+    if hasattr(self, "msdi_save"):
+        msdi_save = self.msdi_save
+        prev_msdi = self.prev_msdi
+    else:
+        msdi_save = None
+        prev_msdi = None
+
+    if atmo.method == "grid":
+        reload = msdi_save is None or atmo.source != prev_msdi[1]
+        atmo = interp_atmo_grid(sme.teff, sme.logg, sme.monh, sme.atmo, reload=reload)
+        prev_msdi = [atmo.method, atmo.source, atmo.depth, atmo.interp]
+        setattr(self, "prev_msdi", prev_msdi)
+        setattr(self, "msdi_save", True)
+    elif atmo.method == "routine":
+        atmo = atmo.source(sme, atmo)
+    elif atmo.method == "embedded":
+        # atmo structure already extracted in sme_main
+        pass
+    else:
+        raise AttributeError("Source must be 'grid', 'routine', or 'file'")
+
+    sme.atmo = atmo
+    return sme
+
+
+def get_wavelengthrange(wran, vrad, vsini):
+    """
+    Determine wavelengthrange that needs to be calculated
+    to include all lines within velocity shift vrad + vsini
+    """
+    # 30 km/s == maximum barycentric velocity
+    vrad_pad = 30.0 + 0.5 * np.clip(vsini, 0, None)  # km/s
+    vbeg = vrad_pad + np.clip(vrad, 0, None)  # km/s
+    vend = vrad_pad - np.clip(vrad, None, 0)  # km/s
+
+    wbeg = wran[0] * (1 - vbeg / clight)
+    wend = wran[1] * (1 + vend / clight)
+    return wbeg, wend
+
+
 def new_wavelength_grid(wint):
-    wmid = 0.5 * (wint[-1] + wint[0])  # midpoint of segment
-    wspan = wint[-1] - wint[0]  # width of segment
+    """ Generate new wavelength grid within bounds of wint"""
+    wbeg, wend = wint[[0, -1]]
+    wmid = 0.5 * (wend + wbeg)  # midpoint of segment
+    wspan = wend - wbeg  # width of segment
     jmin = np.argmin(np.diff(wint))
     vstep1 = np.diff(wint)[jmin]
     vstep1 = vstep1 / wint[jmin] * clight  # smallest step
@@ -473,6 +404,8 @@ def new_wavelength_grid(wint):
     )  # number of wavelengths
     if nx % 2 == 0:
         nx += 1  # force nx to be odd
+
+    # Resolution
     resol_out = 1 / ((wint[-1] / wint[0]) ** (1 / (nx - 1)) - 1)
     vstep = clight / resol_out
 
@@ -480,7 +413,6 @@ def new_wavelength_grid(wint):
     return x_seg, vstep
 
 
-# @memory.cache
 def sme_func(
     sme,
     setLineList=True,
@@ -521,11 +453,13 @@ def sme_func(
 
     # fix sme input
     if "sob" not in sme:
-        sme.vrad_flag = -2
+        sme.vrad_flag = "none"
     if "sob" not in sme and sme.cscale_flag >= -1:
         sme.cscale_flag = -3
 
     # Prepare arrays
+    wran = sme.wran
+
     wint = [None for _ in range(n_segments)]
     sint = [None for _ in range(n_segments)]
     cint = [None for _ in range(n_segments)]
@@ -541,7 +475,7 @@ def sme_func(
         wave, _ = sme.spectrum()
         wind = sme.wind
 
-    # Input atmosphere model
+    # Input Model data to C library
     if setLineList:
         sme_synth.SetLibraryPath()
         sme_synth.InputLineList(sme.atomic, sme.species)
@@ -562,10 +496,9 @@ def sme_func(
     #   Apply instrumental and turbulence broadening
     #   Determine Continuum / Radial Velocity for each segment
     for il in range(n_segments):
-        #   Input Wavelength range and Opacity
-        vrad_seg, _ = get_rv(sme.vrad, sme.vrad_flag, il)
-        wran_seg = sme.wran[il]
-        wbeg, wend = get_wavelengthrange(wran_seg, vrad_seg, sme.vsini)
+        # Input Wavelength range and Opacity
+        vrad_seg = sme.vrad if np.size(sme.vrad) == 1 else sme.vrad[il]
+        wbeg, wend = get_wavelengthrange(sme.wran[il], vrad_seg, sme.vsini)
 
         sme_synth.InputWaveRange(wbeg, wend)
         sme_synth.Opacity()
@@ -610,6 +543,7 @@ def sme_func(
 
         # Create a wavelength array if it doesn't exist
         if "wave" not in sme:
+            wran_seg = wran[il]
             itrim = (x_seg > wran_seg[0]) & (x_seg < wran_seg[1])  # trim padding
             wave[il] = np.pad(
                 x_seg[itrim],
@@ -625,6 +559,7 @@ def sme_func(
         factor = np.sqrt((1 + vrad[il] / clight) / (1 - vrad[il] / clight))
         x_seg *= factor
 
+        # TODO: how to resample/interpolate here? Does it matter?
         # smod[il] = np.interp(wave[il], x_seg, y_seg)
         # smod[il] = resamp(x_seg, y_seg, wave[il])
         smod[il] = interp1d(x_seg, y_seg, kind="cubic")(wave[il])
@@ -636,62 +571,16 @@ def sme_func(
     sme.wind = wind
     sme.wint = wint
 
-    if sme.vrad_flag == 0:
-        _, vrad = match_rv_continuum(sme, -1, wave, smod)
-
-    sme.vrad = np.asarray(vrad)
     sme.cscale = np.stack(cscale)
 
+    if sme.vrad_flag in [0, "whole"]:
+        # If we want to determine radial velocity on the whole spectrum at once (instead of segments)
+        _, vrad = match_rv_continuum(sme, -1, wave, smod)
+        factor = np.sqrt((1 + vrad / clight) / (1 - vrad / clight))
+        sme.smod = interp1d(
+            wave * factor, sme.smod, kind="cubic", fill_value="extrapolate"
+        )(wave)
+
+    sme.vrad = np.asarray(vrad)
+
     return sme
-
-
-def fisher(sme):
-    """ Calculate fisher information matrix """
-    nparam = len(sme.pname)
-    fisher_matrix = np.zeros((nparam, nparam), dtype=np.float64)
-
-    x = sme.wave
-    y = sme.sob
-    yerr = sme.uob
-    parameter_names = [s.decode() for s in sme.pname]
-    p0 = sme.pfree[-1, :nparam]
-
-    # step size = machine precision ** (1/number of points)
-    # see scipy.optimize._numdiff.approx_derivative
-    # step = np.finfo(np.float64).eps ** (1 / 3)
-    step = np.abs(sme.pfree[-3, :nparam] - sme.pfree[-1, :nparam])
-
-    second_deriv = lambda f, x, h: (f(x + h) - 2 * f(x) + f(x - h)) / np.sum(h) ** 2
-
-    sme_synth.SetLibraryPath()
-    sme_synth.InputLineList(sme.atomic, sme.species)
-    # chi squared function, i.e. log likelihood
-    # func = 0.5 * sum ((model - obs) / sigma)**2
-    func = lambda p: 0.5 * np.sum(
-        ((synthetize_spectrum(x, *p, sme=sme, param_names=parameter_names) - y) / yerr)
-        ** 2
-    )
-
-    # Diagonal elements
-    for i in range(nparam):
-        h = np.zeros(nparam)
-        h[i] = step[i]
-        fisher_matrix[i, i] = -second_deriv(func, p0, h)
-
-    # Cross terms, fisher matrix is symmetric, so only calculate one half
-    for i, j in combinations(range(nparam), 2):
-        h = np.zeros(nparam)
-        total = 0
-        for k, m in product([-1, 1], repeat=2):
-            h[i] = k * step[i]
-            h[j] = m * step[j]
-            total += func(p0 + h) * k * m
-
-        total /= 4 * np.abs(h[i] * h[j])
-        print(i, j, total)
-        fisher_matrix[i, j] = -total
-        fisher_matrix[j, i] = -total
-
-    np.save("fisher_matrix", fisher_matrix)
-    print(fisher_matrix)
-    return fisher_matrix
