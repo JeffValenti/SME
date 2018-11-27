@@ -393,11 +393,10 @@ def solve(
         x0=p0,
         jac=jacobian,  # is 2-point good enough or do we need 3-point ?
         bounds=bounds,
-        loss="linear",  # linear or soft_l1 ?
+        loss="soft_l1",  # linear or soft_l1 ?
         verbose=2,
         args=(param_names, wave, spec, uncs),
         method="trf",  # method "dogbox" needs many more function calls
-        xtol=1e-15,
         max_nfev=kwargs.get("maxiter"),
     )
 
@@ -623,10 +622,12 @@ def sme_func(
         # Fit continuum and radial velocity
         cscale[il], vrad[il] = match_rv_continuum(sme, il, x_seg, y_seg)
         # Interpolate spectrum on ouput wavelength grid
-        x_seg *= 1 + vrad[il] / clight
-        smod[il] = np.interp(wave[il], x_seg, y_seg)
+        factor = np.sqrt((1 + vrad[il] / clight) / (1 - vrad[il] / clight))
+        x_seg *= factor
+
+        # smod[il] = np.interp(wave[il], x_seg, y_seg)
         # smod[il] = resamp(x_seg, y_seg, wave[il])
-        # smod[il] = interp1d(x_seg, y_seg, kind="cubic")(wave[il])
+        smod[il] = interp1d(x_seg, y_seg, kind="cubic")(wave[il])
 
     # Merge all segments
     sme.smod = smod = np.concatenate(smod)
@@ -638,7 +639,7 @@ def sme_func(
     if sme.vrad_flag == 0:
         _, vrad = match_rv_continuum(sme, -1, wave, smod)
 
-    sme.vrad = np.array(vrad)
+    sme.vrad = np.asarray(vrad)
     sme.cscale = np.stack(cscale)
 
     return sme

@@ -19,6 +19,7 @@ def determine_continuum(sme, segment):
     elif sme.cscale_flag < 0:
         # Continuum flag is set to no continuum
         cscale = sme.cscale
+        cscale = cscale[segment] if len(cscale) > 1 else cscale[0]
     else:
         # fit a line to the continuum points
         ndeg = sme.cscale_flag
@@ -50,7 +51,8 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
         rvel = None
     elif sme.vrad_flag < 0:
         # vrad_flag says don't determine radial velocity
-        rvel = sme.rvel
+        rvel = np.atleast_1d(sme.vrad)
+        rvel = rvel[segment] if len(rvel) > 1 else rvel[0]
     else:
         # Fit radial velocity
         # Extract data
