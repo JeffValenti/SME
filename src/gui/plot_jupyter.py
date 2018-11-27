@@ -42,34 +42,56 @@ class FinalPlot:
 
         self.mask_type = "good"
 
-        self.fig = go.FigureWidget()
-        self.fig.layout["dragmode"] = "select"
-        self.fig.layout["selectdirection"] = "h"
-        self.fig.layout["title"] = f"Segment {segment}"
-        self.fig.layout["xaxis"]["title"] = "Wavelength [Å]"
-        self.fig.layout["yaxis"]["title"] = "Intensity"
+        data, annotations = self.create_plot(self.segment)
 
-        # Add buttons to switch segments
-        self.button_prev = widgets.Button(description="Previous")
-        self.button_prev.on_click(self.prev_segment)
+        # Add segment slider
+        steps = []
+        for i in range(self.nsegments):
+            step = {
+                "label": f"Segment {i}",
+                "method": "update",
+                "args": [
+                    {"visible": [v == i for v in self.visible]},
+                    {
+                        "title": f"Segment {i}",
+                        "annotations": annotations[i],
+                        "xaxis": {"autorange": True},
+                        "yaxis": {"autorange": True},
+                    },
+                ],
+            }
+            steps += [step]
 
-        self.button_next = widgets.Button(description="Next")
-        self.button_next.on_click(self.next_segment)
+        layout = {
+            "dragmode": "select",
+            "selectdirection": "h",
+            "title": f"Segment {segment}",
+            "xaxis": {"title": "Wavelength [Å]"},
+            "yaxis": {"title": "Intensity"},
+            "annotations": annotations[self.segment],
+            "sliders": [{"active": 0, "steps": steps}],
+            "legend": {"traceorder": "reversed"},
+        }
+        self.fig = go.FigureWidget(data=data, layout=layout)
 
+        # add selection callback
+        self.fig.data[0].on_selection(self.selection_fn)
+
+        # Add button to save figure
+        self.button_save = widgets.Button(description="Save")
+        self.button_save.on_click(self.save)
+
+        # Add buttons for Mask selection
         self.button_mask = widgets.ToggleButtons(
             options=["Good", "Bad", "Continuum", "Line"], description="Mask"
         )
         self.button_mask.observe(self.on_toggle_click, "value")
 
-        self.widget = widgets.VBox(
-            [
-                widgets.HBox([self.button_prev, self.button_next]),
-                self.button_mask,
-                self.fig,
-            ]
-        )
+        self.widget = widgets.VBox([self.button_mask, self.button_save, self.fig])
         display(self.widget)
-        self.create_plot()
+
+    def save(self, _=None):
+        py.plot(self.fig, filename="SME.html")
 
     def shift_mask(self, x, mask):
         for i in np.where(mask)[0]:
@@ -91,105 +113,150 @@ class FinalPlot:
         x = self.shift_mask(x, mask)
         return x, y
 
-    def create_plot(self):
+    def create_plot(self, current_segment):
         seg = self.segment
+        annotations = {}
+        visible = []
+        data = []
+        line_mask_idx = {}
+        cont_mask_idx = {}
 
-        # Line mask
-        x, y = self.create_mask_points(
-            self.wave[seg], self.spec[seg], self.mask[seg], 1
-        )
+        for seg in range(self.nsegments):
 
-        self.line_mask = self.fig.add_scatter(
-            x=x,
-            y=y,
-            fillcolor=fmt["LineMask"]["facecolor"],
-            fill="tozeroy",
-            mode="none",
-            name="Line Mask",
-            hoverinfo="none",
-        )
+            k = len(visible)
+            line_mask_idx[seg] = k
+            cont_mask_idx[seg] = k + 1
 
-        # Cont mask
-        x, y = self.create_mask_points(
-            self.wave[seg], self.spec[seg], self.mask[seg], 2
-        )
+            # The order of the plots is chosen by the z order, from low to high
+            # Masks should be below the spectra (so they don't hide half of the line)
+            # Synthetic on top of observation, because synthetic varies less than observation
+            # Annoying I know, but plotly doesn't seem to have good controls for the z order
+            # Or Legend order for that matter
 
-        self.cont_mask = self.fig.add_scatter(
-            x=x,
-            y=y,
-            fillcolor=fmt["ContMask"]["facecolor"],
-            fill="tozeroy",
-            mode="none",
-            name="Continuum Mask",
-            hoverinfo="none",
-        )
-
-        # Observation
-        self.obs = self.fig.add_scatter(
-            x=self.wave[seg],
-            y=self.spec[seg],
-            line={"color": fmt["Obs"]["color"]},
-            name="Observation",
-        )
-
-        # Synthetic, if available
-        if self.smod is not None:
-            self.synth = self.fig.add_scatter(
-                x=self.wave[seg],
-                y=self.smod[seg],
-                name="Synthethic",
-                line={"color": fmt["Syn"]["color"]},
+            # Line mask
+            x, y = self.create_mask_points(
+                self.wave[seg], self.spec[seg], self.mask[seg], 1
             )
 
-        # mark important lines
-        if self.lines is not None:
-            xlimits = self.wave[self.segment][[0, -1]]
-            xlimits *= 1 - self.vrad / clight
-            lines = (self.lines.wlcent > xlimits[0]) & (self.lines.wlcent < xlimits[1])
-            lines = self.lines[lines]
+            data += [
+                dict(
+                    x=x,
+                    y=y,
+                    fillcolor=fmt["LineMask"]["facecolor"],
+                    fill="tozeroy",
+                    mode="none",
+                    name="Line Mask",
+                    hoverinfo="none",
+                    legendgroup=2,
+                    visible=current_segment == seg,
+                )
+            ]
+            visible += [seg]
 
-            # Keep only the 100 stongest lines for performance
-            lines.sort("depth", ascending=False)
-            lines = lines[:20,]
+            # Cont mask
+            x, y = self.create_mask_points(
+                self.wave[seg], self.spec[seg], self.mask[seg], 2
+            )
 
-            x = lines.wlcent * (1 + self.vrad / clight)
-            y = np.interp(x, self.wave[self.segment], self.spec[self.segment])
+            data += [
+                dict(
+                    x=x,
+                    y=y,
+                    fillcolor=fmt["ContMask"]["facecolor"],
+                    fill="tozeroy",
+                    mode="none",
+                    name="Continuum Mask",
+                    hoverinfo="none",
+                    legendgroup=2,
+                    visible=current_segment == seg,
+                )
+            ]
+            visible += [seg]
 
-            annotations = []
-            for i, line in enumerate(lines):
-                annotations += [
-                    {
-                        "x": x[i],
-                        "y": y[i],
-                        "xref": "x",
-                        "yref": "y",
-                        "text": f"{line.species}",
-                        "hovertext": f"{line.wlcent}",
-                        "textangle": 90,
-                        "opacity": 1,
-                        "ax": 0,
-                        "ay": 1.2,
-                        "ayref": "y",
-                        "showarrow": True,
-                        "arrowhead": 7,
-                        "xanchor": "left",
-                    }
+            # Observation
+            data += [
+                dict(
+                    x=self.wave[seg],
+                    y=self.spec[seg],
+                    line={"color": fmt["Obs"]["color"]},
+                    name="Observation",
+                    legendgroup=0,
+                    visible=current_segment == seg,
+                )
+            ]
+            visible += [seg]
+
+            # Synthetic, if available
+            if self.smod is not None:
+                data += [
+                    dict(
+                        x=self.wave[seg],
+                        y=self.smod[seg],
+                        name="Synthethic",
+                        line={"color": fmt["Syn"]["color"]},
+                        legendgroup=1,
+                        visible=current_segment == seg,
+                    )
                 ]
-            self.fig.layout.annotations = annotations
+                visible += [seg]
 
-        self.obs.on_selection(self.selection_fn)
+            # mark important lines
+            if self.lines is not None:
+                seg_annotations = []
+                xlimits = self.wave[seg][[0, -1]]
+                xlimits *= 1 - self.vrad / clight
+                lines = (self.lines.wlcent > xlimits[0]) & (
+                    self.lines.wlcent < xlimits[1]
+                )
+                lines = self.lines[lines]
+
+                # Keep only the 100 stongest lines for performance
+                lines.sort("depth", ascending=False)
+                lines = lines[:20,]
+
+                x = lines.wlcent * (1 + self.vrad / clight)
+                y = np.interp(x, self.wave[seg], self.spec[seg])
+
+                for i, line in enumerate(lines):
+                    seg_annotations += [
+                        {
+                            "x": x[i],
+                            "y": y[i],
+                            "xref": "x",
+                            "yref": "y",
+                            "text": f"{line.species}",
+                            "hovertext": f"{line.wlcent}",
+                            "textangle": 90,
+                            "opacity": 1,
+                            "ax": 0,
+                            "ay": 1.2,
+                            "ayref": "y",
+                            "showarrow": True,
+                            "arrowhead": 7,
+                            "xanchor": "left",
+                        }
+                    ]
+                annotations[seg] = seg_annotations
+
+        self.visible = visible
+        self.line_mask_idx = line_mask_idx
+        self.cont_mask_idx = cont_mask_idx
+
+        return data, annotations
 
     def update(self):
-        # reset data, and plot everything again
-        # TODO: how to batch this together
-        self.fig.data = []
-        self.fig.layout.annotations = []
-        self.create_plot()
+        # Show only that one segment
+        with self.fig.batch_update():
+            for i, v in enumerate(self.visible):
+                self.fig.data[i].visible = v == self.segment
 
     def selection_fn(self, trace, points, selector):
+        self.segment = self.fig.layout["sliders"][0].active
+        seg = self.segment
+
         xrange = selector.xrange
-        wave = self.wave[self.segment]
-        mask = self.mask[self.segment]
+        wave = self.wave[seg]
+        mask = self.mask[seg]
 
         # Choose pixels and value depending on selected type
         if self.mask_type == "good":
@@ -210,23 +277,24 @@ class FinalPlot:
 
         # Apply changes if any
         if np.count_nonzero(idx) != 0:
-            self.mask[self.segment][idx] = value
-            self.update()
+            self.mask[seg][idx] = value
 
-    def next_segment(self, _=None):
-        self.goto_segment(self.segment + 1)
+            with self.fig.batch_update():
+                # Update Line Mask
+                m = self.line_mask_idx[seg]
+                x, y = self.create_mask_points(
+                    self.wave[seg], self.spec[seg], self.mask[seg], 1
+                )
+                self.fig.data[m].x = x
+                self.fig.data[m].y = y
 
-    def prev_segment(self, _=None):
-        self.goto_segment(self.segment - 1)
-
-    def goto_segment(self, segment):
-        if segment > -1 and segment < self.nsegments - 1:
-            self.segment = segment
-            self.fig.layout["title"] = f"Segment {segment}"
-            self.update()
-            # Rescale to the new segment
-            self.fig.layout["xaxis"]["autorange"] = True
-            self.fig.layout["yaxis"]["autorange"] = True
+                # Update Cont Mask
+                m = self.cont_mask_idx[seg]
+                x, y = self.create_mask_points(
+                    self.wave[seg], self.spec[seg], self.mask[seg], 2
+                )
+                self.fig.data[m].x = x
+                self.fig.data[m].y = y
 
     def on_toggle_click(self, change):
         change = change["new"]

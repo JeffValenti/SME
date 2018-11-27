@@ -3,8 +3,8 @@ class PlotColors:
         self.fmt = {
             "Obs": {"color": "#1f77b4", "linestyle": "solid"},
             "Syn": {"color": "#ff7f0e", "linestyle": "solid", "marker": ""},
-            "LineMask": {"facecolor": "#bcbd22", "alpha": 0.5},
-            "ContMask": {"facecolor": "#d62728", "alpha": 0.5},
+            "LineMask": {"facecolor": "#bcbd22", "alpha": 1},
+            "ContMask": {"facecolor": "#d62728", "alpha": 1},
         }
 
     def __getitem__(self, key):

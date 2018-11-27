@@ -212,7 +212,7 @@ class MaskPlot:
                     verticalalignment="top",
                     alpha=importance[i],
                 )
-                depth = np.interp(wl, self.wave[self.segment], self.smod[self.segment])
+                depth = np.interp(wl, self.wave[self.segment], self.spec[self.segment])
                 self.line_plot[i][1] = self.im.vlines(
                     wl, ymin=depth, ymax=1.1, alpha=importance[i]
                 )
