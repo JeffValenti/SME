@@ -34,7 +34,13 @@ clight = speed_of_light * 1e-3  # km/s
 
 
 def synthetize_spectrum(
-    wavelength, param, sme, save=True, update=True, reuse_wavelength_grid=False
+    wavelength,
+    param,
+    sme,
+    mask=None,
+    save=True,
+    update=True,
+    reuse_wavelength_grid=False,
 ):
     """
     Create a synthetic spectrum, with a given wavelength
@@ -80,16 +86,12 @@ def synthetize_spectrum(
     else:
         sme2.save(save)
 
-    mask = (sme2.mob != 0) & (sme2.uob != 0)
-    if wavelength.size != sme2.wave[mask].size or not np.allclose(
-        wavelength, sme2.wave[mask]
-    ):
-        # interpolate to required wavelenth grid
-        res = np.interp(wavelength, sme2.wave[mask], sme2.smod[mask])
-    else:
-        res = sme2.smod[mask]
+    _, spec = sme2.spectrum(syn=True)
+    spec = spec.flatten()
+    if mask is not None:
+        spec = spec[mask]
 
-    return res
+    return spec
 
 
 def linelist_errors(wave, spec, linelist):
@@ -180,32 +182,43 @@ def solve(
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
     # TODO: create more efficient jacobian function ?
 
+    # Fix parameter names
     param_names = [p.casefold() for p in param_names]
     param_names = [p.capitalize() if p[-5:] == "abund" else p for p in param_names]
 
-    # replace "grav" with equivalent logg fit
     param_names = [p if p != "grav" else "logg" for p in param_names]
     param_names = [p if p != "feh" else "monh" for p in param_names]
 
+    nparam = len(param_names)
+
+    # Create appropiate bounds
     bounds = get_bounds(param_names, sme.atmo.source)
     bounds.update({"vmic": [0, np.inf], "vmac": [0, np.inf]})
     bounds.update({"%s abund" % el: [-10, 10] for el in Abund._elem})
 
-    nparam = len(param_names)
-
-    p0 = [sme[s] for s in param_names]
     bounds = np.array([bounds[s] for s in param_names]).T
+
+    # Starting values
+    p0 = [sme[s] for s in param_names]
+
     # Get constant data from sme structure
-    mask = (sme.mob != 0) & (sme.uob != 0)
-    wave = np.copy(sme.wave[mask])
-    spec = np.copy(sme.sob[mask])
-    uncs = np.copy(sme.uob[mask])
+    wave, spec, mask, uncs = sme.spectrum(return_mask=True, return_uncertainty=True)
+    wave = wave.flatten()
+    spec = spec.flatten()
+    mask = mask.flatten()
+    uncs = uncs.flatten()
+
+    mask = (mask != 0) & (uncs != 0)
+    wave = wave[mask]
+    spec = spec[mask]
+    uncs = uncs[mask]
 
     # Divide the uncertainties by the spectrum, to improve the fit in the continuum
     # Just as in IDL SME
     uncs /= spec
 
-    def residuals(param, param_names, wave, spec, uncs, isJacobian=False):
+    # Define residual and jacobian function
+    def residuals(param, param_names, wave, spec, uncs, mask, isJacobian=False):
         """ func = (model - obs) / sigma """
         self = residuals
 
@@ -215,6 +228,7 @@ def solve(
             wave,
             param,
             sme,
+            mask=mask,
             update=not isJacobian,
             save=not isJacobian,
             reuse_wavelength_grid=isJacobian,
@@ -250,27 +264,26 @@ def solve(
             kwargs={"isJacobian": True},
         )
 
+    # Do the heavy lifting
     res = least_squares(
         residuals,
         x0=p0,
-        jac=jacobian,  # is 2-point good enough or do we need 3-point ?
+        jac=jacobian,
         bounds=bounds,
-        loss="soft_l1",  # linear or soft_l1 ?
+        loss="soft_l1",
         verbose=2,
-        args=(param_names, wave, spec, uncs),
-        method="trf",  # method "dogbox" needs many more function calls
+        args=(param_names, wave, spec, uncs, mask),
+        method="trf",
         max_nfev=kwargs.get("maxiter"),
     )
-
-    # The values in the last call are usually from the jacobian, i.e. not with the exactly correct parameters
-    for i, name in enumerate(param_names):
-        sme[name] = res.x[i]
-    # sme = sme_func(sme)
 
     # SME structure is updated inside synthetize_spectrum to contain the results of the calculation
     # If for some reason that should not work, one can load the intermediary "sme.npy" file
     # sme = SME.SME_Struct.load("sme.npy")
+    for i, name in enumerate(param_names):
+        sme[name] = res.x[i]
 
+    # Create fitresults
     popt = res.x
     sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
     sme.pname = param_names
@@ -573,7 +586,7 @@ def sme_func(
 
     sme.cscale = np.stack(cscale)
 
-    if sme.vrad_flag in [0, "whole"]:
+    if sme.vrad_flag in [-1, "whole"]:
         # If we want to determine radial velocity on the whole spectrum at once (instead of segments)
         _, vrad = match_rv_continuum(sme, -1, wave, smod)
         factor = np.sqrt((1 + vrad / clight) / (1 - vrad / clight))

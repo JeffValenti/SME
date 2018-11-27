@@ -297,7 +297,8 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
         Indices of the used lines in the linelist
     """
 
-    lineindices = np.char.startswith(sme.species, elem)
+    lineindices = np.asarray(sme.species, "U")
+    lineindices = np.char.startswith(lineindices, elem)
     if not np.any(lineindices):
         print(f"No NLTE transitions for {elem} found")
         return None, None, None, None

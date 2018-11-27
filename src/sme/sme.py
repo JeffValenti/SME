@@ -39,8 +39,8 @@ class Iliffe_vector:
         if values is None:
             self.__values__ = np.zeros(np.sum(sizes), dtype=dtype)
         else:
-            if np.size(values) != np.sum(sizes):
-                raise ValueError("Size of values and sizes do not fit")
+            # if np.size(values) != np.sum(sizes):
+            #     raise ValueError("Size of values and sizes do not fit")
             self.__values__ = np.asarray(values)
 
     def __len__(self):
@@ -50,14 +50,20 @@ class Iliffe_vector:
         if not hasattr(index, "__len__"):
             index = (index,)
 
+        if len(index) == 0:
+            return self.__values__
+
         if isinstance(index, str):
             # This happens for example for np.recarrays
             return Iliffe_vector(
                 None, index=self.__idx__, values=self.__values__[index]
             )
 
-        if len(index) == 0:
-            return self.__values__
+        if isinstance(index[0], slice):
+            return Iliffe_vector(
+                None, index=self.__idx__[1:][index], values=self.__values__
+            )
+
         i0 = self.__idx__[index[0]]
         i1 = self.__idx__[index[0] + 1]
         if len(index) == 1:
@@ -97,12 +103,12 @@ class Iliffe_vector:
     def dtype(self):
         return self.__values__.dtype
 
-    @property
-    def flat(self):
-        return self.__values__.flat
+    # @property
+    # def flat(self):
+    # return self.__values__.flat
 
     def flatten(self):
-        return self.__values__
+        return np.concatenate([self[i] for i in range(len(self))])
 
     def copy(self):
         idx = np.copy(self.__idx__)
@@ -521,7 +527,7 @@ class SME_Struct(Param):
         wave = self.wave
         # wavelength indices of the various sections
         # +1 because of different indexing between idl and python
-        section_index = self.wind[1:]
+        section_index = self.wind
 
         if syn:
             # synthetic spectrum
