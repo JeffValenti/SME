@@ -20,14 +20,14 @@ class LineList:
     def from_IDL_SME(**kwargs):
         """ extract LineList from IDL SME structure keywords """
         species = kwargs.pop("species").astype("U")
-        atomic = kwargs.pop("atomic")
-        lande = kwargs.pop("lande")
-        depth = kwargs.pop("depth")
+        atomic = np.asarray(kwargs.pop("atomic"), dtype="<f8")
+        lande = np.asarray(kwargs.pop("lande"), dtype="<f8")
+        depth = np.asarray(kwargs.pop("depth"), dtype="<f8")
         lineref = kwargs.pop("reference").astype("U")
         short_line_format = kwargs.pop("short_line_format")
         if short_line_format == 2:
-            line_extra = kwargs.pop("line_extra")
-            line_lulande = kwargs.pop("line_lulande")
+            line_extra = np.asarray(kwargs.pop("line_extra"), dtype="<f8")
+            line_lulande = np.asarray(kwargs.pop("line_lulande"), dtype="<f8")
             line_term_low = kwargs.pop("line_term_low").astype("U")
             line_term_upp = kwargs.pop("line_term_upp").astype("U")
 
@@ -110,6 +110,8 @@ class LineList:
         if isinstance(index, (list, str)):
             return self._lines[index].values
         else:
+            if isinstance(index, int):
+                index = slice(index, index + 1)
             # just pass on a subsection of the linelist data, but keep it a linelist object
             return LineList(self._lines.iloc[index], self.lineformat)
 
@@ -120,7 +122,7 @@ class LineList:
 
     @property
     def species(self):
-        return self._lines["species"].values.astype("U")
+        return self._lines["species"].values
 
     @property
     def lulande(self):
@@ -141,8 +143,8 @@ class LineList:
     @property
     def atomic(self):
         names = [
-            "ionization",
             "atom_number",
+            "ionization",
             "wlcent",
             "excit",
             "gflog",

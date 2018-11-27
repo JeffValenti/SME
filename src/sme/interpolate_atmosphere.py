@@ -1,4 +1,5 @@
 import os
+import itertools
 import numpy as np
 from scipy.interpolate import interp1d, interpn, griddata
 from scipy.optimize import curve_fit
@@ -123,9 +124,9 @@ def interp_atmo_pair(
     min_dtau = 0.01  # minimum fractional step in tau
 
     # Parameters used to annotate plots.
-    tgm1 = np.array([atmo1.teff, atmo1.logg, atmo1.monh])
-    tgm2 = np.array([atmo2.teff, atmo2.logg, atmo2.monh])
-    tgm = (1 - frac) * tgm1 + frac * tgm2
+    # tgm1 = np.array([atmo1.teff, atmo1.logg, atmo1.monh])
+    # tgm2 = np.array([atmo2.teff, atmo2.logg, atmo2.monh])
+    # tgm = (1 - frac) * tgm1 + frac * tgm2
 
     ##
     ## Select interpolation variable (RHOX vs. TAU)
@@ -203,7 +204,7 @@ def interp_atmo_pair(
     # Initial guess for TEMP shift parameters.
     # Put depth and TEMP midpoints for atmo1 and atmo2 on top of one another.
     npar = 4
-    ipar = np.zeros(npar)
+    ipar = np.zeros(npar, dtype="f4")
     temp1 = np.log10(atmo1.temp[itop1 : ibot1 + 1])
     temp2 = np.log10(atmo2.temp[itop2 : ibot2 + 1])
     mid1 = np.argmin(np.abs(temp1 - 0.5 * (temp1[1] + temp1[ndep1 - 2])))
@@ -214,12 +215,12 @@ def interp_atmo_pair(
     # Apply a constraint on the fit, to avoid runaway for cool models, where
     # the temperature structure is nearly linear with both TAU and RHOX.
     constraints = np.zeros(npar)
-    constraints[0] = 0.5  # weakly contrain the horizontal shift
+    constraints[0] = 0.5  # weakly constrain the horizontal shift
 
     # Fix the remaining two parameters.
     # parinfo = replicate({fixed:0}, npar)
     parinfo = np.zeros(npar, dtype=[("fixed", int)]).view(np.recarray)
-    parinfo[2:3].fixed = 1
+    parinfo[2:4].fixed = 1
 
     # For first pass ('TEMP'), use all available depth points.
     ngd = ndep1
@@ -252,7 +253,7 @@ def interp_atmo_pair(
             err1[igd],
             ipar,
             functargs=functargs,
-            # parinfo=parinfo,
+            parinfo=parinfo,
             constraints=constraints,
             # nprint=(trace >= 1),
             # quiet=True,
@@ -470,7 +471,7 @@ def interpolate_atmosphere_grid(
     M_grid = M_grid & ((atmo_grid.monh == M0) | (atmo_grid.monh == M1))
 
     atmo_grid = atmo_grid[M_grid]
-    assert len(atmo_grid) == 8
+    # # assert len(atmo_grid) == 8
 
     points = np.array((atmo_grid.teff, atmo_grid.logg, atmo_grid.monh)).T
     xi = np.array((teff, logg, monh))
@@ -478,7 +479,9 @@ def interpolate_atmosphere_grid(
     # Interpolate depth scale
     depth_grid = np.array(atmo_grid[interp].tolist())
     depth_grid = np.log10(depth_grid)
-    depth_scale = griddata(points, depth_grid, xi)[0]
+    depth_scale = griddata(points, depth_grid, xi, rescale=True)[0]
+
+    assert not np.any(np.isnan(depth_scale))
 
     # Interpolate values which vary with depth
     var = ["TEMP", "XNE", "XNA", "RHO", "RHOX", "TAU"]
@@ -498,18 +501,18 @@ def interpolate_atmosphere_grid(
             )
             values[i, j, :] = interpolator(depth_scale)
 
-    depth_data = griddata(points, values, xi)[0]
+    depth_data = griddata(points, values, xi, rescale=True)[0]
 
     # Interpolate other values
-    lonh = griddata(points, atmo_grid.lonh, xi)[0]
-    vturb = griddata(points, atmo_grid.vturb, xi)[0]
+    lonh = griddata(points, atmo_grid.lonh, xi, rescale=True)[0]
+    vturb = griddata(points, atmo_grid.vturb, xi, rescale=True)[0]
 
     opflag = np.array(atmo_grid.opflag.tolist())
-    opflag = griddata(points, opflag, xi)[0]
+    opflag = griddata(points, opflag, xi, rescale=True)[0]
 
     abund = np.array(atmo_grid.abund.tolist())
-    abund = griddata(points, abund, xi)[0]
-    abund[1] = np.log10(abund[1])  # Convert Helium into the right shape
+    abund = griddata(points, abund, xi, rescale=True)[0]
+    abund[1] = np.log10(abund[1])  # Convert Helium into log scale as is expected
 
     atmo = Atmo(teff=teff, logg=logg, monh=monh)
     atmo["RHOX"] = depth_data[4]
@@ -689,7 +692,10 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         )
 
     # print("CHECK ATMOSPHERE INTERPOLATION")
-    # return interpolate_atmosphere_grid(atmo_grid, Teff, logg, MonH, interp, depth, atmo_in, atmo_file)
+    # atmo = interpolate_atmosphere_grid(
+    #     atmo_grid, Teff, logg, MonH, interp, depth, atmo_in, atmo_file
+    # )
+    # return atmo
 
     # The purpose of the first major set of code blocks is to find values
     # of [M/H] in the grid that bracket the requested [M/H]. Then in this
@@ -819,22 +825,19 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
 
     # Find and save atmo_grid indices for the 8 corner models.
     icor = np.zeros((nb, nb, nb), dtype=int)
-    ncor = len(icor)
-    for iTb in range(nb):
-        for iGb in range(nb):
-            for iMb in range(nb):
-                iwhr = np.where(
-                    (atmo_grid.teff == Tb[iMb, iGb, iTb])
-                    & (atmo_grid.logg == Gb[iMb, iGb])
-                    & (atmo_grid.monh == Mb[iMb])
-                )[0]
-                nwhr = iwhr.size
-                if nwhr != 1:
-                    print(
-                        "interp_atmo_grid: %i models in grid with [M/H]=%.1f, log(g)=%.1f, and Teff=%i"
-                        % (nwhr, Mb[iMb], Gb[iMb, iGb], Tb[iMb, iGb, iTb])
-                    )
-                icor[iMb, iGb, iTb] = iwhr[0]
+    for iTb, iGb, iMb in itertools.product(range(nb), repeat=3):
+        iwhr = np.where(
+            (atmo_grid.teff == Tb[iMb, iGb, iTb])
+            & (atmo_grid.logg == Gb[iMb, iGb])
+            & (atmo_grid.monh == Mb[iMb])
+        )[0]
+        nwhr = iwhr.size
+        if nwhr != 1:
+            print(
+                "interp_atmo_grid: %i models in grid with [M/H]=%.1f, log(g)=%.1f, and Teff=%i"
+                % (nwhr, Mb[iMb], Gb[iMb, iGb], Tb[iMb, iGb, iTb])
+            )
+        icor[iMb, iGb, iTb] = iwhr[0]
 
     # Trace diagnostics.
     if verbose >= 1:
@@ -1018,7 +1021,9 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
     return atmo
 
 
-def interp_atmo_constrained(x_in, y_in, err_in, par, constraints=None, functargs={}):
+def interp_atmo_constrained(
+    x_in, y_in, err_in, par, constraints=None, functargs={}, parinfo=()
+):
     """
     Apply a constraint on each parameter, to have it approach zero
 
@@ -1065,10 +1070,14 @@ def interp_atmo_constrained(x_in, y_in, err_in, par, constraints=None, functargs
 
     # Evaluate
     # ret = mpfitfun("interp_atmo_func", x, y, err, par, extra=extra, yfit=yfit)
-    func = lambda x, *p: interp_atmo_func(x, p, x2, y2, **functargs)
-    popt, _ = curve_fit(func, x, y, sigma=err, p0=par)
+    # fix paramters 3, 4
+    func = lambda x, *p: interp_atmo_func(x, [*p, *par[2:]], x2, y2, **functargs)
+    popt, _ = curve_fit(func, x, y, sigma=err, p0=par[:2])
 
-    ret = popt
+    ret = [
+        *popt,
+        *par[2:],
+    ]  # 0.059245137   -0.0018499977       0.0000000       0.0000000
     yfit = func(x_in, *popt)
 
     return ret, yfit

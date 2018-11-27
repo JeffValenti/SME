@@ -183,7 +183,7 @@ class Param(Collection):
         self.vmic = None
 
         # TODO: in the SME structure, the abundance values are in a different scheme than described in Abund
-        # Helium is also fractional
+        # Helium is also fractional (sometimes?)
         if abund is not None and abund[1] > 0:
             abund = np.copy(abund)
             abund[1] = np.log10(abund[1])
@@ -369,7 +369,7 @@ class SME_Struct(Param):
         self.accrt = None
         self.clim = None
         self.nmu = None
-        self.mu = None
+        self.mu = np.atleast_1d(kwargs.pop("mu"))
         # linelist
         # TODO move class from vald.py to sme.py ?
         self.linelist = LineList(
@@ -394,7 +394,9 @@ class SME_Struct(Param):
         # Illiffe vector?
         self.nseg = None
         self.wave = None
-        self.wind = None
+        self.wind = kwargs.pop("wind")
+        if self.wind is not None:
+            self.wind = np.array([0, *(self.wind + 1)])
         # Wavelength range of each section
         self.wran = kwargs.pop("wran", None)
         self.wran = np.atleast_2d(self.wran)
@@ -477,7 +479,9 @@ class SME_Struct(Param):
         """ save SME data to disk """
         np.save(filename, self)
 
-    def spectrum(self, syn=False, cont=False, return_mask=False):
+    def spectrum(
+        self, syn=False, cont=False, return_mask=False, return_uncertainty=False
+    ):
         """
         load the wavelength and spectrum, with wavelength sets seperated into seperate arrays
 
@@ -494,7 +498,7 @@ class SME_Struct(Param):
         wave = self.wave
         # wavelength indices of the various sections
         # +1 because of different indexing between idl and python
-        section_index = self.wind + 1
+        section_index = self.wind[1:]
 
         if syn:
             # synthetic spectrum
@@ -515,6 +519,7 @@ class SME_Struct(Param):
         w = Iliffe_vector(None, index=section_index, values=wave)
         s = Iliffe_vector(None, index=section_index, values=obs_flux)
         m = Iliffe_vector(None, index=section_index, values=self.mob)
+        u = Iliffe_vector(None, index=section_index, values=self.uob)
 
         # Apply continuum normalization
         # but only to the real observations
@@ -527,9 +532,12 @@ class SME_Struct(Param):
                     x = np.arange(len(s[i]))
                     s[i] /= np.polyval(self.cscale[i][::-1], x)
 
+        args = [w, s]
         if return_mask:
-            return w, s, m
-        return w, s
+            args += [m]
+        if return_uncertainty:
+            args += [u]
+        return args
 
 
 if __name__ == "__main__":

@@ -127,8 +127,10 @@ def idl_call_external(funcname, *args, restype="str", type=None):
             elif np.issubdtype(args[i].dtype, np.str):
                 args[i] = args[i].astype("S")
                 staying_alive.append(args[i])
-                length = len(args[i][0])
-                args[i] = [IDL_String(slen=length, stype=1, s=s) for s in args[i]]
+                length = [len(a) for a in args[i]]
+                args[i] = [
+                    IDL_String(slen=l, stype=1, s=s) for s, l in zip(args[i], length)
+                ]
                 staying_alive.append(args[i])
 
                 strarr = (IDL_String * len(args[i]))()

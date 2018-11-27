@@ -131,3 +131,11 @@ uioenvfile.txt
 *.inp
 test.html
 beta.png
+*.out
+Untitled.ipynb
+test.py
+mcmc.py
+run_mcmc.py
+src/sme/atmospheres/*
+*.html
+test.py

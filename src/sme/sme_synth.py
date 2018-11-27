@@ -58,20 +58,24 @@ def ClearH2broad():
 def InputLineList(atomic, species):
     """ Read in line list """
     nlines = species.size
+
+    species = np.asarray(species, "U8")
+
+    # Sort list by wavelength
+    sort = np.argsort(atomic[:, 2])
+    species = species[sort]
+    atomic = atomic[sort, :]
+
     atomic = atomic.T
     return idl_call_external(
-        "InputLineList", nlines, species, atomic, type=("int", "double", "double")
+        "InputLineList", nlines, species, atomic, type=("int", "string", "double")
     )
 
 
-def OutputLineList(atomic, copy=False):
+def OutputLineList(nlines):
     """ Return line list """
-    nlines = atomic.shape[0]
-    if copy:
-        atomic = np.copy(atomic)
-    error = idl_call_external(
-        "OutputLineList", nlines, atomic.T, type=("int", "double")
-    )
+    atomic = np.zeros((nlines, 6))
+    error = idl_call_external("OutputLineList", nlines, atomic, type=("int", "double"))
     if error != b"":
         raise ValueError(f"{__name__} (call external): {error.decode()}")
     return atomic
@@ -104,7 +108,7 @@ def InputModel(teff, grav, vturb, atmo):
     vt = np.full(ndepth, vturb) if vturb.size == 1 else vturb
     wlstd = atmo.get("wlstd", 5000.0)
     opflag = atmo.get(
-        "opflag", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0]
+        "opflag", np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0])
     )
     args = [ndepth, teff, grav, wlstd, motype, opflag, depth, t, xne, xna, rho, vt]
     type = "sdddusdddddd"  # s : short, d: double, u: unicode (string)
@@ -120,7 +124,7 @@ def InputModel(teff, grav, vturb, atmo):
 
 
 @check_error
-def InputAbund(abund, feh):
+def InputAbund(abund):
     """
     Pass abundances to radiative transfer code.
 
@@ -131,24 +135,79 @@ def InputAbund(abund, feh):
     """
     # Convert abundances to the right format
     # metallicity is included in the abundance class, ignored in function call
-    assert abund.monh == feh
-    abund = abund("n/nTot", raw=True)
+    abund = abund("sme", raw=True)
     return idl_call_external("InputAbund", abund, type="double")
 
 
-@check_error
-def Opacity():
+def Opacity(nmu=None, motype=1):
     """ Calculate opacities """
-    return idl_call_external("Opacity")
+    args = []
+    type = ""
+    if nmu is not None:
+        copblu = np.zeros(nmu)
+        copred = np.zeros(nmu)
+        args = [nmu, copblu, copred]
+        type = ["s", "d", "d"]
+
+        if motype == 0:
+            copstd = np.zeros(nmu)
+            args += [copstd]
+            type += ["d"]
+
+    check_error(idl_call_external)("Opacity", *args, type=type)
+
+    return args[1:]
 
 
-def GetOpacity():
-    """ Returns specific cont. opacity """
+def GetOpacity(sme, switch, species=None, key=None):
+    """
+    Returns specific cont. opacity
+
+    switch : int
+        -3 : COPSTD
+        -2 : COPRED
+        -1 : COPBLU
+         0 : AHYD
+         1 : AH2P
+         2 : AHMIN
+         3 : SIGH
+         4 : AHE1
+         5 : AHE2
+         6 : AHEMIN
+         7 : SIGHE
+         8 : ACOOL, continuous opacity C1, Mg1, Al1, Si1, Fe1, CH, NH, OH
+         9 : ALUKE, continuous opacity N1, O1, Mg2, Si2, Ca2
+         10: AHOT
+         11: SIGEL
+         12: SIGH2
+    """
     # j=*(short *)arg[0];   # IFOP number */
     # i=*(short *)arg[1];   # Length of IDL arrays */
     # a1=(double *)arg[2];
-    raise NotImplementedError()
-    return idl_call_external("GetOpacity")
+    length = np.size(sme.mu)  # nmu
+    result = np.ones(length)
+    args = [switch, length, result]
+    type = ["s", "s", "d"]
+
+    if switch == 8:
+        if species is not None:
+            if key is None:
+                raise AttributeError(
+                    "Both species and key keywords need to be set with switch 8, continous opacity"
+                )
+            else:
+                args += [species, key]
+                type += ["u", "u"]
+    elif switch == 9:
+        if species is not None:
+            args += [species]
+            type += ["u"]
+
+    error = idl_call_external("GetOpacity", *args, type=type)
+
+    if error != b"":
+        raise ValueError(f"GetOpacity (call external): {error.decode()}")
+    return result
 
 
 # @check_error
@@ -186,18 +245,53 @@ def GetNelec():
     raise NotImplementedError()
 
 
-def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000, wave=None):
-    """ Radiative Transfer Calculation """
+def Transf(
+    mu, accrt, accwi, keep_lineop=False, long_continuum=True, nwmax=400000, wave=None
+):
+    """
+    Radiative Transfer Calculation
+
+    Parameters
+    ---------
+    mu : array
+        mu angles (1 - cos(phi)) of different limb points along the stellar surface
+    accrt : float
+        accuracy of the radiative transfer integration
+    accwi : float
+        accuracy of the interpolation on the wavelength grid
+    keep_lineop : bool, optional
+        if True do not recompute the line opacities (default: False)
+    long_continuum : bool, optional
+        if True the continuum is calculated at every wavelength (default: True)
+    nwmax : int, optional
+        maximum number of wavelength points if wavelength grid is not set with wave (default: 400000)
+    wave : array, optional
+        wavelength grid to use for the calculation,
+        if not set will use an adaptive wavelength grid with no constant step size (default: None)
+
+    Returns
+    -------
+    nw : int
+        number of actual wavelength points, i.e. size of wint_seg
+    wint_seg : array[nw]
+        wavelength grid
+    sint_seg : array[nw]
+        spectrum
+    cint_seg : array[nw]
+        continuum
+    """
+    keep_lineop = 1 if keep_lineop else 0
+    long_continuum = 1 if long_continuum else 0
 
     if wave is None:
         nw = 0
-        wint_seg = np.zeros((nwmax))
+        wint_seg = np.zeros(nwmax, float)
     else:
         nw = len(wave)
         nwmax = nw
         wint_seg = np.asarray(wave, float)
 
-    nmu = len(mu)
+    nmu = np.size(mu)
 
     # Prepare data:
     sint_seg = np.zeros((nwmax, nmu))  # line+continuum intensities
@@ -236,6 +330,44 @@ def Transf(mu, accrt, accwi, keep_lineop=0, long_continuum=1, nwmax=400000, wave
 def CentralDepth():
     """ """
     raise NotImplementedError()
+
+
+def GetLineOpacity(wave, nmu):
+    """
+    Retrieve line opacity data from the C library
+
+    Parameters
+    ----------
+    wave : float
+        Wavelength of the line opacity to retrieve
+    nmu  : int
+        number of depth points in the atmosphere
+
+    Returns
+    ---------
+    lop : array
+        line opacity
+    cop : array
+        continuum opacity including scatter
+    scr : array
+        Scatter
+    tsf : array
+        Total source function
+    csf : array
+        Continuum source function
+    """
+    lop = np.zeros(nmu)
+    cop = np.zeros(nmu)
+    scr = np.zeros(nmu)
+    tsf = np.zeros(nmu)
+    csf = np.zeros(nmu)
+    type = "dsddddd"
+    error = idl_call_external(
+        "GetLineOpacity", wave, nmu, lop, cop, scr, tsf, csf, type=type
+    )
+    if error != b"":
+        raise ValueError(f"GetLineOpacity (call external): {error.decode()}")
+    return lop, cop, scr, tsf, csf
 
 
 def GetLineRange(nlines):

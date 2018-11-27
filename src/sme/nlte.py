@@ -449,7 +449,6 @@ def update_depcoeffs(sme):
     # #  as well as the current matrix of departure coefficients.
 
     ## Reset departure coefficients from any previous call, to ensure LTE as default:
-    sme_synth.ResetNLTE()
 
     if not "nlte" in sme:
         return sme  # no NLTE is requested
@@ -460,14 +459,24 @@ def update_depcoeffs(sme):
         or np.all(sme.nlte.nlte_grids == "")
     ):
         # Silent fail to do LTE only.
-        print("Running in LTE")
+        if not hasattr(update_depcoeffs, "first"):
+            setattr(update_depcoeffs, "first", False)
+            print("Running in LTE")
         return sme  # no NLTE routine available
     if sme.linelist.lineformat == "short":
-        print("---")
-        print("NLTE line formation was requested, but VALD3 long-format linedata ")
-        print("are required in order to relate line terms to NLTE level corrections!")
-        print("Line formation will proceed under LTE.")
+        if not hasattr(update_depcoeffs, "first"):
+            setattr(update_depcoeffs, "first", False)
+            print("---")
+            print("NLTE line formation was requested, but VALD3 long-format linedata ")
+            print(
+                "are required in order to relate line terms to NLTE level corrections!"
+            )
+            print("Line formation will proceed under LTE.")
         return sme  # no NLTE line data available
+
+    # Reset the departure coefficient every time, just to be sure
+    # It would be more efficient to just Update the values, but this doesn't take long
+    sme_synth.ResetNLTE()
 
     # Only print "Running in NLTE" message on the first run each time
     if not hasattr(update_depcoeffs, "first"):
