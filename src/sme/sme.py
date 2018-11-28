@@ -39,8 +39,6 @@ class Iliffe_vector:
         if values is None:
             self.__values__ = np.zeros(np.sum(sizes), dtype=dtype)
         else:
-            # if np.size(values) != np.sum(sizes):
-            #     raise ValueError("Size of values and sizes do not fit")
             self.__values__ = np.asarray(values)
 
     def __len__(self):
@@ -148,7 +146,7 @@ class Collection(object):
         return self.__setattr__(key, value)
 
     def __contains__(self, key):
-        return key.casefold() in dir(self)
+        return key.casefold() in dir(self) and self[key] is not None
 
     @property
     def names(self):
@@ -538,10 +536,12 @@ class SME_Struct(Param):
 
         # Catch none existing data
         if obs_flux is None:
+            args = [None, None]
             if return_mask:
-                return None, None, None
-            else:
-                return None, None
+                args += [None]
+            if return_uncertainty:
+                args += [None]
+            return args
 
         # return as Iliffe vectors, where the arrays can have different sizes
         # this is pretty much the same as it was before, just with fancier indexing

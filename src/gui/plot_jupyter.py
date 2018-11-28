@@ -34,15 +34,23 @@ class FinalPlot:
         self.sme = sme
         self.wave, self.spec, self.mask = sme.spectrum(return_mask=True)
         self.wmod, self.smod = sme.spectrum(syn=True)
+        if self.wave is None:
+            self.wave = self.wmod
+
         self.nsegments = len(self.wave)
         self.segment = segment
-        self.wind = [0, *(sme.wind + 1)]
+        self.wind = sme.wind
+        self.wran = sme.wran
         self.lines = sme.linelist
-        self.vrad = np.atleast_1d(sme.vrad)[-1]
+        self.vrad = np.atleast_1d(sme.vrad)
+        self.vrad = [v if v is not None else 0 for v in self.vrad]
+        if len(self.vrad) == 1:
+            self.vrad = self.vrad * self.nsegments
 
         self.mask_type = "good"
 
         data, annotations = self.create_plot(self.segment)
+        self.annotations = annotations
 
         # Add segment slider
         steps = []
@@ -55,7 +63,7 @@ class FinalPlot:
                     {
                         "title": f"Segment {i}",
                         "annotations": annotations[i],
-                        "xaxis": {"autorange": True},
+                        "xaxis": {"range": list(self.wran[i])},
                         "yaxis": {"autorange": True},
                     },
                 ],
@@ -133,64 +141,66 @@ class FinalPlot:
             # Annoying I know, but plotly doesn't seem to have good controls for the z order
             # Or Legend order for that matter
 
-            # Line mask
-            x, y = self.create_mask_points(
-                self.wave[seg], self.spec[seg], self.mask[seg], 1
-            )
-
-            data += [
-                dict(
-                    x=x,
-                    y=y,
-                    fillcolor=fmt["LineMask"]["facecolor"],
-                    fill="tozeroy",
-                    mode="none",
-                    name="Line Mask",
-                    hoverinfo="none",
-                    legendgroup=2,
-                    visible=current_segment == seg,
+            if self.mask is not None:
+                # Line mask
+                x, y = self.create_mask_points(
+                    self.wave[seg], self.spec[seg], self.mask[seg], 1
                 )
-            ]
-            visible += [seg]
 
-            # Cont mask
-            x, y = self.create_mask_points(
-                self.wave[seg], self.spec[seg], self.mask[seg], 2
-            )
+                data += [
+                    dict(
+                        x=x,
+                        y=y,
+                        fillcolor=fmt["LineMask"]["facecolor"],
+                        fill="tozeroy",
+                        mode="none",
+                        name="Line Mask",
+                        hoverinfo="none",
+                        legendgroup=2,
+                        visible=current_segment == seg,
+                    )
+                ]
+                visible += [seg]
 
-            data += [
-                dict(
-                    x=x,
-                    y=y,
-                    fillcolor=fmt["ContMask"]["facecolor"],
-                    fill="tozeroy",
-                    mode="none",
-                    name="Continuum Mask",
-                    hoverinfo="none",
-                    legendgroup=2,
-                    visible=current_segment == seg,
+                # Cont mask
+                x, y = self.create_mask_points(
+                    self.wave[seg], self.spec[seg], self.mask[seg], 2
                 )
-            ]
-            visible += [seg]
 
-            # Observation
-            data += [
-                dict(
-                    x=self.wave[seg],
-                    y=self.spec[seg],
-                    line={"color": fmt["Obs"]["color"]},
-                    name="Observation",
-                    legendgroup=0,
-                    visible=current_segment == seg,
-                )
-            ]
-            visible += [seg]
+                data += [
+                    dict(
+                        x=x,
+                        y=y,
+                        fillcolor=fmt["ContMask"]["facecolor"],
+                        fill="tozeroy",
+                        mode="none",
+                        name="Continuum Mask",
+                        hoverinfo="none",
+                        legendgroup=2,
+                        visible=current_segment == seg,
+                    )
+                ]
+                visible += [seg]
+
+            if self.spec is not None:
+                # Observation
+                data += [
+                    dict(
+                        x=self.wave[seg],
+                        y=self.spec[seg],
+                        line={"color": fmt["Obs"]["color"]},
+                        name="Observation",
+                        legendgroup=0,
+                        visible=current_segment == seg,
+                    )
+                ]
+                visible += [seg]
 
             # Synthetic, if available
             if self.smod is not None:
                 data += [
                     dict(
-                        x=self.wave[seg],
+                        x=self.wmod[seg],
                         y=self.smod[seg],
                         name="Synthethic",
                         line={"color": fmt["Syn"]["color"]},
@@ -204,7 +214,7 @@ class FinalPlot:
             if self.lines is not None:
                 seg_annotations = []
                 xlimits = self.wave[seg][[0, -1]]
-                xlimits *= 1 - self.vrad / clight
+                xlimits *= 1 - self.vrad[seg] / clight
                 lines = (self.lines.wlcent > xlimits[0]) & (
                     self.lines.wlcent < xlimits[1]
                 )
@@ -214,8 +224,11 @@ class FinalPlot:
                 lines.sort("depth", ascending=False)
                 lines = lines[:20,]
 
-                x = lines.wlcent * (1 + self.vrad / clight)
-                y = np.interp(x, self.wave[seg], self.spec[seg])
+                x = lines.wlcent * (1 + self.vrad[seg] / clight)
+                if self.spec is not None:
+                    y = np.interp(x, self.wave[seg], self.spec[seg])
+                else:
+                    y = np.interp(x, self.wave[seg], self.smod[seg])
 
                 for i, line in enumerate(lines):
                     seg_annotations += [
@@ -325,3 +338,25 @@ class FinalPlot:
 
     def add(self, x, y, label=""):
         self.fig.add_scatter(x=x, y=y, name=label)
+        self.visible += [-1]
+
+        # Update Sliders
+        steps = []
+        for i in range(self.nsegments):
+            step_visible = [(v == i) or (v == -1) for v in self.visible]
+            step = {
+                "label": f"Segment {i}",
+                "method": "update",
+                "args": [
+                    {"visible": step_visible},
+                    {
+                        "title": f"Segment {i}",
+                        "annotations": self.annotations[i],
+                        "xaxis": {"range": list(self.wran[i])},
+                        "yaxis": {"autorange": True},
+                    },
+                ],
+            }
+            steps += [step]
+
+        self.fig.layout["sliders"][0]["steps"] = steps

@@ -33,39 +33,29 @@ warnings.simplefilter("ignore", OptimizeWarning)
 clight = speed_of_light * 1e-3  # km/s
 
 
-def synthetize_spectrum(
-    wavelength,
+def residuals(
     param,
+    names,
     sme,
-    mask=None,
-    save=True,
-    update=True,
-    reuse_wavelength_grid=False,
+    spec,
+    uncs,
+    mask,
+    isJacobian=False,
+    fname=None,
+    plot=False,
+    **kwargs,
 ):
-    """
-    Create a synthetic spectrum, with a given wavelength
 
-    Parameters
-    ----------
-    wavelength : array (npoints,)
-        wavelength grid
-    param : array (nparam,)
-        parameter values to use. Only parameters that are varied need to be set. Which parameter is in which position is determined by param_names
-    sme : SME_Struct
-        input sme structure
-    param_names : list
-        names of parameters in param
-    save : {bool, str}, optional
-        wether to save the sme structure. If save is a string it will be used as the filename (default: True)
+    self = residuals
+    if not hasattr(self, "iteration"):
+        self.iteration = 0
 
-    Returns
-    -------
-    spec : array (npoints,)
-        synthetic spectrum
-    """
+    update = not isJacobian
+    save = not isJacobian
+    reuse_wavelength_grid = isJacobian
 
     # change parameters
-    for name, value in param.items():
+    for name, value in zip(names, param):
         sme[name] = value
 
     # run spectral synthesis
@@ -79,19 +69,44 @@ def synthetize_spectrum(
         sme.cscale = sme2.cscale
 
     # Also save intermediary results, because we can
-    if isinstance(save, bool):
-        if save:
-            # use default name
-            sme2.save()
-    else:
-        sme2.save(save)
+    if save:
+        if fname is None:
+            fname = "sme.npy"
+        sme2.save(fname)
 
-    _, spec = sme2.spectrum(syn=True)
-    spec = spec.flatten()
+    _, synth = sme2.spectrum(syn=True)
+    synth = synth.flatten()
     if mask is not None:
-        spec = spec[mask]
+        synth = synth[mask]
+
+    # TODO: update based on lineranges
+    uncs_linelist = 0
+
+    resid = (synth - spec) / (uncs + uncs_linelist)
+    resid = np.nan_to_num(resid, copy=False)
+
+    if not isJacobian:
+        # Save result for jacobian
+        self.resid = resid
+        # Plot
+        self.iteration += 1
+        if plot is not False:
+            wave = sme2.wave
+            plot.add(wave, synth, f"Iteration {self.iteration}")
 
     return spec
+
+
+def jacobian(param, *args, bounds=None, **kwargs):
+    return approx_derivative(
+        residuals,
+        param,
+        method="3-point",
+        f0=residuals.resid,
+        bounds=bounds,
+        args=args,
+        kwargs={"isJacobian": True},
+    )
 
 
 def linelist_errors(wave, spec, linelist):
@@ -202,67 +217,18 @@ def solve(
     p0 = [sme[s] for s in param_names]
 
     # Get constant data from sme structure
-    wave, spec, mask, uncs = sme.spectrum(return_mask=True, return_uncertainty=True)
-    wave = wave.flatten()
+    _, spec, mask, uncs = sme.spectrum(return_mask=True, return_uncertainty=True)
     spec = spec.flatten()
     mask = mask.flatten()
     uncs = uncs.flatten()
 
     mask = (mask != 0) & (uncs != 0)
-    wave = wave[mask]
     spec = spec[mask]
     uncs = uncs[mask]
 
     # Divide the uncertainties by the spectrum, to improve the fit in the continuum
     # Just as in IDL SME
     uncs /= spec
-
-    # Define residual and jacobian function
-    def residuals(param, param_names, wave, spec, uncs, mask, isJacobian=False):
-        """ func = (model - obs) / sigma """
-        self = residuals
-
-        param = {n: v for n, v in zip(param_names, param)}
-        # print(f"Is Jacobian {isJacobian}")
-        synth = synthetize_spectrum(
-            wave,
-            param,
-            sme,
-            mask=mask,
-            update=not isJacobian,
-            save=not isJacobian,
-            reuse_wavelength_grid=isJacobian,
-        )
-
-        # TODO: linelist uncertainties, how large should they be?
-        # uncs2 = linelist_errors(wave, spec, sme.linelist)
-        uncs_linelist = 0
-
-        resid = (synth - spec) / (uncs + uncs_linelist)
-        resid = np.nan_to_num(resid, copy=False)
-        # print(f"Cost: {np.sum(resid ** 2) * 0.5}")
-
-        if not isJacobian:
-            # print(param)
-            self.resid = resid
-            if not hasattr(self, "iteration"):
-                self.iteration = 0
-            self.iteration += 1
-            if plot is not False:
-                plot.add(wave, synth, f"Iteration {self.iteration}")
-
-        return resid
-
-    def jacobian(param, *args):
-        return approx_derivative(
-            residuals,
-            param,
-            method="3-point",
-            f0=residuals.resid,
-            bounds=bounds,
-            args=args,
-            kwargs={"isJacobian": True},
-        )
 
     # Do the heavy lifting
     res = least_squares(
@@ -272,7 +238,8 @@ def solve(
         bounds=bounds,
         loss="soft_l1",
         verbose=2,
-        args=(param_names, wave, spec, uncs, mask),
+        args=(param_names, sme, spec, uncs, mask),
+        kwargs={"bounds": bounds, "plot": plot, "fname": filename},
         method="trf",
         max_nfev=kwargs.get("maxiter"),
     )
@@ -516,66 +483,65 @@ def sme_func(
         sme_synth.InputWaveRange(wbeg, wend)
         sme_synth.Opacity()
 
-        if reuse_wavelength_grid:
-            wave_seg = sme.wint[il]
-        else:
-            wave_seg = None
-
+        # Reuse adaptive wavelength grid in the jacobians
+        wint_seg = sme.wint[il] if reuse_wavelength_grid else None
+        # Only calculate line opacities in the first segment
+        keep_line_opacity = il != 0
         #   Calculate spectral synthesis for each
         _, wint[il], sint[il], cint[il] = sme_synth.Transf(
             sme.mu,
             sme.accrt,  # threshold line opacity / cont opacity
             sme.accwi,
-            keep_lineop=il != 0,
-            wave=wave_seg,
+            keep_lineop=keep_line_opacity,
+            wave=wint_seg,
         )
 
         # Create new geomspaced wavelength grid, to be used for intermediary steps
-        x_seg, vstep = new_wavelength_grid(wint[il])
+        wgrid, vstep = new_wavelength_grid(wint[il])
 
         # Continuum
-        cflx_seg = rtint(sme.mu, cint[il], 1, 0, 0)
-        yc_seg = np.interp(x_seg, wint[il], cflx_seg)
+        cont_flux = rtint(sme.mu, cint[il], 1, 0, 0)
+        cont_flux = np.interp(wgrid, wint[il], cont_flux)
 
         # Broaden Spectrum
-        yi_seg = np.empty((nmu, len(x_seg)))
+        y_integrated = np.empty((nmu, len(wgrid)))
         for imu in range(nmu):
-            yi_seg[imu] = np.interp(x_seg, wint[il], sint[il][imu])
+            y_integrated[imu] = np.interp(wgrid, wint[il], sint[il][imu])
 
         # Turbulence broadening
-        y_seg = rtint(sme.mu, yi_seg, vstep, abs(sme.vsini), abs(sme.vmac))
+        flux = rtint(sme.mu, y_integrated, vstep, abs(sme.vsini), abs(sme.vmac))
         # instrument broadening
         if "iptype" in sme:
             ipres = sme.ipres if np.size(sme.ipres) == 1 else sme.ipres[il]
-            y_seg = broadening.apply_broadening(
-                ipres, x_seg, y_seg, type=sme["iptype"], sme=sme
+            flux = broadening.apply_broadening(
+                ipres, wgrid, flux, type=sme["iptype"], sme=sme
             )
 
         # Divide calculated spectrum by continuum
-        y_seg /= yc_seg
+        flux /= cont_flux
 
         # Create a wavelength array if it doesn't exist
         if "wave" not in sme:
-            wran_seg = wran[il]
-            itrim = (x_seg > wran_seg[0]) & (x_seg < wran_seg[1])  # trim padding
-            wave[il] = np.pad(
-                x_seg[itrim],
-                1,
-                mode="constant",
-                constant_value=[wran_seg[0], wran_seg[1]],
-            )
+            # trim padding
+            wbeg, wend = wran[il]
+            itrim = (wgrid > wbeg) & (wgrid < wend)
+            # Force endpoints == wavelength range
+            wave[il] = np.concatenate(([wbeg], wgrid[itrim], [wend]))
             wind[il + 1] = wind[il] + len(wave[il])
+            sme.wave = wave[il]
+            sme.wind = wind[il : il + 2]
 
         # Fit continuum and radial velocity
-        cscale[il], vrad[il] = match_rv_continuum(sme, il, x_seg, y_seg)
+        cscale[il], vrad[il] = match_rv_continuum(sme, il, wgrid, flux)
         # Interpolate spectrum on ouput wavelength grid
-        factor = np.sqrt((1 + vrad[il] / clight) / (1 - vrad[il] / clight))
-        x_seg *= factor
+        if vrad[il] is not None:
+            rv_factor = np.sqrt((1 + vrad[il] / clight) / (1 - vrad[il] / clight))
+            wgrid *= rv_factor
 
         # TODO: how to resample/interpolate here? Does it matter?
         # smod[il] = np.interp(wave[il], x_seg, y_seg)
         # smod[il] = resamp(x_seg, y_seg, wave[il])
-        smod[il] = interp1d(x_seg, y_seg, kind="cubic")(wave[il])
+        smod[il] = interp1d(wgrid, flux, kind="cubic")(wave[il])
 
     # Merge all segments
     sme.smod = smod = np.concatenate(smod)
@@ -589,9 +555,13 @@ def sme_func(
     if sme.vrad_flag in [-1, "whole"]:
         # If we want to determine radial velocity on the whole spectrum at once (instead of segments)
         _, vrad = match_rv_continuum(sme, -1, wave, smod)
-        factor = np.sqrt((1 + vrad / clight) / (1 - vrad / clight))
+        rv_factor = np.sqrt((1 + vrad / clight) / (1 - vrad / clight))
         sme.smod = interp1d(
-            wave * factor, sme.smod, kind="cubic", fill_value="extrapolate"
+            wave * rv_factor,
+            sme.smod,
+            kind="cubic",
+            fill_value="constant",
+            bounds_error=False,
         )(wave)
 
     sme.vrad = np.asarray(vrad)
