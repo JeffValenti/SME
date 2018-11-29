@@ -250,6 +250,29 @@ def get_bounds(param_names, atmo_file):
     return bounds
 
 
+def get_scale(param_names):
+    """
+    Returns scales for each parameter so that values are on order ~1
+    
+    Parameters
+    ----------
+    param_names : list(str)
+        names of the parameters
+
+    Returns
+    -------
+    scales : list(float)
+        scales of the parameters in the same order as input array
+    """
+
+    scales = {"teff": 1000, "logg": 1, "monh": 1}
+    scales.update({"vmic": 1, "vmac": 1, "vsini": 1})
+    scales.update({f"{el} abund": 1 for el in Abund._elem})
+
+    scales = [scales[name] for name in param_names]
+    return scales
+
+
 def solve(
     sme, param_names=("teff", "logg", "monh"), filename="sme.npy", fig=None, **kwargs
 ):
@@ -283,7 +306,7 @@ def solve(
     param_names = [p if p != "grav" else "logg" for p in param_names]
     param_names = [p if p != "feh" else "monh" for p in param_names]
 
-    param_names = list(np.unique(param_names))
+    # param_names = list(set(param_names))
 
     if "vrad" in param_names:
         param_names.remove("vrad")
@@ -297,6 +320,7 @@ def solve(
 
     # Create appropiate bounds
     bounds = get_bounds(param_names, sme.atmo.source)
+    scales = get_scale(param_names)
 
     # Starting values
     p0 = [sme[s] for s in param_names]
@@ -321,11 +345,12 @@ def solve(
         x0=p0,
         jac=jacobian,
         bounds=bounds,
+        x_scale=scales,
         loss="soft_l1",
+        method="trf",
         verbose=2,
         args=(param_names, sme, spec, uncs, mask),
         kwargs={"bounds": bounds, "fig": fig, "fname": filename},
-        method="trf",
         max_nfev=kwargs.get("maxiter"),
     )
 
