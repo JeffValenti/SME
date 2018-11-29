@@ -88,7 +88,7 @@ class MaskPlot:
     def resize_event(self, event):
         if self.line_plot is not None and not self.lock:
             xlim = np.array(self.im.get_xlim())
-            xlim *= 1 - self.vrad / clight
+            xlim *= 1 - self.vrad[self.segment] / clight
             idx = (self.lines_segment.wlcent >= xlim[0]) & (
                 self.lines_segment.wlcent <= xlim[1]
             )

@@ -35,8 +35,8 @@ if len(sys.argv) > 1:
     in_file, vald_file, fitparameters = parse_args()
 else:
     # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
-    in_file = "./wasp117_short.inp"
-    vald_file = "./5475-5548hps_vdw.lin"
+    in_file = "./sun_6440_grid.out"
+    vald_file = None
     fitparameters = []
 
 sme = SME.SME_Struct.load(in_file)
@@ -52,6 +52,10 @@ if len(fitparameters) == 0:
         fitparameters = sme.pname
     else:
         fitparameters = ["teff", "logg", "monh"]
+
+print("teff", sme.teff)
+print("logg", sme.logg)
+print("monh", sme.monh)
 
 # TODO: DEBUG
 fitparameters = ["teff", "logg", "monh"]
