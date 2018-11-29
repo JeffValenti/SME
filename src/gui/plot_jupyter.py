@@ -337,7 +337,7 @@ class FinalPlot:
         self.fig.layout["dragmode"] = "select"
 
     def add(self, x, y, label=""):
-        self.fig.add_scatter(x=x, y=y, name=label)
+        self.fig.add_scatter(x=x, y=y, name=label, legendgroup=10)
         self.visible += [-1]
 
         # Update Sliders

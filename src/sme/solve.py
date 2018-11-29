@@ -41,10 +41,44 @@ def residuals(
     uncs,
     mask,
     isJacobian=False,
-    fname=None,
-    plot=False,
+    fname="sme.npy",
+    fig=None,
     **kwargs,
 ):
+    """
+    Calculates the synthetic spectrum with sme_func and
+    returns the residuals between observation and synthetic spectrum
+
+    residual = (obs - synth) / uncs
+
+    Parameters
+    ----------
+    param : list(float) of size (n,)
+        parameter values to use for synthetic spectrum, order is the same as names
+    names : list(str) of size (n,)
+        names of the parameters to set, as defined by SME_Struct
+    sme : SME_Struct
+        sme structure holding all relevant information for the synthetic spectrum generation
+    spec : array(float) of size (m,)
+        observed spectrum
+    uncs : array(float) of size (m,)
+        uncertainties of the observed spectrum
+    mask : array(bool) of size (k,)
+        mask to apply to the synthetic spectrum to select the same points as spec
+        The size of the synthetic spectrum is given by sme.wave
+        then mask must have the same size, with m True values
+    isJacobian : bool, optional
+        Flag to use when within the calculation of the Jacobian (default: False)
+    fname : str, optional
+        filename of the intermediary product (default: "sme.npy")
+    fig : Figure, optional
+        plotting interface, fig.add(x, y, title) will be called each non jacobian iteration
+
+    Returns
+    -------
+    resid : array(float) of size (m,)
+        residuals of the synthetic spectrum
+    """
 
     self = residuals
     if not hasattr(self, "iteration"):
@@ -70,8 +104,6 @@ def residuals(
 
     # Also save intermediary results, because we can
     if save:
-        if fname is None:
-            fname = "sme.npy"
         sme2.save(fname)
 
     _, synth = sme2.spectrum(syn=True)
@@ -90,14 +122,24 @@ def residuals(
         self.resid = resid
         # Plot
         self.iteration += 1
-        if plot is not False:
+        if fig is not None:
             wave = sme2.wave
-            plot.add(wave, synth, f"Iteration {self.iteration}")
+            try:
+                fig.add(wave, synth, f"Iteration {self.iteration}")
+            except AttributeError:
+                print(f"Figure {repr(fig)} doesn't have a 'add' method")
+            except Exception as e:
+                print(f"Error during Plotting: {e.message}")
 
     return spec
 
 
 def jacobian(param, *args, bounds=None, **kwargs):
+    """
+    Approximate the jacobian numerically
+    The calculation is the same as "3-point"
+    but we can tell residuals that we are within a jacobian
+    """
     return approx_derivative(
         residuals,
         param,
@@ -139,40 +181,77 @@ def determine_continuum(wave, spec, linelist, deg=2):
 
 
 def get_bounds(param_names, atmo_file):
+    """
+    Create Bounds based on atmosphere grid and general rules
+
+    Note that bounds define by definition a cube in the parameter space,
+    but the grid might not be a cube. I.e. Not all combinations of teff, logg, monh are valid
+    This method will choose the outerbounds of that space as the boundary, which means that
+    we can still run into problems when interpolating the atmospheres
+
+    Parameters
+    ----------
+    param_names : array(str)
+        names of the parameters to vary
+    atmo_file : str
+        filename of the atmosphere grid
+
+    Raises
+    ------
+    IOError
+        If the atmosphere file can't be read, allowed types are IDL savefiles (.sav), and .krz files
+
+    Returns
+    -------
+    bounds : dict
+        Bounds for the given parameters
+    """
+
     bounds = {}
 
-    dir = os.path.dirname(__file__)
-    atmo_file = os.path.basename(atmo_file)
-    _, ext = os.path.splitext(atmo_file)
-    atmo_file = os.path.join(dir, "atmospheres", atmo_file)
+    # Create bounds based on atmosphere grid
+    if "teff" in param_names or "logg" in param_names or "monh" in param_names:
+        dir = os.path.dirname(__file__)
+        atmo_file = os.path.basename(atmo_file)
+        _, ext = os.path.splitext(atmo_file)
+        atmo_file = os.path.join(dir, "atmospheres", atmo_file)
 
-    if ext == ".sav":
-        atmo_grid = readsav(atmo_file)["atmo_grid"]
+        if ext == ".sav":
+            atmo_grid = readsav(atmo_file)["atmo_grid"]
 
-        teff = np.unique(atmo_grid.teff)
-        teff = np.min(teff), np.max(teff)
-        bounds["teff"] = teff
+            teff = np.unique(atmo_grid.teff)
+            teff = np.min(teff), np.max(teff)
+            bounds["teff"] = teff
 
-        logg = np.unique(atmo_grid.logg)
-        logg = np.min(logg), np.max(logg)
-        bounds["logg"] = logg
+            logg = np.unique(atmo_grid.logg)
+            logg = np.min(logg), np.max(logg)
+            bounds["logg"] = logg
 
-        monh = np.unique(atmo_grid.monh)
-        monh = np.min(monh), np.max(monh)
-        bounds["monh"] = monh
-    elif ext == ".krz":
-        atmo = krz_file(atmo_file)
-        bounds["teff"] = atmo.teff - 500, atmo.teff + 500
-        bounds["logg"] = atmo.logg - 1, atmo.logg + 1
-        bounds["monh"] = atmo.monh - 1, atmo.monh + 1
-    else:
-        raise IOError(f"File extension {ext} not recognized")
+            monh = np.unique(atmo_grid.monh)
+            monh = np.min(monh), np.max(monh)
+            bounds["monh"] = monh
+        elif ext == ".krz":
+            # krz atmospheres are fixed to one parameter set
+            # allow just "small" area around that
+            atmo = krz_file(atmo_file)
+            bounds["teff"] = atmo.teff - 500, atmo.teff + 500
+            bounds["logg"] = atmo.logg - 1, atmo.logg + 1
+            bounds["monh"] = atmo.monh - 1, atmo.monh + 1
+        else:
+            raise IOError(f"File extension {ext} not recognized")
+
+    # Add generic bounds
+    bounds.update({"vmic": [0, np.inf], "vmac": [0, np.inf], "vsini": [0, np.inf]})
+    bounds.update({"%s abund" % el: [-10, 11] for el in Abund._elem})
+
+    # Select bounds requested
+    bounds = np.array([bounds[s] for s in param_names]).T
 
     return bounds
 
 
 def solve(
-    sme, param_names=("teff", "logg", "monh"), filename="sme.npy", plot=False, **kwargs
+    sme, param_names=("teff", "logg", "monh"), filename="sme.npy", fig=None, **kwargs
 ):
     """
     Find the least squares fit parameters to an observed spectrum
@@ -197,21 +276,27 @@ def solve(
     # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
     # TODO: create more efficient jacobian function ?
 
-    # Fix parameter names
+    # Sanitize parameter names
     param_names = [p.casefold() for p in param_names]
     param_names = [p.capitalize() if p[-5:] == "abund" else p for p in param_names]
 
     param_names = [p if p != "grav" else "logg" for p in param_names]
     param_names = [p if p != "feh" else "monh" for p in param_names]
 
+    param_names = list(np.unique(param_names))
+
+    if "vrad" in param_names:
+        param_names.remove("vrad")
+        sme.vrad_flag = "each"
+
+    if "cont" in param_names:
+        param_names.remove("cont")
+        sme.cscale_flag = 1
+
     nparam = len(param_names)
 
     # Create appropiate bounds
     bounds = get_bounds(param_names, sme.atmo.source)
-    bounds.update({"vmic": [0, np.inf], "vmac": [0, np.inf]})
-    bounds.update({"%s abund" % el: [-10, 10] for el in Abund._elem})
-
-    bounds = np.array([bounds[s] for s in param_names]).T
 
     # Starting values
     p0 = [sme[s] for s in param_names]
@@ -239,7 +324,7 @@ def solve(
         loss="soft_l1",
         verbose=2,
         args=(param_names, sme, spec, uncs, mask),
-        kwargs={"bounds": bounds, "plot": plot, "fname": filename},
+        kwargs={"bounds": bounds, "fig": fig, "fname": filename},
         method="trf",
         max_nfev=kwargs.get("maxiter"),
     )
@@ -250,7 +335,7 @@ def solve(
     for i, name in enumerate(param_names):
         sme[name] = res.x[i]
 
-    # Create fitresults
+    # Update SME structure
     popt = res.x
     sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
     sme.pname = param_names
@@ -258,19 +343,13 @@ def solve(
     for i, name in enumerate(param_names):
         sme[name] = popt[i]
 
-    # Determine the covariance matrix of the fit
-    # Do Moore-Penrose inverse discarding zero singular values.
-    # _, s, VT = np.linalg.svd(res.jac, full_matrices=False)
-    # threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
-    # s = s[s > threshold]
-    # VT = VT[: s.size]
-    # pcov = np.dot(VT.T / s ** 2, VT)
-
-    # Alternative for determining the Covariance, with the exact same result
-    fisher = res.jac.T.dot(res.jac)  # hessian == fisher information matrix
+    # Determine the covariance
+    # hessian == fisher information matrix
+    fisher = res.jac.T.dot(res.jac)
     covar = np.linalg.pinv(fisher)
     sig = np.sqrt(covar.diagonal())
 
+    # Update fitresults
     sme.fitresults.clear()
     sme.fitresults.covar = covar
     sme.fitresults.grad = res.grad
@@ -301,25 +380,25 @@ def solve(
 
 def sme_func_atmo(sme):
     """
-    Purpose:
-     Return an atmosphere based on specification in an SME structure
+    Return an atmosphere based on specification in an SME structure
 
-    Inputs:
-     SME (structure) atmosphere specification
+    sme.atmo.method defines mode of action:
+        "grid"
+            interpolate on atmosphere grid
+        "embedded"
+            No change
+        "routine"
+            calls sme.atmo.source(sme, atmo)
 
-    Outputs:
-     ATMO (structure) atmosphere structure
-     [.WLSTD] (scalar) wavelength for continuum optical depth scale [A]
-     [.TAU] (vector[ndep]) optical depth scale,
-     [.RHOX] (vector[ndep]) mass column scale
-      .TEMP (vector[ndep]) temperature vs. depth
-      .XNE (vector[ndep]) electron number density vs. depth
-      .XNA (vector[ndep]) atomic number density vs. depth
-      .RHO (vector[ndep]) mass density vs. depth
+    Parameters
+    ---------
+        sme : SME_Struct
+            sme structure with sme.atmo = atmosphere specification
 
-    History:
-     2013-Sep-23 Valenti Extracted and adapted from sme_func.pro
-     2013-Dec-13 Valenti Bundle atmosphere variables in ATMO structure
+    Returns
+    -------
+    sme : SME_Struct
+        sme structure with updated sme.atmo
     """
 
     # Handle atmosphere grid or user routine.
@@ -345,7 +424,7 @@ def sme_func_atmo(sme):
         # atmo structure already extracted in sme_main
         pass
     else:
-        raise AttributeError("Source must be 'grid', 'routine', or 'file'")
+        raise AttributeError("Source must be 'grid', 'routine', or 'embedded'")
 
     sme.atmo = atmo
     return sme
@@ -419,7 +498,9 @@ def sme_func(
     passAtmosphere : bool, optional
         wether to pass the atmosphere to the c library (default: True)
     passNLTE : bool, optional
-        wether to pass NLTE departure coefficients to the c library (default:True)
+        wether to pass NLTE departure coefficients to the c library (default: True)
+    reuse_wavelength_grid : bool, optional
+        wether to use sme.wint as the output grid of the function or create a new grid (default: False)
 
     Returns
     -------
@@ -431,11 +512,13 @@ def sme_func(
     n_segments = sme.nseg
     nmu = np.size(sme.mu)
 
-    # fix sme input
+    # fix impossible input
     if "sob" not in sme:
         sme.vrad_flag = "none"
     if "sob" not in sme and sme.cscale_flag >= -1:
         sme.cscale_flag = -3
+    if "wint" not in sme and reuse_wavelength_grid:
+        reuse_wavelength_grid = False
 
     # Prepare arrays
     wran = sme.wran
@@ -478,7 +561,7 @@ def sme_func(
     for il in range(n_segments):
         # Input Wavelength range and Opacity
         vrad_seg = sme.vrad if np.size(sme.vrad) == 1 else sme.vrad[il]
-        wbeg, wend = get_wavelengthrange(sme.wran[il], vrad_seg, sme.vsini)
+        wbeg, wend = get_wavelengthrange(wran[il], vrad_seg, sme.vsini)
 
         sme_synth.InputWaveRange(wbeg, wend)
         sme_synth.Opacity()
