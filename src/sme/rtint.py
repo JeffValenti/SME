@@ -6,89 +6,101 @@ from scipy.ndimage.filters import convolve
 from .bezier import interpolate as spl_interp
 
 
-def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
+def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
     """
-    # NAME:
-    # 	RTINT
-    #
-    # PURPOSE:
-    # 	Produces a flux profile by integrating intensity profiles (sampled
-    # 	  at various mu angles) over the visible stellar surface.
-    #
-    # CALLING S==UENCE:
-    # 	flux = RTINT(mu, inten, deltav, vsini, vrt)
-    #
-    # INPUTS:
-    # 	MU: (vector(nmu)) cosi!= of the angle between the outward normal and
-    # 	  the li!= of sight for each intensity spectrum in INTEN.
-    # 	INTEN: (array(npts,nmu)) intensity spectra at specified values of MU.
-    # 	DELTAV: (scalar) velocity spacing between adjacent spectrum points
-    # 	  in INTEN (same units as VSINI and VRT).
-    # 	VSINI (scalar) maximum radial velocity, due to solid-body rotation.
-    # 	VRT (scalar) radial-tangential macroturbulence parameter, i.e.
-    #         np.sqrt(2) times the standard deviation of a Gaussian distribution
-    #         of turbulent velocities. The same distribution function describes
-    # 	  the radial motions of o!= compo!=nt and the tangential motions of
-    # 	  a second compo!=nt. Each compo!=nt covers half the stellar surface.
-    #         See _The Observation and Analysis of Stellar Photospheres_, Gray.
-    #
-    # INPUT KEYWORDS:
-    # 	OSAMP: (scalar) internal oversampling factor for convolutions. By
-    # 	  default convolutions are do!= using the input points (OSAMP=1),
-    # 	  but when OSAMP is set to higher integer values, the input spectra
-    # 	  are first oversampled by cubic spli!= interpolation.
-    #
-    # OUTPUTS:
-    # 	Function Value: (vector(npts)) Disk integrated flux profile.
-    #
-    # RESTRICTIONS:
-    # 	Intensity profiles are weighted by the fraction of the projected
-    # 	  stellar surface they represent, apportioning the area between
-    # 	  adjacent MU points ==ually. Additional weights (such as those
-    # 	  used in a Gauss-Legendre quadrature) can not meaningfully be
-    # 	  used in this scheme.  About twice as many points are r==uired
-    # 	  with this scheme to achieve the precision of Gauss-Legendre
-    # 	  quadrature.
-    # 	DELTAV, VSINI, and VRT must all be in the same units (e.g. km/s).
-    # 	If specified, OSAMP should be a positive integer.
-    #
-    # AUTHOR'S R==UEST:
-    # 	If you use this algorithm in work that you publish, please cite
-    # 	  Valenti & Anderson 1996, PASP, currently in preparation.
-    #
-    # MODIFICATION HISTORY:
-    # 	   Feb-88  GM	Created ANA version.
-    # 	13-Oct-92 JAV	Adapted from G. Marcy's ANA routi!= of the same name.
-    # 	03-Nov-93 JAV	Switched to annular convolution technique.
-    # 	12-Nov-93 JAV	Fixed bug. Intensity compo!=nts not added when vsini=0.
-    # 	14-Jun-94 JAV	Reformatted for "public" release. Heavily commented.
-    # 			Pass deltav instead of 2.998d5/deltav. Added osamp
-    # 			  keyword. Added rebinning logic at end of routi!=.
-    # 			Changed default osamp from 3 to 1.
-    # 	20-Feb-95 JAV	Added mu as an argument to handle arbitrary mu sampling
-    # 			  and remove ambiguity in intensity profile ordering.
-    # 			Interpret VTURB as np.sqrt(2)*sigma instead of just sigma.
-    # 			Replaced call_external with call to spl_{init|interp}.
-    # 	03-Apr-95 JAV	Multiply flux by !pi to give observed flux.
-    # 	24-Oct-95 JAV	Force "nmk" padding to be at least 3 pixels.
-    # 	18-Dec-95 JAV	Renamed from dskint() to rtint(). No longer make local
-    # 			  copy of intensities. Use radial-tangential instead
-    # 			  of isotropic Gaussian macroturbulence.
-    # 	26-Jan-99 JAV	For NMU=1 and VSINI=0, assume resolved solar surface#
-    # 			  apply R-T macro, but supress vsini broadening.
-    # 	01-Apr-99 GMH	Use annuli weights, rather than assuming ==ual area.
-    #       07-Mar-12 JAV   Force vsini and vmac to be scalars.
+    Produces a flux profile by integrating intensity profiles (sampled
+    at various mu angles) over the visible stellar surface.
+
+    Intensity profiles are weighted by the fraction of the projected
+    stellar surface they represent, apportioning the area between
+    adjacent MU points equally. Additional weights (such as those
+    used in a Gauss-Legendre quadrature) can not meaningfully be
+    used in this scheme.  About twice as many points are required
+    with this scheme to achieve the precision of Gauss-Legendre
+    quadrature.
+    DELTAV, VSINI, and VRT must all be in the same units (e.g. km/s).
+    If specified, OSAMP should be a positive integer.
+
+    Parameters:
+    ----------
+    mu : array(float) of size (nmu,)
+        cosine of the angle between the outward normal and
+        the line of sight for each intensity spectrum in INTEN.
+    inten : array(float) of size(nmu, npts)
+        intensity spectra at specified values of MU.
+    deltav : float
+        velocity spacing between adjacent spectrum points
+        in INTEN (same units as VSINI and VRT).
+    vsini : float
+        maximum radial velocity, due to solid-body rotation.
+    vrt : float
+        radial-tangential macroturbulence parameter, i.e.
+        np.sqrt(2) times the standard deviation of a Gaussian distribution
+        of turbulent velocities. The same distribution function describes
+        the radial motions of one component and the tangential motions of
+        a second component. Each component covers half the stellar surface.
+        See _The Observation and Analysis of Stellar Photospheres_, Gray.
+    osamp : int, optional
+        internal oversampling factor for convolutions.
+        By default convolutions are done using the input points (OSAMP=1),
+        but when OSAMP is set to higher integer values, the input spectra
+        are first oversampled by cubic spline interpolation.
+
+    Returns:
+    -------
+    value : array(float) of size (npts,)
+        Disk integrated flux profile.
+
+    Author's request:
+    ------------
+        If you use this algorithm in work that you publish, please cite
+        Valenti & Anderson 1996, PASP, currently in preparation.
+
+    History:
+    -----------
+    Feb-88  GM
+        Created ANA version.
+    13-Oct-92 JAV
+        Adapted from G. Marcy's ANA routi!= of the same name.
+    03-Nov-93 JAV
+        Switched to annular convolution technique.
+    12-Nov-93 JAV
+        Fixed bug. Intensity compo!=nts not added when vsini=0.
+    14-Jun-94 JAV
+        Reformatted for "public" release. Heavily commented.
+        Pass deltav instead of 2.998d5/deltav. Added osamp
+        keyword. Added rebinning logic at end of routine.
+        Changed default osamp from 3 to 1.
+    20-Feb-95 JAV
+        Added mu as an argument to handle arbitrary mu sampling
+        and remove ambiguity in intensity profile ordering.
+        Interpret VTURB as np.sqrt(2)*sigma instead of just sigma.
+        Replaced call_external with call to spl_{init|interp}.
+    03-Apr-95 JAV
+        Multiply flux by pi to give observed flux.
+    24-Oct-95 JAV
+        Force "nmk" padding to be at least 3 pixels.
+    18-Dec-95 JAV
+        Renamed from dskint() to rtint(). No longer make local
+        copy of intensities. Use radial-tangential instead
+        of isotropic Gaussian macroturbulence.
+    26-Jan-99 JAV
+        For NMU=1 and VSINI=0, assume resolved solar surface#
+        apply R-T macro, but supress vsini broadening.
+    01-Apr-99 GMH
+        Use annuli weights, rather than assuming ==ual area.
+    07-Mar-12 JAV
+        Force vsini and vmac to be scalars.
     """
 
     # Make local copies of various input variables, which will be altered below.
     # Force vsini and especially vmac to be scalars. Otherwise mu dependence fails.
 
-    if np.size(vsini_in) > 1:
-        vsini_in = vsini_in[0]
-    if np.size(vrt_in) > 1:
-        vrt_in = vrt_in[0]
-    vsini = float(vsini_in)  # ensure real number
-    vrt = abs(float(vrt_in))  # ensure real number
+    if np.size(vsini) > 1:
+        vsini = vsini[0]
+    if np.size(vrt) > 1:
+        vrt = vrt[0]
+    vrt = abs(vrt)  # ensure real number
 
     # Determine oversampling factor.
     os = round(np.clip(osamp, 1, None))  # force integral value > 1
@@ -108,33 +120,31 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
         vsini = 0  # ignore vsini if only 1 mu
 
     # Calculate projected radii for boundaries of disk integration annuli.  The n+1
-    #  boundaries are selected such that r(i+1) exactly bisects the area between
-    #  rmu(i) and rmu(i+1). The in!=rmost boundary, r(0) is set to 0 (disk center)
-    #  and the outermost boundary, r(nmu) is set to 1 (limb).
+    # boundaries are selected such that r(i+1) exactly bisects the area between
+    # rmu(i) and rmu(i+1). The in!=rmost boundary, r(0) is set to 0 (disk center)
+    # and the outermost boundary, r(nmu) is set to 1 (limb).
     if nmu > 1 or vsini != 0:  # really want disk integration
         r = np.sqrt(0.5 * (rmu[:-1] ** 2 + rmu[1:] ** 2))  # area midpoints between rmu
-        r = np.pad(
-            r, 1, mode="constant", constant_values=(0, 1)
-        )  # [0, *r, 1]  # bookend with center and limb
+        r = np.concatenate(([0], r, [1]))
 
         # Calculate integration weights for each disk integration annulus.  The weight
-        #  is just given by the relative area of each annulus, normalized such that
-        #  the sum of all weights is unity.  Weights for limb darkening are included
-        #  explicitly in the intensity profiles, so they aren't !=eded here.
+        # is just given by the relative area of each annulus, normalized such that
+        # the sum of all weights is unity.  Weights for limb darkening are included
+        # explicitly in the intensity profiles, so they aren't needed here.
         wt = r[1:] ** 2 - r[:-1] ** 2  # weights = relative areas
     else:
         wt = np.array([1.0])  # single mu value, full weight
 
-    # Ge!=rate index vectors for input and oversampled points. Note that the
-    #  oversampled indicies are carefully chosen such that every "os" finely
-    #  sampled points fit exactly into o!= input bin. This makes it simple to
-    #  "integrate" the fi!=ly sampled points at the end of the routine.
-    npts = inten.shape[1]  ## of points
+    # Generate index vectors for input and oversampled points. Note that the
+    # oversampled indicies are carefully chosen such that every "os" finely
+    # sampled points fit exactly into one input bin. This makes it simple to
+    # "integrate" the finely sampled points at the end of the routine.
+    npts = inten.shape[1]  # number of points
     xpix = np.arange(npts)  # point indices
-    nfine = int(os * npts)  ## of oversampled points
+    nfine = int(os * npts)  # number of oversampled points
     xfine = (0.5 / os) * (2 * np.arange(nfine) - os + 1)  # oversampled points indices
 
-    # Loop through annuli, constructing and convolving with rotation ker!=ls.
+    # Loop through annuli, constructing and convolving with rotation kernels.
     dummy = 0  # init call_ext() return value
     yfine = np.empty(nfine)  # init oversampled intensities
     flux = np.zeros(nfine)  # init flux vector
@@ -142,29 +152,29 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
 
         #  Use external cubic spline routine (adapted from Numerical Recipes) to make
         #  an oversampled version of the intensity profile for the current annulus.
-        #  IDL (tensed) spline is nice, but *VERY* slow. Note that the spline extends
-        #  (i.e. extrapolates) a fraction of a point beyond the original endpoints.
         ypix = inten[isort[imu]]  # extract intensity profile
-        if os == 1:  # true: no oversampling
-            yfine = ypix  # just copy (use) original profile
-        else:  # else: must oversample
-            yfine = spl_interp(xpix, ypix, xfine)  # spli!= onto fi!= wavelen>h scale
+        if os == 1:
+            # just copy (use) original profile
+            yfine = ypix
+        else:
+            # spline onto fine wavelength scale
+            yfine = spl_interp(xpix, ypix, xfine)
 
         # Construct the convolution kernel which describes the distribution of
-        #  rotational velocities present in the current annulus. The distribution has
-        #  been derived analytically for annuli of arbitrary thick!=ss in a rigidly
-        #  rotating star. The ker!=l is constructed in two pieces: o!= piece for
-        #  radial velocities less than the maximum velocity along the in!=r edge of
-        #  the annulus, and o!= piece for velocities greater than this limit.
-        if vsini > 0:  # true: nontrivial case
+        # rotational velocities present in the current annulus. The distribution has
+        # been derived analytically for annuli of arbitrary thickness in a rigidly
+        # rotating star. The kernel is constructed in two pieces: o!= piece for
+        # radial velocities less than the maximum velocity along the inner edge of
+        # the annulus, and one piece for velocities greater than this limit.
+        if vsini > 0:
+            # nontrivial case
             r1 = r[imu]  # inner edge of annulus
             r2 = r[imu + 1]  # outer edge of annulus
             dv = deltav / os  # oversampled velocity spacing
             maxv = vsini * r2  # maximum velocity in annulus
             nrk = 2 * int(maxv / dv) + 3  ## oversampled kernel point
-            v = dv * (
-                np.arange(nrk, dtype=float) - ((nrk - 1) / 2)
-            )  # velocity scale for kernel
+            # velocity scale for kernel
+            v = dv * (np.arange(nrk, dtype=float) - ((nrk - 1) / 2))
             rkern = np.zeros(nrk)  # init rotational kernel
             j1 = np.abs(v) < vsini * r1  # low velocity points
             rkern[j1] = np.sqrt((vsini * r2) ** 2 - v[j1] ** 2) - np.sqrt(
@@ -172,15 +182,15 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
             )  # generate distribution
 
             j2 = (np.abs(v) >= vsini * r1) & (np.abs(v) <= vsini * r2)
-            rkern[j2] = np.sqrt((vsini * r2) ** 2 - v[j2] ** 2)  # ge!=rate distribution
+            rkern[j2] = np.sqrt((vsini * r2) ** 2 - v[j2] ** 2)  # generate distribution
 
-            rkern = rkern / np.sum(rkern)  # normalize ker!=l
+            rkern = rkern / np.sum(rkern)  # normalize kernel
 
-            # Convolve the intensity profile with the rotational velocity ker!=l for this
-            #  annulus. Pad each end of the profile with as many points as are in the
-            #  convolution ker!=l. This reduces Fourier ringing. The convolution may also
-            #  be do!= with a routi!= called "externally" from IDL, which efficiently
-            #  shifts and adds.
+            # Convolve the intensity profile with the rotational velocity kernel for this
+            # annulus. Pad each end of the profile with as many points as are in the
+            # convolution kernel. This reduces Fourier ringing. The convolution may also
+            # be do!= with a routi!= called "externally" from IDL, which efficiently
+            # shifts and adds.
             if nrk > 3:
                 yfine = convolve(yfine, rkern, mode="nearest")
 
@@ -192,10 +202,10 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
 
         # Figure out how many points to use in macroturbulence kernel.
         nmk = np.clip(10 * sigma, None, (nfine - 3) / 2)
-        # extend ker!=l to 10 sigma
+        # extend kernel to 10 sigma
         nmk = int(np.clip(nmk, 3, None))  # pad with at least 3 pixels
 
-        # Construct radial macroturbulence ker!=l with a sigma of mu*VRT/np.sqrt(2).
+        # Construct radial macroturbulence kernel with a sigma of mu*VRT/np.sqrt(2).
         if sigr > 0:
             xarg = (np.arange(2 * nmk + 1) - nmk) / sigr  # expo!=ntial argument
             mrkern = np.exp(
@@ -206,7 +216,7 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
             mrkern = np.zeros(2 * nmk + 1)  # init with 0d0
             mrkern[nmk] = 1.0  # delta function
 
-        # Construct tangential ker!=l with a sigma of np.sqrt(1-mu**2)*VRT/np.sqrt(2).
+        # Construct tangential kernel with a sigma of np.sqrt(1-mu**2)*VRT/np.sqrt(2).
         if sigt > 0:
             xarg = (np.arange(2 * nmk + 1) - nmk) / sigt  # expo!=ntial argument
             mtkern = np.exp(
@@ -217,22 +227,21 @@ def rtint(mu, inten, deltav, vsini_in, vrt_in, osamp=1):
             mtkern = np.zeros(2 * nmk + 1)  # init with 0d0
             mtkern[nmk] = 1.0  # delta function
 
-        # Sum the radial and tangential compo!=nts, weighted by surface area.
-        area_r = 0.5  # assume ==ual areas
-        area_t = 0.5  # ar+at must ==ual 1
-        mkern = area_r * mrkern + area_t * mtkern  # add both compo!=nts
+        # Sum the radial and tangential components, weighted by surface area.
+        area_r = 0.5  # assume equal areas
+        area_t = 0.5  # ar+at must equal 1
+        mkern = area_r * mrkern + area_t * mtkern  # add both components
 
         # Convolve the total flux profiles, again padding the spectrum on both ends to
-        #  protect against Fourier ringing.
-        # ypad = np.pad(yfine, nmk, mode="edge")
+        # protect against Fourier ringing.
         yfine = convolve(yfine, mkern, mode="nearest")  # add the padding and convolve
-        # yfine = yfine[nmk : -nmk]  # trim away padding
 
         # Add contribution from current annulus to the running total.
         flux = flux + wt[imu] * yfine  # add profile to running total
 
     flux = np.reshape(flux, (npts, os))  # convert to an array
-    return np.pi * np.sum(flux, axis=1) / os  # sum, normalize, and return
+    flux = np.pi * np.sum(flux, axis=1) / os  # sum, normalize
+    return flux
 
 
 def rdpop(species, wave, e_low, model, pop_dir=None, eps_wave=4e-6, eps_energy=0.01):
@@ -240,12 +249,17 @@ def rdpop(species, wave, e_low, model, pop_dir=None, eps_wave=4e-6, eps_energy=0
     rdpop reads departure coefficients from one or several files and returns them
     as a 2 x ndepth array referring to the two levels involved in the transition and
     the number of depth points in model atmosphere.
-    HISTORY:
-    XX-XX-2012 NP wrote.
-    27-03-2013 NP added optional parameters for pop-file(s) directory replacing
-               explicit pop file name.
-    28-03-2013 NP added checks for energy of the lower level and ionization,
-                and optional parameters for the test criteria.
+
+    History:
+    --------
+    XX-XX-2012
+        NP wrote.
+    27-03-2013
+        NP added optional parameters for pop-file(s) directory replacing
+        explicit pop file name.
+    28-03-2013 NP
+        added checks for energy of the lower level and ionization,
+        and optional parameters for the test criteria.
     """
 
     sp = species.strip().replace(

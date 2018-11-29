@@ -5,12 +5,15 @@ Handle Bezier interpolation just like bezier_init and bezier_interp in IDL(SME)
 import numpy as np
 import scipy.interpolate
 
+
 def interpolate(x_old, y_old, x_new):
     return bezier_interp(x_old, y_old, x_new)
 
+
 def bezier_interp(x_old, y_old, x_new):
-    """Do Bezier spline interpolation
-    
+    """
+    Do Bezier spline interpolation
+
     Parameters
     ----------
     x_old : array
@@ -19,7 +22,7 @@ def bezier_interp(x_old, y_old, x_new):
         old y values
     x_new : array
         new x values
-    
+
     Returns
     -------
     y_new
@@ -32,7 +35,7 @@ def bezier_interp(x_old, y_old, x_new):
         y_old = np.ma.compressed(y_old)
 
     if np.ma.is_masked(x_new):
-        #x_new_tmp = np.ma.compressed(x_new)
+        # x_new_tmp = np.ma.compressed(x_new)
         mask = x_new.mask
     else:
         mask = None
@@ -46,6 +49,7 @@ def bezier_interp(x_old, y_old, x_new):
     if mask is not None:
         y_new = np.ma.masked_array(y_new, mask=mask)
     return y_new
+
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
