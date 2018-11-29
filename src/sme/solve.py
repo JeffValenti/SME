@@ -131,7 +131,7 @@ def residuals(
             except Exception as e:
                 print(f"Error during Plotting: {e.message}")
 
-    return spec
+    return resid
 
 
 def jacobian(param, *args, bounds=None, **kwargs):
