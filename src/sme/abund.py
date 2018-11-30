@@ -50,7 +50,7 @@ class Abund:
         if isinstance(elems, (list, tuple, np.ndarray)):
             elems = [self._elem_dict[el] if isinstance(el, str) else el for el in elems]
 
-        abund = self._pattern
+        abund = np.copy(self._pattern)
 
         try:
             return abund[elems]
@@ -225,6 +225,34 @@ class Abund:
         0.65, None, None, None, None, None, None, 0.06,
         None, -0.52, None, None, None, None, None, None,
         None,)
+
+    """ Array of atomic weights
+    From Loss, R. D. 2003, Pure Appl. Chem., 75, 1107, "Atomic Weights
+    of the Elements 2001". The isotopic composition of the Sun and stars
+    may differ from the terrestrial values listed here!
+    For radionuclides that appear only in Table 3, we have adopted the
+    atomic mass of the longest lived isotope, rounding to at most two
+    digits after the decimal point. These elements are: 43_Tc_98,
+    61_Pm_145, 85_At_210, 86_Rn_222, 87_Fr_223, 88_Ra_226, 89_Ac_227,
+    93_Np_237, 94_Pu_244, 95_Am_243, 96_Cm_247, 97_Bk_247, 98_Cf_251,
+    99_Es_252 """
+
+    _atom_weight = (
+        1.00794, 4.002602,
+        6.941, 9.012182, 10.811, 12.0107, 14.0067, 15.9994, 18.9984032, 20.1797,
+        22.989770, 24.3050, 26.981538, 28.0855, 30.973761, 32.065, 35.453, 39.948,
+        39.0983, 40.078, 44.955910, 47.867, 50.9415, 51.9961, 54.938049, 55.845,
+        58.933200, 58.6934, 63.546, 65.409, 69.723, 72.64, 74.92160, 78.96,
+        79.904, 83.798, 85.4678, 87.62, 88.90585, 91.224, 92.90638,
+        95.94, 97.91, 95.94, 101.07, 102.90550, 106.42, 107.8682, 112.411,
+        114.818, 118.710, 121.760, 127.60, 126.90447, 131.293, 132.90545, 137.327,
+        138.9055, 140.116, 140.90765, 144.24, 144.91, 150.36, 151.964, 157.25,
+        158.92534, 162.500, 164.93032, 167.259, 168.93421, 173.04, 174.967, 178.49,
+        180.9479, 183.84, 186.207, 190.23, 192.217, 195.078, 196.966, 200.59,
+        204.3833, 207.2, 208.98038, 209.99, 222.02, 223.02, 226.03, 227.03,
+        232.0381, 231.03588, 238.02891, 237.05, 244.06, 243.06, 247.07, 247.07,
+        251.08, 252.08,)
+
     # fmt: on
 
     @property
@@ -335,3 +363,9 @@ class Abund:
                     astr += "{:7.3f}".format(a[11 * i + j])
                 print(estr)
                 print(astr)
+
+    @staticmethod
+    def solar():
+        """ Return solar abundances """
+        solar = Abund(0, "asplund2009")
+        return solar

@@ -161,7 +161,7 @@ def read_grid(sme, elem):
     # as we are just going to linearly interpolate between the closest pointsanyway
     subgrid_size = sme.nlte.subgrid_size
     # subgrid_size[:] = 2
-    solar = Abund(0, "asplund2009")
+    solar = Abund.solar()
     relative_abundance = sme.abund[elem] - solar[elem]
     sme_values = relative_abundance, sme.teff, sme.logg, sme.monh
 
@@ -389,7 +389,7 @@ def interpolate_grid(sme, elem, nlte_grid):
     teff = sme.teff
     grav = sme.logg
     feh = sme.monh
-    solar = Abund(0, "asplund2009")
+    solar = Abund.solar()
     abund = sme.abund[elem] - solar[elem]
 
     # find target depth
