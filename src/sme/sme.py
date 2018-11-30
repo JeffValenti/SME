@@ -255,21 +255,58 @@ class NLTE(Collection):
             args.update(kwargs)
             kwargs = args
         # TODO: nlte_subgrid_size, should be a dictionary similar to
+        self.nlte_pro = kwargs.pop("sme_nlte", None)
         self.nlte_pro = "nlte"
-        self.nlte_elem_flags_byte = []
-        self.nlte_subgrid_size = []
+        elements = kwargs.pop("nlte_elem_flags", [])
+        elements = [Abund._elem[i] for i, j in enumerate(elements) if j == 1]
+        self.elements = elements
+        self.subgrid_size = kwargs.pop("nlte_subgrid_size", [2, 2, 2, 2])
 
-        nlte_grids = kwargs.pop("nlte_grids", None)
+        grids = kwargs.pop("nlte_grids", {})
 
-        if nlte_grids is not None and isinstance(nlte_grids, (list, np.ndarray)):
-            nlte_grids = {
+        if isinstance(grids, (list, np.ndarray)):
+            grids = {
                 Abund._elem[i]: name.decode()
-                for i, name in enumerate(nlte_grids)
+                for i, name in enumerate(grids)
                 if name != ""
             }
 
-        self.nlte_grids = nlte_grids
+        self.grids = grids
         super().__init__(**kwargs)
+
+    _default_grids = {
+        "Al": "marcs2012_Al2017.grd",
+        "Fe": "marcs2012_Fe2016.grd",
+        "Li": "marcs2012_Li.grd",
+        "Mg": "marcs2012_Mg2016.grd",
+        "Na": "marcs2012p_t1.0_Na.grd",
+        "O": "marcs2012_O2015.grd",
+        "Ba": "marcs2012p_t1.0_Ba.grd",
+        "Ca": "marcs2012p_t1.0_Ca.grd",
+        "Si": "marcs2012_SI2016.grd",
+        "Ti": "marcs2012s_t2.0_Ti.grd",
+    }
+
+    def set_nlte(self, element, grid=None):
+        """ add an element to the NLTE calculations """
+        if element in self.elements:
+            return
+
+        if grid is None:
+            # Use default grid
+            grid = NLTE._default_grids[element]
+            print(f"Using default grid {grid} for element {element}")
+
+        self.elements += [element]
+        self.grids[element] = grid
+
+    def remove_nlte(self, element):
+        """ remove an element from the NLTE calculations """
+        if element not in self.elements:
+            return
+
+        self.elements.remove(element)
+        self.grids.pop(element)
 
 
 class Version(Collection):

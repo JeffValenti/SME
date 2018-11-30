@@ -159,8 +159,8 @@ def read_grid(sme, elem):
     # array[4] = abund, teff, logg, feh
     # subgridsize > 2, doesn't really matter,
     # as we are just going to linearly interpolate between the closest pointsanyway
-    subgrid_size = sme.nlte.nlte_subgrid_size
-    subgrid_size[:] = 2
+    subgrid_size = sme.nlte.subgrid_size
+    # subgrid_size[:] = 2
     solar = Abund(0, "asplund2009")
     relative_abundance = sme.abund[elem] - solar[elem]
     sme_values = relative_abundance, sme.teff, sme.logg, sme.monh
@@ -168,7 +168,7 @@ def read_grid(sme, elem):
     # Get NLTE filename
     # TODO: external setting parameter for the location of the grids
     localdir = os.path.dirname(__file__)
-    fname = os.path.join(localdir, "nlte_grids", sme.nlte.nlte_grids[elem])
+    fname = os.path.join(localdir, "nlte_grids", sme.nlte.grids[elem])
 
     # Get data from file
     directory = DirectAccessFile(fname)
@@ -431,7 +431,7 @@ def interpolate_grid(sme, elem, nlte_grid):
 
 
 def nlte(sme, elem):
-    if sme.nlte.nlte_grids[elem] is None:
+    if sme.nlte.grids[elem] is None:
         raise ValueError(f"Element {elem} has not been prepared for NLTE")
 
     nlte_grid, linerefs, lineindices = read_grid(sme, elem)
@@ -454,10 +454,9 @@ def update_depcoeffs(sme):
     if not "nlte" in sme:
         return sme  # no NLTE is requested
     if (
-        "nlte_pro" not in sme.nlte
-        or "nlte_elem_flags" not in sme.nlte
-        or "nlte_grids" not in sme.nlte
-        or np.all(sme.nlte.nlte_grids == "")
+        "elements" not in sme.nlte
+        or "grids" not in sme.nlte
+        or np.all(sme.nlte.grids == "")
     ):
         # Silent fail to do LTE only.
         if not hasattr(update_depcoeffs, "first"):
@@ -486,8 +485,7 @@ def update_depcoeffs(sme):
 
     # TODO store results for later reuse
 
-    elements = sme.nlte.nlte_elem_flags
-    elements = [elem for elem, i in zip(Abund._elem, elements) if i == 1]
+    elements = sme.nlte.elements
 
     # Call each element to update and return its set of departure coefficients
     for elem in elements:
