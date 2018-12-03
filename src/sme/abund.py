@@ -171,7 +171,7 @@ class Abund:
 
     # fmt: off
     _elem = (
-        "H", "He", 
+        "H", "He",
         "Li", "Be", "B" , "C" , "N" , "O" , "F" , "Ne",
         "Na", "Mg", "Al", "Si", "P" , "S" , "Cl", "Ar",
         "K" , "Ca", "Sc", "Ti", "V" , "Cr", "Mn", "Fe",
@@ -181,7 +181,7 @@ class Abund:
         "Sb", "Te", "I" , "Xe", "Cs", "Ba", "La", "Ce",
         "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy",
         "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W" ,
-        "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", 
+        "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb",
         "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th",
         "Pa", "U" , "Np", "Pu", "Am", "Cm", "Bk", "Cf",
         "Es",)
@@ -226,6 +226,23 @@ class Abund:
         None, -0.52, None, None, None, None, None, None,
         None,)
 
+    """ Lodders 2003 (ApJ, 591, 1220) """
+    _lodders2003 = (
+        12, 10.899,
+        3.28, 1.41, 2.78, 8.39, 7.83, 8.69, 4.46, 7.87,
+        6.30, 7.55, 6.46, 7.54, 5.46, 7.19, 5.26, 6.55,
+        5.11, 6.34, 3.07, 4.92, 4.00, 5.65, 5.50, 7.47,
+        4.91, 6.22, 4.26, 4.63, 3.10, 3.62, 2.32, 3.36,
+        2.59, 3.28, 2.36, 2.91, 2.20, 2.60, 1.42, 1.96,
+        1.82, 1.11, 1.70, 1.23, 1.74, 0.80, 2.11, 1.06,
+        2.22, 1.54, 2.27, 1.10, 2.18, 1.18, 1.61, 0.75,
+        1.46, 0.95, 0.85, 1.06, 0.31, 1.13, 0.49, 0.95,
+        0.11, 0.94, 0.09, 0.77, -0.14, 0.65, 0.26, 1.37,
+        1.35, 1.67, 0.72, 1.16, 0.81, 2.05, 0.68, 0.09,
+        None, -0.49, None, None, None, None, None, None,
+        None, None, None, None, None, None, None, None,
+        None,)
+    
     """ Array of atomic weights
     From Loss, R. D. 2003, Pure Appl. Chem., 75, 1107, "Atomic Weights
     of the Elements 2001". The isotopic composition of the Sun and stars
@@ -282,12 +299,14 @@ class Abund:
             self._pattern = np.array(self._asplund2009, dtype=float)
         elif pattern_name.lower() == "grevesse2007":
             self._pattern = np.array(self._grevesse2007, dtype=float)
+        elif pattern_name.lower() == "lodders2003":
+            self._pattern = np.array(self._lodders2003, dtype=float)
         elif pattern_name.lower() == "empty":
             self._pattern = self.empty_pattern()
         else:
             raise ValueError(
                 "got abundance pattern name '{}',".format(pattern_name)
-                + " should be 'Asplund2009', 'Grevesse2007', 'empty'."
+                + " should be 'Asplund2009', 'Grevesse2007', 'Lodders2003', 'empty'."
             )
 
     def set_pattern_by_value(self, pattern, type):
