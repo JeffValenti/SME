@@ -3,16 +3,31 @@ import ipywidgets as widgets
 import numpy as np
 import plotly.offline as py
 import plotly.graph_objs as go
+from IPython import get_ipython
 from IPython.display import display
 
 from scipy.constants import speed_of_light
-
-clight = speed_of_light * 1e-3
-
 from .plot_colors import PlotColors
 
+clight = speed_of_light * 1e-3
 fmt = PlotColors()
-py.init_notebook_mode()
+
+
+def in_notebook():
+    try:
+        cfg = get_ipython().config
+        if cfg["IPKernelApp"]["parent_appname"] == "ipython-notebook":
+            return True
+        else:
+            return False
+    except NameError:
+        return False
+    except AttributeError:
+        return False
+
+
+if in_notebook():
+    py.init_notebook_mode()
 
 
 class FitPlot:
@@ -96,10 +111,11 @@ class FinalPlot:
         self.button_mask.observe(self.on_toggle_click, "value")
 
         self.widget = widgets.VBox([self.button_mask, self.button_save, self.fig])
-        display(self.widget)
+        if in_notebook():
+            display(self.widget)
 
-    def save(self, _=None):
-        py.plot(self.fig, filename="SME.html")
+    def save(self, _=None, filename="SME.html"):
+        py.plot(self.fig, filename=filename)
 
     def shift_mask(self, x, mask):
         for i in np.where(mask)[0]:
