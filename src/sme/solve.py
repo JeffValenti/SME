@@ -92,8 +92,17 @@ def residuals(
     for name, value in zip(names, param):
         sme[name] = value
 
+    # DEBUG
+    # print({n: v for n, v in zip(names, param)})
+
     # run spectral synthesis
-    sme2 = sme_func(sme, reuse_wavelength_grid=reuse_wavelength_grid)
+    try:
+        sme2 = sme_func(sme, reuse_wavelength_grid=reuse_wavelength_grid)
+    except ValueError as ve:
+        # Something went wrong (left the grid? Don't go there)
+        # If returned value is not finite it will be ignored?
+        print(ve)
+        return np.inf
 
     # Return values by reference to sme
     if update:
@@ -253,7 +262,7 @@ def get_bounds(param_names, atmo_file):
 def get_scale(param_names):
     """
     Returns scales for each parameter so that values are on order ~1
-    
+
     Parameters
     ----------
     param_names : list(str)
@@ -265,11 +274,8 @@ def get_scale(param_names):
         scales of the parameters in the same order as input array
     """
 
-    scales = {"teff": 1000, "logg": 1, "monh": 1}
-    scales.update({"vmic": 1, "vmac": 1, "vsini": 1})
-    scales.update({f"{el} abund": 1 for el in Abund._elem})
-
-    scales = [scales[name] for name in param_names]
+    scales = {"teff": 1000}
+    scales = [scales[name] if name in scales.keys() else 1 for name in param_names]
     return scales
 
 
