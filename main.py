@@ -1,22 +1,13 @@
+""" Main entry point for an SME script """
 import sys
-import os.path
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 import util
-
-from scipy.stats import norm
-from scipy.integrate import quad
-
-from src.gui import plot_pyplot, plot_jupyter
-
+from src.gui import plot_jupyter, plot_pyplot
 from src.sme import sme as SME
-from src.sme.abund import Abund
 from src.sme.vald import ValdFile
-
-from src.sme.solve import solve, sme_func
-
+from src.sme.solve import solve
 
 util.start_logging()
 

@@ -1,4 +1,7 @@
-
+"""
+Provide Plotting utility for Jupyter Notebook using Plot.ly
+Can also be used just for Plot.ly, which will then generated html files
+"""
 import ipywidgets as widgets
 import numpy as np
 import plotly.offline as py
@@ -39,10 +42,13 @@ class FitPlot:
         self.fig.add_scatter(x=wave, y=spec, name="Observation")
 
     def add_synth(self, wave, synth, iteration=0):
+        """ add a scatter plot to the plot """
         self.fig.add_scatter(x=wave, y=synth, name=f"Iteration {iteration}")
 
 
 class FinalPlot:
+    """ Big plot that covers everything """
+
     def __init__(self, sme, segment=0):
         self.sme = sme
         self.wave, self.spec, self.mask = sme.spectrum(return_mask=True)
@@ -113,9 +119,12 @@ class FinalPlot:
             display(self.widget)
 
     def save(self, _=None, filename="SME.html"):
+        """ save plot to html file """
         py.plot(self.fig, filename=filename)
 
     def shift_mask(self, x, mask):
+        """ shift the edges of the mask to the bottom of the plot,
+        so that the mask creates a shape with straight edges """
         for i in np.where(mask)[0]:
             try:
                 if mask[i] == mask[i + 1]:
@@ -128,6 +137,7 @@ class FinalPlot:
         return x
 
     def create_mask_points(self, x, y, mask, value):
+        """ Creates the points that define the outer edge of the mask region """
         mask = mask != value
         x = np.copy(x)
         y = np.copy(y)
@@ -136,6 +146,7 @@ class FinalPlot:
         return x, y
 
     def create_plot(self, current_segment):
+        """ Generate the plot componentes (lines and masks) and line labels """
         seg = self.segment
         annotations = {}
         visible = []
@@ -271,13 +282,8 @@ class FinalPlot:
 
         return data, annotations
 
-    def update(self):
-        # Show only that one segment
-        with self.fig.batch_update():
-            for i, v in enumerate(self.visible):
-                self.fig.data[i].visible = v == self.segment
-
     def selection_fn(self, trace, points, selector):
+        """ Callback for area selection, changes the mask depending on selected mode """
         self.segment = self.fig.layout["sliders"][0].active
         seg = self.segment
 
@@ -324,6 +330,7 @@ class FinalPlot:
                 self.fig.data[m].y = y
 
     def on_toggle_click(self, change):
+        """ Callback for mask mode selector buttons """
         change = change["new"]
         if change == "Good":
             self.set_mask_good()
@@ -335,22 +342,28 @@ class FinalPlot:
             self.set_mask_line()
 
     def set_mask_good(self, _=None):
+        """ Called by clicking the 'good' mask button """
         self.set_mask_type("good")
 
     def set_mask_bad(self, _=None):
+        """ Called by clicking the 'bad' mask button """
         self.set_mask_type("bad")
 
     def set_mask_line(self, _=None):
+        """ Called by clicking the 'line' mask button """
         self.set_mask_type("line")
 
     def set_mask_continuum(self, _=None):
+        """ Called by clicking the 'continuum' mask button """
         self.set_mask_type("cont")
 
     def set_mask_type(self, type):
+        """ Changes the mask change mode and chooses the current interactive tool """
         self.mask_type = type
         self.fig.layout["dragmode"] = "select"
 
     def add(self, x, y, label=""):
+        """ adds a scatter plot to the image, and makes the necessary changes in the slider """
         self.fig.add_scatter(x=x, y=y, name=label, legendgroup=10)
         self.visible += [-1]
 

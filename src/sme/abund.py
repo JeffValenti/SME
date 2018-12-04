@@ -255,7 +255,7 @@ class Abund:
         None, -0.49, None, None, None, None, None, None,
         None, None, None, None, None, None, None, None,
         None,)
-    
+
     """ Array of atomic weights
     From Loss, R. D. 2003, Pure Appl. Chem., 75, 1107, "Atomic Weights
     of the Elements 2001". The isotopic composition of the Sun and stars
@@ -294,6 +294,7 @@ class Abund:
 
     @property
     def monh(self):
+        """ Metallicity """
         return self._monh
 
     @monh.setter
@@ -305,7 +306,12 @@ class Abund:
 
     @property
     def pattern(self):
-        return self._pattern
+        """
+        Abundance pattern
+        returns a copy to protect the data
+        Use update_pattern if you want to change the values
+        """
+        return np.copy(self._pattern)
 
     def set_pattern_by_name(self, pattern_name):
         if pattern_name.lower() == "asplund2009":

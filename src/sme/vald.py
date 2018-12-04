@@ -3,7 +3,6 @@ import logging
 from io import StringIO
 
 import numpy as np
-import numpy.lib.recfunctions
 import pandas as pd
 
 from .abund import Abund
@@ -24,22 +23,27 @@ class ValdFile:
 
     @property
     def filename(self):
+        """ Source filename """
         return self._filename
 
     @property
     def n(self):
+        """ number of spectral lines """
         return self._nlines
 
     @property
     def linelist(self):
+        """ LineList data """
         return self._linelist
 
     @property
     def valdatmo(self):
+        """ Atmopshere used by Vald """
         return self._valdatmo
 
     @property
     def abund(self):
+        """ Elemental abundances used by Vald """
         return self._abund
 
     def read(self, filename):

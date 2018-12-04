@@ -6,10 +6,7 @@ And also determines the best fit parameters
 import os.path
 import warnings
 import logging
-import builtins
-from itertools import combinations, product
 
-import matplotlib.pyplot as plt
 
 import numpy as np
 from scipy.io import readsav
@@ -20,12 +17,11 @@ from scipy.interpolate import interp1d
 
 from . import broadening, sme_synth
 from .interpolate_atmosphere import interp_atmo_grid
-from .rtint import rdpop, rtint
+from .rtint import rtint
 from .sme_crvmatch import match_rv_continuum
 from .nlte import update_depcoeffs
 from .abund import Abund
 from .atmo import krz_file
-from .resamp import resamp
 
 
 clight = speed_of_light * 1e-3  # km/s
@@ -41,7 +37,7 @@ def residuals(
     isJacobian=False,
     fname="sme.npy",
     fig=None,
-    **kwargs,
+    **_,
 ):
     """
     Calculates the synthetic spectrum with sme_func and
@@ -138,7 +134,7 @@ def residuals(
     return resid
 
 
-def jacobian(param, *args, bounds=None, **kwargs):
+def jacobian(param, *args, bounds=None, **_):
     """
     Approximate the jacobian numerically
     The calculation is the same as "3-point"
@@ -158,7 +154,8 @@ def jacobian(param, *args, bounds=None, **kwargs):
 
 
 def linelist_errors(wave, spec, linelist):
-    # make linelist errors
+    """ make linelist errors, based on the effective wavelength range
+    of each line and the uncertainty value of that line """
     rel_error = linelist.error
     width = sme_synth.GetLineRange(len(linelist))
 
@@ -174,6 +171,8 @@ def linelist_errors(wave, spec, linelist):
 
 
 def determine_continuum(wave, spec, linelist, deg=2):
+    """ Use the effective wavelength range of the lines,
+    to find wavelength points that should be unaffected by lines """
     width = sme_synth.GetLineRange(len(linelist))
     mask = np.full(wave.size, True)
 
@@ -217,10 +216,10 @@ def get_bounds(param_names, atmo_file):
 
     # Create bounds based on atmosphere grid
     if "teff" in param_names or "logg" in param_names or "monh" in param_names:
-        dir = os.path.dirname(__file__)
+        folder = os.path.dirname(__file__)
         atmo_file = os.path.basename(atmo_file)
         _, ext = os.path.splitext(atmo_file)
-        atmo_file = os.path.join(dir, "atmospheres", atmo_file)
+        atmo_file = os.path.join(folder, "atmospheres", atmo_file)
 
         if ext == ".sav":
             atmo_grid = readsav(atmo_file)["atmo_grid"]

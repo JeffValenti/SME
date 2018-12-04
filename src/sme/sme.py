@@ -92,14 +92,17 @@ class Iliffe_vector:
 
     @property
     def size(self):
+        """ number of segments in vector """
         return self.__idx__[-1]
 
     @property
     def shape(self):
+        """ number of segments, array with size of each segment """
         return len(self.__idx__) - 1, np.diff(self.__idx__)
 
     @property
     def dtype(self):
+        """ numpy datatype of the values """
         return self.__values__.dtype
 
     # @property
@@ -107,9 +110,14 @@ class Iliffe_vector:
     # return self.__values__.flat
 
     def flatten(self):
+        """
+        Returns a new(!) flattened version of the vector
+        Values are identical to __values__ iff the segments don't overlap
+        """
         return np.concatenate([self[i] for i in range(len(self))])
 
     def copy(self):
+        """ Create a copy of the current vector """
         idx = np.copy(self.__idx__)
         values = np.copy(self.__values__)
         return Iliffe_vector(None, index=idx, values=values)
@@ -151,6 +159,7 @@ class Collection(object):
 
     @property
     def names(self):
+        """ Names of all not None parameters in the Collection """
         exclude = ["names", "dtype"]
         exclude += [
             s[0]
@@ -170,6 +179,7 @@ class Collection(object):
         return dummy
 
     def get(self, key, alt=None):
+        """ Get a value with name key if it exists and is not None or alt if not """
         if key in self:
             return self[key]
         else:
@@ -191,6 +201,7 @@ class Param(Collection):
         self.vsini = None
         self.vmac = None
         self.vmic = None
+        self._abund = None
 
         # TODO: in the SME structure, the abundance values are in a different scheme than described in Abund
         # Helium is also fractional (sometimes?)
@@ -225,6 +236,7 @@ class Param(Collection):
 
     @property
     def abund(self):
+        """ Elemental abundances """
         return self._abund
 
     @abund.setter
@@ -240,6 +252,7 @@ class Param(Collection):
             )
 
     def set_abund(self, monh, abpatt, abtype):
+        """ Set elemental abundances together with the metallicity """
         self._abund = Abund(monh, abpatt, abtype)
 
 
@@ -251,7 +264,6 @@ class NLTE(Collection):
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
             args.update(kwargs)
             kwargs = args
-        # TODO: nlte_subgrid_size, should be a dictionary similar to
         self.nlte_pro = kwargs.pop("sme_nlte", None)
         self.nlte_pro = "nlte"
         elements = kwargs.pop("nlte_elem_flags", [])
@@ -292,7 +304,7 @@ class NLTE(Collection):
         if grid is None:
             # Use default grid
             grid = NLTE._default_grids[element]
-            logging.info(f"Using default grid {grid} for element {element}")
+            logging.info("Using default grid %s for element %s", grid, element)
 
         self.elements += [element]
         self.grids[element] = grid
@@ -346,6 +358,13 @@ class Version(Collection):
 
 
 class Atmo(Param):
+    """
+    Atmosphere structure
+    contains all information to describe the solar atmosphere
+    i.e. temperature etc in the different layers
+    as well as stellar parameters and abundances
+    """
+
     def __init__(self, *args, **kwargs):
         if len(args) != 0 and args[0] is not None:
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
@@ -367,6 +386,13 @@ class Atmo(Param):
 
 
 class Fitresults(Collection):
+    """
+    Fitresults collection for all parameters
+    that are created by the SME fit
+    i.e. parameter uncertainties
+    and Goodness of Fit parameters
+    """
+
     def __init__(self, **kwargs):
         self.maxiter = kwargs.pop("maxiter", None)
         self.chirat = kwargs.pop("chirat", None)
@@ -395,6 +421,12 @@ class Fitresults(Collection):
 
 
 class SME_Struct(Param):
+    """
+    The all important SME structure
+    contains all information necessary to create a synthetic spectrum
+    and perform a fit to existing data
+    """
+
     def __init__(self, atmo=None, nlte=None, idlver=None, **kwargs):
         # Meta information
         self.version = None
@@ -487,10 +519,13 @@ class SME_Struct(Param):
 
     @property
     def atomic(self):
+        """ Atomic linelist data, usually passed to the C library
+        Use sme.linelist instead for other purposes """
         return self.linelist.atomic
 
     @property
     def species(self):
+        """ Names of the species of each spectral line """
         return self.linelist.species
 
     def __getitem__(self, key):

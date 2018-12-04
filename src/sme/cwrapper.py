@@ -1,12 +1,28 @@
-import os.path
-import numpy as np
-import ctypes as ct
+"""
+Wrapper for IDL style C libary code
 
-import sys
+IDL Style:
+{return_type} {func_name}(int argv, void *argc[]);
+
+with argv = number of parameters
+and argc = list of pointers to those parameters
+"""
+import ctypes as ct
+import os.path
 import platform
+import sys
+
+import numpy as np
 
 
 class IDL_String(ct.Structure):
+    """
+    IDL strings are actually structures like this one,
+    for correct passing of values we need to define this structure
+    NOTE: the definition might have changed with IDL version,
+    so make sure to use the same one as in the C code
+    """
+
     _fields_ = [("slen", ct.c_int), ("stype", ct.c_ushort), ("s", ct.c_char_p)]
 
 
@@ -20,6 +36,12 @@ def get_lib_name():
 
 
 def get_typenames(arg):
+    """
+    Return internal typename based on the type of the argument
+    strings -> "unicode"
+    floating points -> "double"
+    integers -> "int"
+    """
     if isinstance(arg, (str, np.str)) or (
         isinstance(arg, np.ndarray) and np.issubdtype(arg.dtype, np.str)
     ):
@@ -37,6 +59,11 @@ def get_typenames(arg):
 
 
 def get_dtype(type):
+    """
+    Get the ctypes dtype appropiate for the passed type string
+    type : str
+        One of 'int', 'short', 'long', 'float', 'double', 'unicode' or one of the first letters 'islfdu'
+    """
     if type in ["i", "int", int]:
         return ct.c_int
     elif type in ["s", "short"]:

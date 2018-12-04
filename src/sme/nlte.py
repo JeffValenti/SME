@@ -53,6 +53,7 @@ class DirectAccessFile:
         return value
 
     def get(self, key, alt=None):
+        """ get field from file """
         idx = np.where(self.key == key)[0]
 
         if idx.size == 0:
@@ -72,7 +73,7 @@ class DirectAccessFile:
     def idl_typecode(i):
         """
         relevant IDL typecodes and corresponding Numpy Codes
-        Most specify a byte size, but not all 
+        Most specify a byte size, but not all
         """
         typecode = {
             0: "V",
@@ -264,8 +265,8 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     These are stored in line3_term_low and line3_term_upp.
     The array line3_extra has dimensions [3 x nline3s]. It stores J_low, E_up, J_up
     The sme.atomic array stores:
-        0) atomic number, 1) ionization state, 2) wavelength (in A), 
-        3) excitation energy of lower level (in eV), 4) log(gf), 5) radiative, 
+        0) atomic number, 1) ionization state, 2) wavelength (in A),
+        3) excitation energy of lower level (in eV), 4) log(gf), 5) radiative,
         6) Stark, 7) and van der Waals damping parameters
 
     Parameters:
@@ -434,6 +435,7 @@ def interpolate_grid(sme, elem, nlte_grid):
 
 
 def nlte(sme, elem):
+    """ Read and interpolate the NLTE grid for the current element and parameters """
     if sme.nlte.grids[elem] is None:
         raise ValueError(f"Element {elem} has not been prepared for NLTE")
 

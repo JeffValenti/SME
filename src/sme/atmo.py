@@ -1,3 +1,4 @@
+""" Handles reading of atmopshere (grid) files """
 import os
 
 import numpy as np
@@ -37,6 +38,7 @@ class sav_file(np.recarray):
         self.file = getattr(self, "file", None)
 
     def load(self, filename, reload=False):
+        """ load a new file if necessary """
         changed = filename != self.file
         if reload or changed:
             new = sav_file(filename)
@@ -46,12 +48,15 @@ class sav_file(np.recarray):
 
 
 class krz_file(Atmo):
+    """ Read .krz atmosphere files """
+
     def __init__(self, filename):
         self.source = filename
         self.method = "embedded"
         self.load(filename)
 
     def load(self, filename):
+        """ Load data from disk """
         # TODO: this only works for some krz files
         # 1..2 lines header
         # 3 line opacity

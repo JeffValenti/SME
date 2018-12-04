@@ -1,9 +1,10 @@
+""" Module to interpolate atmospheres on an atmopshere grid """
+
+
 import itertools
-import os
 
 import numpy as np
-from scipy.interpolate import griddata, interp1d, interpn
-from scipy.io import readsav
+from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
 
 from .atmo import sav_file
@@ -205,10 +206,6 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
     constraints = np.zeros(npar)
     constraints[0] = 0.5  # weakly constrain the horizontal shift
 
-    # Fix the remaining two parameters.
-    parinfo = np.zeros(npar, dtype=[("fixed", int)]).view(np.recarray)
-    parinfo[2:4].fixed = 1
-
     # For first pass ('TEMP'), use all available depth points.
     ngd = ndep1
     igd = np.arange(ngd)
@@ -233,7 +230,6 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
 
         # Fit the second atmosphere onto the first by finding the best horizontal
         # shift in depth2 and the best vertical shift in vect2.
-        functargs = {"y1": vect1, "ndep": ngd}
         pars[ivtag], _ = interp_atmo_constrained(
             depth1[igd],
             vect1[igd],
@@ -241,7 +237,9 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
             ipar,
             x2=depth2,
             y2=vect2,
-            functargs=functargs,
+            y1=vect1,
+            ndep=ngd,
+            constraints=constraints,
         )
 
         # After first pass ('TEMP'), adjust initial guess and restrict depth points.
@@ -250,8 +248,7 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
             igd = np.where(
                 (depth1 >= min(depth2) + ipar[0]) & (depth1 <= max(depth2) + ipar[0])
             )[0]
-            ndg = igd.size
-            if ngd < 2:
+            if igd.size < 2:
                 raise ValueError("unstable shift in temperature")
 
     ##
@@ -290,13 +287,9 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
         # Identify output depth points that require extrapolation of atmosphere vector.
         depth1f = depth1 - par[0] * frac
         depth2f = depth2 + par[0] * (1 - frac)
-        x1min = np.min(depth1f)
         x1max = np.max(depth1f)
-        x2min = np.min(depth2f)
         x2max = np.max(depth2f)
-        ilo = (depth < x1min) | (depth < x2min)
         iup = (depth > x1max) | (depth > x2max)
-        nlo = np.count_nonzero(ilo)
         nup = np.count_nonzero(iup)
         checkup = (nup >= 1) and abs(frac - 0.5) <= 0.5 and ndep1 == ndep2
 
@@ -354,92 +347,7 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
     return atmo
 
 
-def interpolate_atmosphere_grid(
-    atmo_grid, teff, logg, monh, interp, depth, atmo_in, atmogridfile
-):
-    # Select nearest points used for linear interpolation
-    # Should be 8 (corners of a cube)
-    M = np.unique(atmo_grid.teff)
-    M0, M1 = np.min(M[M >= teff]), np.max(M[M <= teff])
-    M_grid = (atmo_grid.teff == M0) | (atmo_grid.teff == M1)
-
-    M = np.unique(atmo_grid.logg)
-    M0, M1 = np.min(M[M >= logg]), np.max(M[M <= logg])
-    M_grid = M_grid & ((atmo_grid.logg == M0) | (atmo_grid.logg == M1))
-
-    M = np.unique(atmo_grid.monh)
-    M0, M1 = np.min(M[M >= monh]), np.max(M[M <= monh])
-    M_grid = M_grid & ((atmo_grid.monh == M0) | (atmo_grid.monh == M1))
-
-    atmo_grid = atmo_grid[M_grid]
-    # # assert len(atmo_grid) == 8
-
-    points = np.array((atmo_grid.teff, atmo_grid.logg, atmo_grid.monh)).T
-    xi = np.array((teff, logg, monh))
-
-    # Interpolate depth scale
-    depth_grid = np.array(atmo_grid[interp].tolist())
-    depth_grid = np.log10(depth_grid)
-    depth_scale = griddata(points, depth_grid, xi, rescale=True)[0]
-
-    assert not np.any(np.isnan(depth_scale))
-
-    # Interpolate values which vary with depth
-    var = ["TEMP", "XNE", "XNA", "RHO", "RHOX", "TAU"]
-    values = [np.array(atmo_grid[v].tolist()) for v in var]
-    values = np.stack(values).swapaxes(0, 1)
-
-    # Interpolate onto common depth scale
-    # fill values outside the range with nearest point inside the range
-    for i in range(values.shape[0]):
-        for j in range(len(var)):
-            interpolator = interp1d(
-                depth_grid[i],
-                values[i, j],
-                kind="cubic",
-                bounds_error=False,
-                fill_value=tuple(values[i, j][[0, -1]]),
-            )
-            values[i, j, :] = interpolator(depth_scale)
-
-    depth_data = griddata(points, values, xi, rescale=True)[0]
-
-    # Interpolate other values
-    lonh = griddata(points, atmo_grid.lonh, xi, rescale=True)[0]
-    vturb = griddata(points, atmo_grid.vturb, xi, rescale=True)[0]
-
-    opflag = np.array(atmo_grid.opflag.tolist())
-    opflag = griddata(points, opflag, xi, rescale=True)[0]
-
-    abund = np.array(atmo_grid.abund.tolist())
-    abund = griddata(points, abund, xi, rescale=True)[0]
-    abund[1] = np.log10(abund[1])  # Convert Helium into log scale as is expected
-
-    atmo = Atmo(teff=teff, logg=logg, monh=monh)
-    atmo["RHOX"] = depth_data[4]
-    atmo["TAU"] = depth_data[5]
-    atmo["temp"] = depth_data[0]
-    atmo["xne"] = depth_data[1]
-    atmo["xna"] = depth_data[2]
-    atmo["rho"] = depth_data[3]
-    atmo["lonh"] = lonh
-    atmo.set_abund(monh, abund, "sme")
-
-    atmo.depth = depth
-    atmo.interp = interp
-    atmo.geom = atmo_in.geom
-    atmo.vmac = atmo_in.vmac
-    atmo.vmic = atmo_in.vmic
-    atmo.vsini = atmo_in.vsini
-    atmo.method = "grid"
-    atmo.source = atmogridfile
-    atmo.opflag = opflag
-    atmo.vturb = vturb
-
-    return atmo
-
-
-def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=False):
+def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
     """
     General routine to interpolate in 3D grid of model atmospheres
 
@@ -897,41 +805,42 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
     return atmo
 
 
-def interp_atmo_constrained(x, y, err, par, x2, y2, functargs={}):
+def interp_atmo_constrained(x, y, err, par, x2, y2, constraints=None, **kwargs):
     """
     Apply a constraint on each parameter, to have it approach zero
 
     Input
     -------
-    x_in : array[n]
+    x : array[n]
         x data
-    y_in : array[n]
+    y : array[n]
         y data
-    err_in : array[n]
+    err : array[n]
         errors on y data
-    par : list[3]
+    par : list[4]
         initial guess for fit parameters - see interp_atmo_func
-    constraints : array[nconstraint], optional
-        error vector for constrained parameters.
-        Use errors of 0 for unconstrained parameters.
-    functargs : dict
+    x2 : array
+        independent variable for tabulated input function
+    y2 : array
+        dependent variable for tabulated input function
+    ** kwargs : dict
         passes keyword arguments to interp_atmo_func
-        x2 : array
-        y2 : array
+
         ndep : int
             number of depth points in supplied quantities
-    Other input parameters are forwarded to interp_atmo_func, below, via mpfitfun.
+        constraints : array[nconstraint], optional
+            error vector for constrained parameters.
+            Use errors of 0 for unconstrained parameters.
     """
 
-    # Evaluate
+    # Evaluate with fixed paramters 3, 4
     # ret = mpfitfun("interp_atmo_func", x, y, err, par, extra=extra, yfit=yfit)
-    # fix paramters 3, 4
-    func = lambda x, *p: interp_atmo_func(x, [*p, *par[2:]], x2, y2, **functargs)
+    # TODO: what does the constrain do?
+    func = lambda x, *p: interp_atmo_func(x, [*p, *par[2:]], x2, y2, **kwargs)
     popt, _ = curve_fit(func, x, y, sigma=err, p0=par[:2])
 
     ret = [*popt, *par[2:]]
     yfit = func(x, *popt)
-
     return ret, yfit
 
 

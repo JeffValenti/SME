@@ -1,10 +1,11 @@
-from io import StringIO
+"""
+Handles abstract LineList data
+Implementation of a specific source (e.g. Vald) should be in its own file
 
+Uses a pandas dataframe under the hood to handle the data
+"""
 import numpy as np
-import numpy.lib.recfunctions
 import pandas as pd
-
-from .abund import Abund
 
 
 class FileError(Exception):
@@ -34,7 +35,7 @@ class LineList:
             "E": 0.7,
         }
         error = np.ones(len(error_flags), dtype=float)
-        for i, (flag, value) in enumerate(zip(error_flags, values)):
+        for i, (flag, _) in enumerate(zip(error_flags, values)):
             if flag[0] in [" ", "_", "P"]:
                 # undefined or predicted
                 error[i] = 0.5
@@ -154,12 +155,16 @@ class LineList:
 
     @property
     def species(self):
+        """ Species name of each line """
         return self._lines["species"].values
 
     @property
     def lulande(self):
+        """ Lower and Upper Lande factors """
         if self.lineformat == "short":
-            raise AttributeError("LuLande is only available in the long line format")
+            raise AttributeError(
+                "Lower and Upper Lande Factors are only available in the long line format"
+            )
 
             # additional data arrays for sme
         names = ["lande_lower", "lande_upper"]
@@ -167,6 +172,7 @@ class LineList:
 
     @property
     def extra(self):
+        """ additional line level information for NLTE calculation """
         if self.lineformat == "short":
             raise AttributeError("Extra is only available in the long line format")
         names = ["j_lo", "e_upp", "j_up"]
@@ -174,6 +180,7 @@ class LineList:
 
     @property
     def atomic(self):
+        """ Data array passed to C library, should only be used for this purpose """
         names = [
             "atom_number",
             "ionization",
@@ -187,6 +194,7 @@ class LineList:
         # Select fields
         return self._lines[names].values
 
-    def sort(self, field, ascending=True):
+    def sort(self, field="wlcent", ascending=True):
+        """ sort the linelist 'in place' """
         self._lines = self._lines.sort_values(by=field, ascending=ascending)
         return self._lines
