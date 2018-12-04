@@ -398,7 +398,7 @@ def solve(
         tmp = np.abs(res.fun) / np.clip(np.median(np.abs(res.jac[:, i])), 1e-5, None)
         sme.fitresults.punc2[param_names[i]] = np.median(tmp)
 
-    sme.nlte.flags = sme_synth.GetNLTEflags(sme.linelist)
+    sme.nlte.flags = sme_synth.GetNLTEflags(len(sme.linelist))
 
     if filename is not None:
         sme.save(filename)
