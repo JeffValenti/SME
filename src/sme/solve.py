@@ -11,7 +11,7 @@ import logging
 import numpy as np
 from scipy.io import readsav
 from scipy.constants import speed_of_light
-from scipy.optimize import least_squares
+from scipy.optimize import least_squares, OptimizeWarning
 from scipy.optimize._numdiff import approx_derivative
 from scipy.interpolate import interp1d
 
@@ -25,6 +25,7 @@ from .atmo import krz_file
 
 
 clight = speed_of_light * 1e-3  # km/s
+warnings.filterwarnings("ignore", category=OptimizeWarning)
 
 
 def residuals(
