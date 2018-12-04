@@ -1,9 +1,18 @@
+""" Wrapper for sme_synth.so C library """
 import os
+import warnings
+
 import numpy as np
+
 from .cwrapper import idl_call_external
 
 
 class check_error:
+    """
+    decorator that raises an error if a
+    function does not return b"", i.e. empty bytes string
+    """
+
     def __init__(self, func):
         self.func = func
         self.name = func.__name__
@@ -22,6 +31,7 @@ def SMELibraryVersion():
 
 @check_error
 def SetLibraryPath():
+    """ Set the path to the library """
     prefix = os.path.dirname(__file__)
     libpath = os.path.join(prefix, "dll") + os.sep
     return idl_call_external("SetLibraryPath", libpath)
@@ -227,7 +237,7 @@ def Ionization(ion=0):
     """
     error = idl_call_external("Ionization", ion, type="short")
     if error != b"":
-        print(f"{__name__} (call external): {error.decode()}")
+        warnings.warn(f"{__name__} (call external): {error.decode()}")
 
 
 def GetDensity():
@@ -371,7 +381,20 @@ def GetLineOpacity(wave, nmu):
 
 
 def GetLineRange(nlines):
-    """ """
+    """ Get the effective wavelength range for each line
+    i.e. the wavelengths for which the line has significant impact
+    
+    Parameters
+    ----------
+    nlines : int
+        number of lines in the linelist
+    
+    Returns
+    -------
+    linerange : array of size (nlines, 2)
+        lower and upper wavelength for each spectral line
+    """
+
     linerange = np.zeros((nlines, 2))
 
     error = idl_call_external("GetLineRange", linerange, nlines, type=("double", "int"))
@@ -390,6 +413,21 @@ def InputNLTE(bmat, lineindices):
 
 
 def GetNLTE(nrhox, line):
+    """ Get the NLTE departure coefficients as stored in the C library
+
+    Parameters
+    ----------
+    nrhox : int
+        number of layers
+    line : int
+        requested line index, i.e. between 0 and number of lines
+
+    Returns
+    -------
+    bmat : array of size (2, nrhox)
+        departure coefficients for the given line index
+    """
+
     bmat = np.full((2, nrhox), -1., dtype=float)
     error = idl_call_external(
         "GetDepartureCoefficients", bmat, nrhox, line, type=("double", "int", "int")
@@ -405,9 +443,20 @@ def ResetNLTE():
     return idl_call_external("ResetDepartureCoefficients")
 
 
-def GetNLTEflags(linelist):
-    """ """
-    nlines = len(linelist)
+def GetNLTEflags(nlines):
+    """Get an array that tells us which lines have been used with NLTE correction
+
+    Parameters
+    ----------
+    linelist : int
+        number of lines
+
+    Returns
+    -------
+    nlte_flags : array(bool) of size (nlines,)
+        True if line was used with NLTE, False if line is only LTE
+    """
+
     nlte_flags = np.zeros(nlines, dtype=np.int16)
 
     error = idl_call_external("GetNLTEflags", nlte_flags, nlines, type=("short", "int"))
