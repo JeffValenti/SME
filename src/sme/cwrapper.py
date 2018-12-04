@@ -124,7 +124,7 @@ def idl_call_external(funcname, *args, restype="str", type=None):
                 )
                 staying_alive[i] = args[i].ctypes
                 args[i] = staying_alive[i].data
-            elif np.issubdtype(args[i].dtype, np.str):
+            elif np.issubdtype(args[i].dtype, np.str_):
                 args[i] = args[i].astype("S")
                 staying_alive.append(args[i])
                 length = [len(a) for a in args[i]]
@@ -168,7 +168,7 @@ def idl_call_external(funcname, *args, restype="str", type=None):
                 if original[i] is staying_alive[i]._arr:
                     continue
                 arr = staying_alive[i]._arr
-            elif np.issubdtype(original[i].dtype, np.str):
+            elif np.issubdtype(original[i].dtype, np.str_):
                 # For string arrays recover the strings from the IDL_String structure
                 arr = [s.s.decode() for s in staying_alive[i]]
             else:
