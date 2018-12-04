@@ -1,23 +1,16 @@
-import os
 import itertools
+import os
+
 import numpy as np
-from scipy.interpolate import interp1d, interpn, griddata
-from scipy.optimize import curve_fit
+from scipy.interpolate import griddata, interp1d, interpn
 from scipy.io import readsav
+from scipy.optimize import curve_fit
+
+from .atmo import sav_file
 from .sme import Atmo
 
 
-def interp_atmo_pair(
-    atmo1,
-    atmo2,
-    frac,
-    interpvar="RHOX",
-    itop=0,
-    atmop=None,
-    verbose=0,
-    plot=0,
-    old=False,
-):
+def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
     """
     Interpolate between two model atmospheres, accounting for shifts in
     the mass column density or optical depth scale.
@@ -123,11 +116,6 @@ def interp_atmo_pair(
     min_drhox = 0.01  # minimum fractional step in rhox
     min_dtau = 0.01  # minimum fractional step in tau
 
-    # Parameters used to annotate plots.
-    # tgm1 = np.array([atmo1.teff, atmo1.logg, atmo1.monh])
-    # tgm2 = np.array([atmo2.teff, atmo2.logg, atmo2.monh])
-    # tgm = (1 - frac) * tgm1 + frac * tgm2
-
     ##
     ## Select interpolation variable (RHOX vs. TAU)
     ##
@@ -218,7 +206,6 @@ def interp_atmo_pair(
     constraints[0] = 0.5  # weakly constrain the horizontal shift
 
     # Fix the remaining two parameters.
-    # parinfo = replicate({fixed:0}, npar)
     parinfo = np.zeros(npar, dtype=[("fixed", int)]).view(np.recarray)
     parinfo[2:4].fixed = 1
 
@@ -246,37 +233,16 @@ def interp_atmo_pair(
 
         # Fit the second atmosphere onto the first by finding the best horizontal
         # shift in depth2 and the best vertical shift in vect2.
-        functargs = {"x2": depth2, "y2": vect2, "y1": vect1, "ndep": ngd, "ipar": ipar}
-        pars[ivtag], vect21 = interp_atmo_constrained(
+        functargs = {"y1": vect1, "ndep": ngd}
+        pars[ivtag], _ = interp_atmo_constrained(
             depth1[igd],
             vect1[igd],
             err1[igd],
             ipar,
+            x2=depth2,
+            y2=vect2,
             functargs=functargs,
-            parinfo=parinfo,
-            constraints=constraints,
-            # nprint=(trace >= 1),
-            # quiet=True,
         )
-
-        # Make a diagnostic plot.
-        if abs(plot) >= 4:
-            pass
-            # xr = minmax([depth1, depth2])
-            # yr = minmax([vect1, vect2, vect21])
-            # fmt = '(2(a,":",i0,",",f0.2,",",f0.2,"  "),a)'
-            # tit = string(form=fmt, 'red', tgm1, 'blue', tgm2, 'white:blue->red')
-            # plot, depth1, vect1, xr=xr, xsty=3, yr=yr, ysty=3, /nodata $
-            #     , xtit='log '+interpvar, ytit='log '+vtag, tit=tit, chars=1.4
-            # colors
-            # oplot, depth1, vect1, co=c24(2)
-            # oplot, depth2, vect2, co=c24(4)
-            # oplot, depth1, vect21
-            # x = !x.crange[0] + 0.05*(!x.crange[1]-!x.crange[0])
-            # y = !y.crange[0] + [0.92,0.85]*(!y.crange[1]-!y.crange[0])
-            # xyouts, x, y[0], size=1.4, 'xshift='+string(pars[0,ivtag],'(f+0.3)')
-            # xyouts, x, y[1], size=1.4, 'yshift='+string(pars[1,ivtag],'(f+0.3)')
-            # if plot lt 0 then junk = get_kbrd(1)
 
         # After first pass ('TEMP'), adjust initial guess and restrict depth points.
         if ivtag == 0:
@@ -306,8 +272,6 @@ def interp_atmo_pair(
     elif ndep1 < ndep2:
         depth = depth1f
     ndep = len(depth)
-    xmin = np.min(depth)
-    xmax = np.max(depth)
 
     ##
     ## Interpolate input atmosphere vectors onto output depth scale.
@@ -334,7 +298,6 @@ def interp_atmo_pair(
         iup = (depth > x1max) | (depth > x2max)
         nlo = np.count_nonzero(ilo)
         nup = np.count_nonzero(iup)
-        checklo = (nlo >= 1) and abs(frac - 0.5) <= 0.5 and ndep1 == ndep2
         checkup = (nup >= 1) and abs(frac - 0.5) <= 0.5 and ndep1 == ndep2
 
         # Combine shifted vect1 and vect2 structures to get output vect.
@@ -349,30 +312,6 @@ def interp_atmo_pair(
         ):
             vect[iup] = vect2f[iup] if x1max < x2max else vect1f[iup]
         vects[ivtag] = vect
-
-        # Make diagnostic plot.
-        if abs(plot) >= 1:
-            pass
-            # if keyword_set(atmop) then depthp = alog10(atmop[0,*])
-            # if keyword_set(old) then deptho = (1-frac)*depth1 + frac*depth2
-            # xr = minmax([depth1, depth2, depth])
-            # yr = minmax([vect1, vect2, vect])
-            # fmt = '(3(a,":",i0,",",f0.3,",",f0.3,"  "))'
-            # tit = string(form=fmt, 'red', tgm1, 'white', tgm, 'blue', tgm2)
-            # plot, depth, vect, xr=xr, xsty=3, yr=yr, ysty=3, /nodata $
-            #     , xtit='log '+interpvar, ytit='log '+vtag, tit=tit, chars=1.4
-            # oplot, depth, vect1f, co=c24(2), li=2
-            # oplot, depth, vect2f, co=c24(4), li=2
-            # oplot, depth1, vect1, co=c24(2)
-            # oplot, depth2, vect2, co=c24(4)
-            # oplot, depth, vect
-            # if keyword_set(old) :
-            #     vecto = (1-frac) * interpol(vect1, depth1, deptho) $
-            #         + frac * interpol(vect2, depth2, deptho)
-            #     oplot, deptho, vecto, co=c24(6)
-            # endif
-            # if keyword_set(atmop) then oplot, depthp, alog10(atmop[1,*]), co=c24(4)
-            # if plot lt 0 then junk = get_kbrd(1)
 
     ##
     ## Construct output structure
@@ -397,7 +336,6 @@ def interp_atmo_pair(
 
         # Scalar quantities that should be interpolated using frac.
         if tag in stags:
-            value1 = atmo1[tag]
             if tag in tags2:
                 value = (1 - frac) * atmo1[tag] + frac * atmo2[tag]
             else:
@@ -414,43 +352,6 @@ def interp_atmo_pair(
         # Create or add to output structure.
         atmo[tag] = value
     return atmo
-
-
-def load_atmopshere_grid(filename, reload=False):
-    self = interp_atmo_grid
-    prefix = os.path.dirname(__file__)
-
-    # TODO: remove reliance on atmo_in parameter
-    # Load values from previous call if they exist
-    if hasattr(self, "atmo_grid"):
-        atmo_grid = self.atmo_grid
-        atmo_grid_maxdep = self.atmo_grid_maxdep
-        atmo_grid_natmo = self.atmo_grid_natmo
-        atmo_grid_vers = self.atmo_grid_vers
-        atmo_grid_file = self.atmo_grid_file
-    else:
-        atmo_grid = None
-        atmo_grid_file = None
-
-    # Load atmosphere grid from disk, if not already loaded.
-    changed = filename is None or filename != atmo_grid_file
-    if changed or atmo_grid is None or reload:
-        path = os.path.join(prefix, "atmospheres", filename)
-        krz2 = readsav(path)
-        atmo_grid = krz2["atmo_grid"]
-        atmo_grid_maxdep = krz2["atmo_grid_maxdep"]
-        atmo_grid_natmo = krz2["atmo_grid_natmo"]
-        atmo_grid_vers = krz2["atmo_grid_vers"]
-        atmo_grid_file = filename
-
-        # Keep values around for next run
-        setattr(self, "atmo_grid", atmo_grid)
-        setattr(self, "atmo_grid_maxdep", atmo_grid_maxdep)
-        setattr(self, "atmo_grid_natmo", atmo_grid_natmo)
-        setattr(self, "atmo_grid_vers", atmo_grid_vers)
-        setattr(self, "atmo_grid_file", atmo_grid_file)
-
-    return atmo_grid
 
 
 def interpolate_atmosphere_grid(
@@ -637,7 +538,11 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
     itop = 1  # index of top depth to use on rhox scale
 
     atmo_file = atmo_in.source
-    atmo_grid = load_atmopshere_grid(atmo_file, reload=reload)
+    self = interp_atmo_grid
+    if not hasattr(self, "atmo_grid"):
+        self.atmo_grid = atmo_grid = sav_file(atmo_file)
+    else:
+        self.atmo_grid = atmo_grid = self.atmo_grid.load(atmo_file, reload=reload)
 
     # Get field names in ATMO and ATMO_GRID structures.
     atags = [s.upper() for s in atmo_in.names]
@@ -886,8 +791,6 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         mfrac,
         interpvar=interp,
         itop=itop,
-        verbose=verbose - 1,
-        plot=plot and (mfrac != 0),
     )
     m0 = atmo_grid[icor[0, 1, 0]].monh
     m1 = atmo_grid[icor[1, 1, 0]].monh
@@ -898,8 +801,6 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         mfrac,
         interpvar=interp,
         itop=itop,
-        verbose=verbose - 1,
-        plot=plot and (mfrac != 0),
     )
     m0 = atmo_grid[icor[0, 0, 1]].monh
     m1 = atmo_grid[icor[1, 0, 1]].monh
@@ -910,8 +811,6 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         mfrac,
         interpvar=interp,
         itop=itop,
-        verbose=verbose - 1,
-        plot=plot and (mfrac != 0),
     )
     m0 = atmo_grid[icor[0, 1, 1]].monh
     m1 = atmo_grid[icor[1, 1, 1]].monh
@@ -922,8 +821,6 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
         mfrac,
         interpvar=interp,
         itop=itop,
-        verbose=verbose - 1,
-        plot=plot and (mfrac != 0),
     )
 
     # Interpolate 4 models at the desired [M/H] to create 2 models at desired
@@ -931,39 +828,18 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
     g0 = atmo00.logg
     g1 = atmo01.logg
     gfrac = 0 if g0 == g1 else (logg - g0) / (g1 - g0)
-    atmo0 = interp_atmo_pair(
-        atmo00,
-        atmo01,
-        gfrac,
-        interpvar=interp,
-        verbose=verbose - 1,
-        plot=plot and (gfrac != 0),
-    )
+    atmo0 = interp_atmo_pair(atmo00, atmo01, gfrac, interpvar=interp)
     g0 = atmo10.logg
     g1 = atmo11.logg
     gfrac = 0 if g0 == g1 else (logg - g0) / (g1 - g0)
-    atmo1 = interp_atmo_pair(
-        atmo10,
-        atmo11,
-        gfrac,
-        interpvar=interp,
-        verbose=verbose - 1,
-        plot=plot and (gfrac != 0),
-    )
+    atmo1 = interp_atmo_pair(atmo10, atmo11, gfrac, interpvar=interp)
 
     # Interpolate the 2 models at desired [M/H] and log(g) to create final
     # model at desired [M/H], log(g), and Teff
     t0 = atmo0.teff
     t1 = atmo1.teff
     tfrac = 0 if t0 == t1 else (Teff - t0) / (t1 - t0)
-    krz = interp_atmo_pair(
-        atmo0,
-        atmo1,
-        tfrac,
-        interpvar=interp,
-        verbose=verbose - 1,
-        plot=plot * (tfrac != 0),
-    )
+    krz = interp_atmo_pair(atmo0, atmo1, tfrac, interpvar=interp)
     ktags = krz.names
 
     # Set model type to depth variable that should be used for radiative transfer.
@@ -1021,9 +897,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, plot=False, reload=Fa
     return atmo
 
 
-def interp_atmo_constrained(
-    x_in, y_in, err_in, par, constraints=None, functargs={}, parinfo=()
-):
+def interp_atmo_constrained(x, y, err, par, x2, y2, functargs={}):
     """
     Apply a constraint on each parameter, to have it approach zero
 
@@ -1041,7 +915,7 @@ def interp_atmo_constrained(
         error vector for constrained parameters.
         Use errors of 0 for unconstrained parameters.
     functargs : dict
-        passes keyword arguments to interp_atmo_func 
+        passes keyword arguments to interp_atmo_func
         x2 : array
         y2 : array
         ndep : int
@@ -1049,36 +923,14 @@ def interp_atmo_constrained(
     Other input parameters are forwarded to interp_atmo_func, below, via mpfitfun.
     """
 
-    # TODO: What do the constraints even do?
-    if constraints is not None:
-        i = constraints != 0
-        nconstraints = np.count_nonzero(i)
-    else:
-        nconstraints = 0
-    if nconstraints > 0:
-        x = np.concatenate([x_in, np.zeros(nconstraints)])
-        y = np.concatenate([y_in, np.zeros(nconstraints)])
-        err = np.concatenate([err_in, constraints[i]])
-    else:
-        x = x_in
-        y = y_in
-        err = err_in
-
-    x2 = functargs.pop("x2")
-    y2 = functargs.pop("y2")
-    _ = functargs.pop("ipar")
-
     # Evaluate
     # ret = mpfitfun("interp_atmo_func", x, y, err, par, extra=extra, yfit=yfit)
     # fix paramters 3, 4
     func = lambda x, *p: interp_atmo_func(x, [*p, *par[2:]], x2, y2, **functargs)
     popt, _ = curve_fit(func, x, y, sigma=err, p0=par[:2])
 
-    ret = [
-        *popt,
-        *par[2:],
-    ]  # 0.059245137   -0.0018499977       0.0000000       0.0000000
-    yfit = func(x_in, *popt)
+    ret = [*popt, *par[2:]]
+    yfit = func(x, *popt)
 
     return ret, yfit
 
@@ -1142,7 +994,4 @@ def interp_atmo_func(x1, par, x2, y2, ndep=None, y1=None):
 
     # Set all leftover values to zero
     y[ndep:] = 0
-    # Append information for constrained fits:
-    # y1 = np.concatenate([y1, par - kwargs["ipar"]])
-    # Return function value.
     return y

@@ -1,5 +1,48 @@
+import os
+
 import numpy as np
+from scipy.io import readsav
+
 from .sme import Atmo
+
+
+class sav_file(np.recarray):
+    """ IDL savefile atmosphere grid """
+
+    def __new__(cls, filename):
+        prefix = os.path.dirname(__file__)
+        path = os.path.join(prefix, "atmospheres", filename)
+        krz2 = readsav(path)
+        atmo_grid = krz2["atmo_grid"]
+        atmo_grid_maxdep = krz2["atmo_grid_maxdep"]
+        atmo_grid_natmo = krz2["atmo_grid_natmo"]
+        atmo_grid_vers = krz2["atmo_grid_vers"]
+        atmo_grid_file = filename
+
+        # Keep values around for next run
+        data = atmo_grid.view(cls)
+        data.maxdep = atmo_grid_maxdep
+        data.natmo = atmo_grid_natmo
+        data.vers = atmo_grid_vers
+        data.file = atmo_grid_file
+
+        return data
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self.maxdep = getattr(self, "maxdep", None)
+        self.natmo = getattr(self, "natmo", None)
+        self.vers = getattr(self, "vers", None)
+        self.file = getattr(self, "file", None)
+
+    def load(self, filename, reload=False):
+        changed = filename != self.file
+        if reload or changed:
+            new = sav_file(filename)
+        else:
+            new = self
+        return new
 
 
 class krz_file(Atmo):
@@ -23,8 +66,8 @@ class krz_file(Atmo):
             abund = [file.readline() for _ in range(10)]
             table = file.readlines()
 
-        # Parse header
-        # vturb
+            # Parse header
+            # vturb
         i = header1.find("VTURB")
         self.vturb = float(header1[i + 5 : i + 9])
         # L/H, metalicity
@@ -41,8 +84,7 @@ class krz_file(Atmo):
         j = header2.find("MODEL TYPE=", i + k)
         self.logg = float(header2[i + k : j])
 
-        i = j
-        k = len("MODEL TYPE=")
+        i, k = j, len("MODEL TYPE=")
         j = header2.find("WLSTD=", i + k)
         model_type_key = {0: "rhox", 1: "tau", 3: "sph"}
         self.model_type = int(header2[i + k : j])
