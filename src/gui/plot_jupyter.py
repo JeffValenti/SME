@@ -3,30 +3,28 @@ import ipywidgets as widgets
 import numpy as np
 import plotly.offline as py
 import plotly.graph_objs as go
-from IPython import get_ipython
-from IPython.display import display
 
 from scipy.constants import speed_of_light
 from .plot_colors import PlotColors
 
+try:
+    from IPython import get_ipython
+    from IPython.display import display
+
+    cfg = get_ipython().config
+    if cfg["IPKernelApp"]["parent_appname"] == "ipython-notebook":
+        in_notebook = True
+    else:
+        in_notebook = False
+except AttributeError:
+    in_notebook = False
+except ImportError:
+    in_notebook = False
+
 clight = speed_of_light * 1e-3
 fmt = PlotColors()
 
-
-def in_notebook():
-    try:
-        cfg = get_ipython().config
-        if cfg["IPKernelApp"]["parent_appname"] == "ipython-notebook":
-            return True
-        else:
-            return False
-    except NameError:
-        return False
-    except AttributeError:
-        return False
-
-
-if in_notebook():
+if in_notebook:
     py.init_notebook_mode()
 
 
@@ -111,7 +109,7 @@ class FinalPlot:
         self.button_mask.observe(self.on_toggle_click, "value")
 
         self.widget = widgets.VBox([self.button_mask, self.button_save, self.fig])
-        if in_notebook():
+        if in_notebook:
             display(self.widget)
 
     def save(self, _=None, filename="SME.html"):

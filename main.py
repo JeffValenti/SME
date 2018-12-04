@@ -1,44 +1,38 @@
 import sys
 import os.path
-import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.gui import plot_pyplot
+import util
+
+from scipy.stats import norm
+from scipy.integrate import quad
+
+from src.gui import plot_pyplot, plot_jupyter
 
 from src.sme import sme as SME
+from src.sme.abund import Abund
 from src.sme.vald import ValdFile
 
-from src.sme.solve import solve
+from src.sme.solve import solve, sme_func
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="SME solve")
-    parser.add_argument(
-        "sme",
-        type=str,
-        help="an sme input file (either in IDL sav or Numpy npy format)",
-    )
-    parser.add_argument("--vald", type=str, default=None, help="the vald linelist file")
-    parser.add_argument(
-        "fitparameters",
-        type=str,
-        nargs="*",
-        help="Parameters to fit, abundances are 'Mg Abund'",
-    )
-    args = parser.parse_args()
-    return args.sme, args.vald, args.fitparameters
+util.start_logging()
 
-
+# Get input files
 if len(sys.argv) > 1:
-    in_file, vald_file, fitparameters = parse_args()
+    in_file, vald_file, fitparameters = util.parse_args()
 else:
     # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
-    in_file = "./sun_6440_grid.out"
+    in_file = "./sun_6440_grid.inp"
+    # in_file = "./wasp117_short.inp"
+    # in_file = "./wasp117.npy"
+    # vald_file = "sun.lin"
     vald_file = None
     fitparameters = []
 
+# Load files
 sme = SME.SME_Struct.load(in_file)
 
 if vald_file is not None:
@@ -53,29 +47,20 @@ if len(fitparameters) == 0:
     else:
         fitparameters = ["teff", "logg", "monh"]
 
-print("teff", sme.teff)
-print("logg", sme.logg)
-print("monh", sme.monh)
+fitparameters = ["teff", "logg", "monh"]  # , "Y Abund", "Mg Abund"]
+target = "sun"
+# sme.nlte.set_nlte("Ca")
 
-# TODO: DEBUG
-fitparameters = ["teff", "logg", "monh"]
-sme = solve(sme, fitparameters)
+# Start SME solver
+sme = solve(sme, fitparameters, filename=f"{target}.npy")
 
-
-# # Plot results
-mask_plot = plot_pyplot.MaskPlot(sme)
-input("Wait a second...")
-
-# # Update mask
-# # new_mask = mask_plot.mask
-# # sme.mob = new_mask.__values__
 
 # # Calculate stellar age based on abundances
-# x = sme.abund["Y"] / sme.abund["Mg"]
-# sx = (sme.fitresults.punc["Y Abund"] / sme.abund["Mg"]) ** 2 + (
-#     sme.fitresults.punc["Mg Abund"] * sme.abund["Y"] / sme.abund["Mg"] ** 2
-# ) ** 2
-# sx = np.sqrt(sx)
+# solar = Abund.solar()
+# y, mg = sme.abund["Y"], sme.abund["Mg"]
+# sy, smg = sme.fitresults.punc["Y abund"], sme.fitresults.punc["Mg abund"]
+# x = y - mg - (solar["Y"] - solar["Mg"])
+# sx = np.sqrt(sy ** 2 + smg ** 2)
 
 # # Values from paper
 # a = 0.175
@@ -84,5 +69,25 @@ input("Wait a second...")
 # sb = 0.0019
 # age = (x - a) / b
 # sigma_age = 1 / b * np.sqrt(sx ** 2 + sa ** 2 + ((x - a) / b) ** 2 * sb ** 2)
+# sigma_age = abs(sigma_age)
+# print(f"Age {age:.3f} +- {sigma_age:.3f} Gyr")
 
-# print("Age = %.3f Gyr", age)
+# p = np.linspace(0, 10, 1000)
+# g = norm.pdf(p, loc=age, scale=sigma_age)
+# # Rescale to area = 1
+# area = np.sum(g * np.gradient(p))  # Cheap integral
+# g *= 1 / area
+# plt.plot(p, g)
+# plt.xlabel("Age [Gyr]")
+# plt.ylabel("Probability")
+# plt.show()
+
+# # Plot results
+fig = plot_jupyter.FinalPlot(sme)
+fig.save(filename=f"{target}.html")
+
+plt.plot(sme.wave, sme.sob - sme.smod)
+plt.show()
+
+mask_plot = plot_pyplot.MaskPlot(sme)
+input("Wait a second...")
