@@ -6,6 +6,9 @@ reads and interpolates departure coefficients from library files
 import itertools
 import os.path
 
+import logging
+import warnings
+
 import numpy as np
 from scipy import interpolate
 
@@ -211,7 +214,7 @@ def read_grid(sme, elem):
         if model != "":
             bgrid[:, :, i, j, k, l] = directory[model]
         else:
-            print(
+            warnings.warn(
                 f"Missing Model for element {elem}: T={teff[t[j]]}, logg={grav[g[k]]}, feh={feh[f[l]]}, abund={xfe[x[i]]:.2f}"
             )
     mask = np.zeros(depth.shape[:-1], bool)
@@ -300,7 +303,7 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     lineindices = np.asarray(sme.species, "U")
     lineindices = np.char.startswith(lineindices, elem)
     if not np.any(lineindices):
-        print(f"No NLTE transitions for {elem} found")
+        warnings.warn(f"No NLTE transitions for {elem} found")
         return None, None, None, None
 
     sme_species = sme.species[lineindices]
@@ -445,47 +448,45 @@ def nlte(sme, elem):
 # TODO should this be in sme_synth instead ?
 def update_depcoeffs(sme):
     """ pass departure coefficients to C library """
-    # # Common block keeps track of the currently stored subgrid,
-    # #  i.e. that which surrounds a previously used grid points,
-    # #  as well as the current matrix of departure coefficients.
 
-    ## Reset departure coefficients from any previous call, to ensure LTE as default:
+    # Only print "Running in NLTE" message on the first run each time
+    self = update_depcoeffs
+    if not hasattr(self, "first"):
+        setattr(self, "first", True)
 
-    if not "nlte" in sme:
-        return sme  # no NLTE is requested
     if (
-        "elements" not in sme.nlte
+        not "nlte" in sme
+        or "elements" not in sme.nlte
         or "grids" not in sme.nlte
         or np.all(sme.nlte.grids == "")
+        or np.size(sme.nlte.elements) == 0
     ):
-        # Silent fail to do LTE only.
-        if not hasattr(update_depcoeffs, "first"):
-            setattr(update_depcoeffs, "first", False)
-            print("Running in LTE")
-        return sme  # no NLTE routine available
+        # No NLTE to do
+        if self.first:
+            self.first = False
+            logging.info("Running in LTE")
+        return sme
     if sme.linelist.lineformat == "short":
-        if not hasattr(update_depcoeffs, "first"):
-            setattr(update_depcoeffs, "first", False)
-            print("---")
-            print("NLTE line formation was requested, but VALD3 long-format linedata ")
-            print(
-                "are required in order to relate line terms to NLTE level corrections!"
+        if self.first:
+            self.first = False
+            warnings.warn(
+                "NLTE line formation was requested, but VALD3 long-format linedata\n"
+                "are required in order to relate line terms to NLTE level corrections!\n"
+                "Line formation will proceed under LTE."
             )
-            print("Line formation will proceed under LTE.")
-        return sme  # no NLTE line data available
+        return sme
+
+    # TODO store results for later reuse
 
     # Reset the departure coefficient every time, just to be sure
     # It would be more efficient to just Update the values, but this doesn't take long
     sme_synth.ResetNLTE()
 
-    # Only print "Running in NLTE" message on the first run each time
-    if not hasattr(update_depcoeffs, "first"):
-        setattr(update_depcoeffs, "first", False)
-        print("Running in NLTE")
-
-    # TODO store results for later reuse
-
     elements = sme.nlte.elements
+
+    if self.first:
+        self.first = False
+        logging.info("Running in NLTE: %s", ", ".join(elements))
 
     # Call each element to update and return its set of departure coefficients
     for elem in elements:

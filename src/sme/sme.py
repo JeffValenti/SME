@@ -5,6 +5,7 @@ Notably all SME objects will be Collections, which can accessed both by attribut
 
 
 import sys
+import logging
 import os.path
 import platform
 import inspect
@@ -205,7 +206,13 @@ class Param(Collection):
         super().__init__(**kwargs)
 
     def __str__(self):
-        return self.summary()
+        text = (
+            f"Teff={self.teff} K, logg={self.logg:.3f}, "
+            f"[M/H]={self.monh:.3f}, Vmic={self.vmic:.2f}, "
+            f"Vmac={self.vmac:.2f}, Vsini={self.vsini:.1f}\n"
+        )
+        text += str(self._abund)
+        return text
 
     @property
     def monh(self):
@@ -234,16 +241,6 @@ class Param(Collection):
 
     def set_abund(self, monh, abpatt, abtype):
         self._abund = Abund(monh, abpatt, abtype)
-
-    def summary(self):
-        fmt = "Teff={} K,  logg={:.3f},  [M/H]={:.3f},  Vmic={:.2f},  Vmac={:.2f},  Vsini={:.1f}"
-        print(
-            fmt.format(
-                self.teff, self.logg, self.monh, self.vmic, self.vmac, self.vsini
-            )
-        )
-        self._abund.print()
-        return ""
 
 
 class NLTE(Collection):
@@ -295,7 +292,7 @@ class NLTE(Collection):
         if grid is None:
             # Use default grid
             grid = NLTE._default_grids[element]
-            print(f"Using default grid {grid} for element {element}")
+            logging.info(f"Using default grid {grid} for element {element}")
 
         self.elements += [element]
         self.grids[element] = grid
@@ -528,6 +525,7 @@ class SME_Struct(Param):
     @staticmethod
     def load(filename="sme.npy"):
         """ load SME data from disk """
+        logging.info("Loading SME file %s", filename)
         _, ext = os.path.splitext(filename)
         if ext == ".npy":
             s = np.load(filename)
@@ -539,8 +537,10 @@ class SME_Struct(Param):
 
         return s
 
-    def save(self, filename="sme.npy"):
+    def save(self, filename="sme.npy", verbose=True):
         """ save SME data to disk """
+        if verbose:
+            logging.info("Saving SME structure %s", filename)
         np.save(filename, self)
 
     def spectrum(

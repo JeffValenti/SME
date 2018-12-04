@@ -1,4 +1,7 @@
-import math
+"""
+Elemental abundance data handling module
+"""
+
 import numpy as np
 
 
@@ -66,21 +69,31 @@ class Abund:
         )
 
     def __str__(self):
-        a = list(self.get_pattern("H=12").values())
-        a = a[0:2] + [ab + self._monh for ab in a[2:]]
-        out = (
-            " [M/H]={:.3f} applied to abundance pattern. "
-            "Values below are abundances.\n".format(self._monh)
-        )
-        for i in range(9):
-            for j in range(11):
-                out += "  {:<5s}".format(self._elem[11 * i + j])
-            out += "\n"
-            for j in range(11):
-                out += "{:7.3f}".format(a[11 * i + j])
-            if i < 8:
+        if self._pattern is None:
+            if self._monh is None:
+                return "[M/H] is not set. Abundance pattern is not set."
+            else:
+                return f"[M/H]={self._monh:.3f}. Abundance pattern is not set"
+        else:
+            a = self.get_pattern("H=12", raw=True)
+            if self._monh is None:
+                out = "[M/H] is not set. Values below are the abundance pattern.\n"
+            else:
+                a = np.copy(a)
+                a[2:] += self._monh
+                out = (
+                    f" [M/H]={self._monh:.3f} applied to abundance pattern. "
+                    "Values below are abundances.\n"
+                )
+            for i in range(9):
+                for j in range(11):
+                    out += "  {:<5s}".format(self._elem[11 * i + j])
                 out += "\n"
-        return out
+                for j in range(11):
+                    out += "{:7.3f}".format(a[11 * i + j])
+                if i < 8:
+                    out += "\n"
+            return out
 
     def __add__(self, other):
         if isinstance(other, Abund):
@@ -356,32 +369,6 @@ class Abund:
         """Return an abundance pattern with value None for all elements.
         """
         return np.full(len(self._elem), np.nan)  # OrderedDict.fromkeys(self._elem)
-
-    def print(self):
-        if self._pattern is None:
-            if self._monh is None:
-                print("[M/H] is not set. Abundance pattern is not set.")
-            else:
-                print("[M/H]={:.3f}. Abundance pattern is not set".format(self._monh))
-        else:
-            if self._monh is None:
-                print("[M/H] is not set. Values below are the abundance pattern.")
-                a = self.get_pattern("H=12")
-            else:
-                print(
-                    "[M/H]={:.3f} applied to abundance pattern. "
-                    "Values below are abundances.".format(self._monh)
-                )
-                a = self.get_pattern("H=12", raw=True)
-                a = list(a[:2]) + [ab + self._monh for ab in a[2:]]
-            for i in range(9):
-                estr = ""
-                astr = ""
-                for j in range(11):
-                    estr += "  {:<5s}".format(self._elem[11 * i + j])
-                    astr += "{:7.3f}".format(a[11 * i + j])
-                print(estr)
-                print(astr)
 
     @staticmethod
     def solar():

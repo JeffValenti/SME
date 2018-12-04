@@ -5,6 +5,8 @@ And also determines the best fit parameters
 
 import os.path
 import warnings
+import logging
+import builtins
 from itertools import combinations, product
 
 import matplotlib.pyplot as plt
@@ -12,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import readsav
 from scipy.constants import speed_of_light
-from scipy.optimize import OptimizeWarning, least_squares
+from scipy.optimize import least_squares
 from scipy.optimize._numdiff import approx_derivative
 from scipy.interpolate import interp1d
 
@@ -25,10 +27,6 @@ from .abund import Abund
 from .atmo import krz_file
 from .resamp import resamp
 
-# from . import sme as SME
-
-warnings.simplefilter("ignore", FutureWarning)
-warnings.simplefilter("ignore", OptimizeWarning)
 
 clight = speed_of_light * 1e-3  # km/s
 
@@ -91,17 +89,13 @@ def residuals(
     # change parameters
     for name, value in zip(names, param):
         sme[name] = value
-
-    # DEBUG
-    # print({n: v for n, v in zip(names, param)})
-
     # run spectral synthesis
     try:
         sme2 = sme_func(sme, reuse_wavelength_grid=reuse_wavelength_grid)
     except ValueError as ve:
         # Something went wrong (left the grid? Don't go there)
         # If returned value is not finite it will be ignored?
-        print(ve)
+        logging.debug(ve)
         return np.inf
 
     # Return values by reference to sme
@@ -113,7 +107,7 @@ def residuals(
 
     # Also save intermediary results, because we can
     if save:
-        sme2.save(fname)
+        sme2.save(fname, verbose=False)
 
     _, synth = sme2.spectrum(syn=True)
     synth = synth.flatten()
@@ -129,16 +123,17 @@ def residuals(
     if not isJacobian:
         # Save result for jacobian
         self.resid = resid
-        # Plot
         self.iteration += 1
+        logging.debug("%s", {n: v for n, v in zip(names, param)})
+        # Plot
         if fig is not None:
             wave = sme2.wave
             try:
                 fig.add(wave, synth, f"Iteration {self.iteration}")
             except AttributeError:
-                print(f"Figure {repr(fig)} doesn't have a 'add' method")
+                warnings.warn(f"Figure {repr(fig)} doesn't have a 'add' method")
             except Exception as e:
-                print(f"Error during Plotting: {e.message}")
+                warnings.warn(f"Error during Plotting: {e.message}")
 
     return resid
 
@@ -153,6 +148,8 @@ def jacobian(param, *args, bounds=None, **kwargs):
         residuals,
         param,
         method="3-point",
+        # This feels pretty bad, passing the latest synthetic spectrum
+        # by reference as a parameter of the residuals function object
         f0=residuals.resid,
         bounds=bounds,
         args=args,
@@ -274,6 +271,8 @@ def get_scale(param_names):
         scales of the parameters in the same order as input array
     """
 
+    # The only parameter we want to scale right now is temperature,
+    # as it is orders of magnitude larger than all others
     scales = {"teff": 1000}
     scales = [scales[name] if name in scales.keys() else 1 for name in param_names]
     return scales
@@ -285,7 +284,7 @@ def solve(
     """
     Find the least squares fit parameters to an observed spectrum
 
-    NOTE: intermediary results will be saved in "sme.npy", which is also used to transfer data
+    NOTE: intermediary results will be saved in filename ("sme.npy")
 
     Parameters
     ----------
@@ -302,9 +301,6 @@ def solve(
         same sme structure with fit results in sme.fitresults, and best fit spectrum in sme.smod
     """
 
-    # TODO: get bounds for all parameters. Bounds are given by the precomputed tables
-    # TODO: create more efficient jacobian function ?
-
     # Sanitize parameter names
     param_names = [p.casefold() for p in param_names]
     param_names = [p.capitalize() if p[-5:] == "abund" else p for p in param_names]
@@ -312,7 +308,10 @@ def solve(
     param_names = [p if p != "grav" else "logg" for p in param_names]
     param_names = [p if p != "feh" else "monh" for p in param_names]
 
-    # param_names = list(set(param_names))
+    # Parameters are unique
+    # But keep the order the same
+    param_names, index = np.unique(param_names, return_index=True)
+    param_names = param_names[np.argsort(index)]
 
     if "vrad" in param_names:
         param_names.remove("vrad")
@@ -344,6 +343,8 @@ def solve(
     # Divide the uncertainties by the spectrum, to improve the fit in the continuum
     # Just as in IDL SME
     uncs /= spec
+
+    logging.info("Fitting Spectrum with Parameters: " + "%s, " * nparam, *param_names)
 
     # Do the heavy lifting
     res = least_squares(
@@ -402,9 +403,9 @@ def solve(
     if filename is not None:
         sme.save(filename)
 
-    print(res.message)
+    logging.debug("Reduced chi square: %.3f", sme.fitresults.chisq)
     for name, value, unc in zip(param_names, popt, sme.fitresults.punc.values()):
-        print(f"{name}\t{value:.5f} +- {unc:.5g}")
+        logging.info("%s\t%.5f +- %.5g", name.ljust(10), value, unc)
 
     return sme
 
