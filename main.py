@@ -1,6 +1,7 @@
 """ Main entry point for an SME script """
 import sys
 
+import numpy as np
 import matplotlib.pyplot as plt
 
 import util
@@ -16,7 +17,7 @@ if len(sys.argv) > 1:
     in_file, vald_file, fitparameters = util.parse_args()
 else:
     # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
-    in_file = "./sun_6440_grid.inp"
+    in_file = "./sun_6440_grid.out"
     # in_file = "./wasp117_short.inp"
     # in_file = "./wasp117.npy"
     # vald_file = "sun.lin"
@@ -37,6 +38,12 @@ if len(fitparameters) == 0:
         fitparameters = sme.pname
     else:
         fitparameters = ["teff", "logg", "monh"]
+
+resid = (sme.smod - sme.sob) / (sme.uob / sme.sob)
+z = resid ** 2
+z = 2 * ((1 + z) ** 0.5 - 1)
+initial_cost = 0.5 * np.sum(z)
+print(f"Initial Cost: {initial_cost:1.4e}")
 
 fitparameters = ["teff", "logg", "monh"]  # , "Y Abund", "Mg Abund"]
 target = "sun"
