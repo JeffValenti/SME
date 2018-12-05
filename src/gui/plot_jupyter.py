@@ -120,6 +120,7 @@ class FinalPlot:
 
     def save(self, _=None, filename="SME.html"):
         """ save plot to html file """
+        self.fig.layout.dragmode = "zoom"
         py.plot(self.fig, filename=filename)
 
     def shift_mask(self, x, mask):
