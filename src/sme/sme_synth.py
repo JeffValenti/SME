@@ -237,7 +237,7 @@ def Ionization(ion=0):
     """
     error = idl_call_external("Ionization", ion, type="short")
     if error != b"":
-        warnings.warn(f"{__name__} (call external): {error.decode()}")
+        warnings.warn(f"{__name__} (call external): {error.decode()}", source=__name__)
 
 
 def GetDensity():

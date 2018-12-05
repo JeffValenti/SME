@@ -1,4 +1,4 @@
-""" Handles reading of atmopshere (grid) files """
+""" Handles reading and interpolation of atmopshere (grid) data """
 import itertools
 import os
 
@@ -120,9 +120,6 @@ class krz_file(Atmo):
         self.xne = self.table[:, 2]
         self.xna = self.table[:, 3]
         self.rho = self.table[:, 4]
-
-
-""" Module to interpolate atmospheres on an atmopshere grid """
 
 
 def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
