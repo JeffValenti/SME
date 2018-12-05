@@ -318,7 +318,7 @@ def solve(
     mask = mask.flatten()
     uncs = uncs.flatten()
 
-    mask = (mask != 0) & (uncs != 0)
+    mask = mask != 0
     spec = spec[mask]
     uncs = uncs[mask]
 

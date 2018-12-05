@@ -63,12 +63,12 @@ def determine_continuum(sme, segment):
             # Save mask for next iteration
             m[cont] = 2
             logging.info(
-                "No Continuum mask was set\n"
+                "No Continuum mask was set, "
                 "Using effective wavelength range of lines to find continuum instead"
             )
             logging.debug("Continuum mask points: %i", np.count_nonzero(cont == 2))
         else:
-            cont = (m == 2) & (u != 0)
+            cont = m == 2
 
         x, y, u = x[cont], y[cont], u[cont]
 
@@ -116,16 +116,19 @@ def get_continuum_mask(wave, linelist, threshold=0.1, mask=None):
         mask = np.full(len(wave), 1)
 
     width = sme_synth.GetLineRange(len(linelist))
-
-    while np.count_nonzero(mask == 2) < len(wave) * 0.1:
+    temp = False
+    while np.count_nonzero(temp) < len(wave) * 0.1:
+        temp = np.full(len(wave), True)
         for i, line in enumerate(width):
             if linelist["depth"][i] > threshold:
                 w = (wave >= line[0]) & (wave <= line[1])
-                w = w & (mask != 0)
-                mask[w] = 2
+                temp[w] = False
 
         # TODO: Good value to increase threshold by?
+        temp[mask == 0] = False
         threshold *= 1.1
+
+    mask[temp] = 2
 
     logging.debug("Ignoring lines with depth < %f", threshold)
     return mask
@@ -231,7 +234,7 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
         x2 = x_obs[len(x_obs) // 2]
         rvel = c_light * (1 - x2 / x1)
 
-        lines = (mask == 1) & (u_obs != 0)
+        lines = mask == 1
 
         # Then minimize the least squares for a better fit
         # as cross correlation can only find
