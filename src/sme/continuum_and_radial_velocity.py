@@ -245,7 +245,9 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
             resid = (y_obs[lines] - shifted) / u_obs[lines]
             return resid
 
-        interpolator = interp1d(x_syn, y_syn, kind="cubic")
+        interpolator = interp1d(
+            x_syn, y_syn, kind="cubic", fill_value=y_syn[[0, -1]], bounds_error=False
+        )
         res = least_squares(func, x0=rvel, loss="soft_l1")
         rvel = res.x[0]
 
