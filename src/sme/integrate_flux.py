@@ -6,7 +6,7 @@ from scipy.ndimage.filters import convolve
 from scipy.interpolate import interp1d
 
 
-def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
+def integrate_flux(mu, inten, deltav, vsini, vrt, osamp=1):
     """
     Produces a flux profile by integrating intensity profiles (sampled
     at various mu angles) over the visible stellar surface.

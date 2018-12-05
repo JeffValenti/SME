@@ -3,26 +3,23 @@ Calculates the spectrum, based on a set of stellar parameters
 And also determines the best fit parameters
 """
 
+import logging
 import os.path
 import warnings
-import logging
-
 
 import numpy as np
-from scipy.io import readsav
 from scipy.constants import speed_of_light
-from scipy.optimize import least_squares, OptimizeWarning
-from scipy.optimize._numdiff import approx_derivative
 from scipy.interpolate import interp1d
+from scipy.io import readsav
+from scipy.optimize import OptimizeWarning, least_squares
+from scipy.optimize._numdiff import approx_derivative
 
 from . import broadening, sme_synth
-from .interpolate_atmosphere import interp_atmo_grid
-from .rtint import rtint
-from .sme_crvmatch import match_rv_continuum
-from .nlte import update_depcoeffs
 from .abund import Abund
-from .atmo import krz_file
-
+from .atmosphere import interp_atmo_grid, krz_file
+from .continuum_and_radial_velocity import match_rv_continuum
+from .integrate_flux import integrate_flux
+from .nlte import update_depcoeffs
 
 clight = speed_of_light * 1e-3  # km/s
 warnings.filterwarnings("ignore", category=OptimizeWarning)
@@ -88,7 +85,7 @@ def residuals(
         sme[name] = value
     # run spectral synthesis
     try:
-        sme2 = sme_func(sme, reuse_wavelength_grid=reuse_wavelength_grid)
+        sme2 = synthesize_spectrum(sme, reuse_wavelength_grid=reuse_wavelength_grid)
     except ValueError as ve:
         # Something went wrong (left the grid? Don't go there)
         # If returned value is not finite it will be ignored?
@@ -410,7 +407,7 @@ def solve(
     return sme
 
 
-def sme_func_atmo(sme):
+def get_atmosphere(sme):
     """
     Return an atmosphere based on specification in an SME structure
 
@@ -435,7 +432,7 @@ def sme_func_atmo(sme):
 
     # Handle atmosphere grid or user routine.
     atmo = sme.atmo
-    self = sme_func_atmo
+    self = get_atmosphere
 
     if hasattr(self, "msdi_save"):
         msdi_save = self.msdi_save
@@ -518,7 +515,7 @@ def new_wavelength_grid(wint):
     return x_seg, vstep
 
 
-def sme_func(
+def synthesize_spectrum(
     sme,
     setLineList=True,
     passAtmosphere=True,
@@ -589,7 +586,7 @@ def sme_func(
         sme_synth.SetLibraryPath()
         sme_synth.InputLineList(sme.atomic, sme.species)
     if passAtmosphere:
-        sme = sme_func_atmo(sme)
+        sme = get_atmosphere(sme)
         sme_synth.InputModel(sme.teff, sme.logg, sme.vmic, sme.atmo)
         sme_synth.InputAbund(sme.abund)
         sme_synth.Ionization(0)
@@ -630,7 +627,7 @@ def sme_func(
 
         # Continuum
         # rtint = Radiative Transfer Integration
-        cont_flux = rtint(sme.mu, cint[il], 1, 0, 0)
+        cont_flux = integrate_flux(sme.mu, cint[il], 1, 0, 0)
         cont_flux = np.interp(wgrid, wint[il], cont_flux)
 
         # Broaden Spectrum
@@ -641,7 +638,7 @@ def sme_func(
         # Turbulence broadening
         # Apply macroturbulent and rotational broadening while integrating intensities
         # over the stellar disk to produce flux spectrum Y.
-        flux = rtint(sme.mu, y_integrated, vstep, sme.vsini, sme.vmac)
+        flux = integrate_flux(sme.mu, y_integrated, vstep, sme.vsini, sme.vmac)
         # instrument broadening
         if "iptype" in sme:
             ipres = sme.ipres if np.size(sme.ipres) == 1 else sme.ipres[il]
