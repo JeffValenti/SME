@@ -1,6 +1,15 @@
+"""
+Determine continuum based on continuum mask
+and fit best radial velocity to observation
+"""
+
+import logging
+import warnings
+
 import numpy as np
 from scipy.signal import correlate
-from scipy.optimize import minimize
+from scipy.interpolate import interp1d
+from scipy.optimize import least_squares
 from scipy.constants import speed_of_light
 
 
@@ -8,11 +17,29 @@ c_light = speed_of_light * 1e-3  # speed of light in km/s
 
 
 def determine_continuum(sme, segment):
+    """
+    Fit a polynomial to the spectrum points marked as continuum
+    The degree of the polynomial fit is determined by sme.cscale_flag
+
+    Parameters
+    ----------
+    sme : SME_Struct
+        input sme structure with sme.sob, sme.wave, and sme.mob
+    segment : int
+        index of the wavelength segment to use, or -1 when dealing with the whole spectrum
+
+    Returns
+    -------
+    cscale : array of size (ndeg + 1,)
+        polynomial coefficients of the continuum fit, in numpy order, i.e. largest exponent first
+    """
+
     if segment < 0:
         return sme.cscale
 
-    if "sob" not in sme:
+    if "sob" not in sme or "mob" not in sme or "wave" not in sme or "uob" not in sme:
         # If there is no observation, we have no continuum scale
+        warnings.warn("Missing data for continuum fit")
         cscale = None
     elif sme.cscale_flag < 0:
         # Continuum flag is set to no continuum
@@ -37,15 +64,44 @@ def determine_continuum(sme, segment):
 
         # Fit polynomial
         cscale = np.polyfit(x, y, deg=ndeg, w=1 / u)
-        # Inverse coefficient order to make it more intuitive ?
-        # cscale = cscale_new[::-1]
 
+    logging.debug("Continuum coefficients for segment %i: %s", segment, cscale)
     return cscale
 
 
 def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
-    if "sob" not in sme:
+    """
+    Calculate radial velocity by using cross correlation and
+    least-squares between observation and synthetic spectrum
+
+    Parameters
+    ----------
+    sme : SME_Struct
+        sme structure with observed spectrum and flags
+    segment : int
+        which wavelength segment to handle, -1 if its using the whole spectrum
+    cscale : array of size (ndeg,)
+        continuum coefficients, as determined by e.g. determine_continuum
+    x_syn : array of size (n,)
+        wavelength of the synthetic spectrum
+    y_syn : array of size (n,)
+        intensity of the synthetic spectrum
+
+    Raises
+    ------
+    ValueError
+        if sme.vrad_flag is not recognized
+
+    Returns
+    -------
+    rvel : float
+        best fit radial velocity for this segment/whole spectrum
+        or None if no observation is present
+    """
+
+    if "sob" not in sme or "mob" not in sme or "wave" not in sme or "uob" not in sme:
         # No observation no radial velocity
+        warnings.warn("Missing data for radial velocity determination")
         rvel = None
     elif sme.vrad_flag in [-2, "none"]:
         # vrad_flag says don't determine radial velocity
@@ -69,8 +125,8 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
             if cscale is not None:
                 cont = np.polyval(cscale, x_obs)
             else:
-                print(
-                    "Warning: No continuum scale passed to radial velocity determination"
+                warnings.warn(
+                    "No continuum scale passed to radial velocity determination"
                 )
                 cont = np.ones_like(y_obs)
 
@@ -82,8 +138,8 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
                 cscale = np.atleast_2d(cscale)
                 cont = [np.polyval(c, x[i]) for i, c in enumerate(cscale)]
             else:
-                print(
-                    "Warning: No continuum scale passed to radial velocity determination"
+                warnings.warn(
+                    "No continuum scale passed to radial velocity determination"
                 )
                 cont = [1 for _ in range(len(x))]
 
@@ -118,13 +174,17 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
         # Then minimize the least squares for a better fit
         # as cross correlation can only find
         def func(rv):
-            rv_factor = np.sqrt((1 + rv / c_light) / (1 - rv / c_light))
-            tmp = np.interp(x_obs[lines], x_syn * rv_factor, y_syn)
-            return np.sum((y_obs[lines] - tmp) ** 2 * u_obs[lines] ** -2)
+            rv_factor = np.sqrt((1 - rv / c_light) / (1 + rv / c_light))
+            shifted = interpolator(x_obs[lines] * rv_factor)
+            # shifted = np.interp(x_obs[lines], x_syn * rv_factor, y_syn)
+            resid = (y_obs[lines] - shifted) / u_obs[lines]
+            return resid
 
-        res = minimize(func, x0=rvel)
+        interpolator = interp1d(x_syn, y_syn, kind="cubic")
+        res = least_squares(func, x0=rvel, loss="soft_l1")
         rvel = res.x[0]
 
+    logging.debug("Radial velocity for segment %i: %f", segment, rvel)
     return rvel
 
 
@@ -136,34 +196,20 @@ def match_rv_continuum(sme, segment, x_syn, y_syn):
 
     Parameters
     ----------
-    x_obs : array
-        observed wavelength
-    y_obs : array
-        observed flux
-    u_obs : array
-        uncertainties of observed flux
-    x_syn : array
-        synthetic wavel
-    y_syn : array
-        synthetic flux
-    mask : array
-        pixel mask, determining continuum and lines (continuum == 2, line == 1, bad == 0)
-    ndeg : int, optional
-        number of degrees of the continuum polynomial (default: 1, i.e linear)
-    rvel : float, optional
-        radial velocity guess (not used unless fix_rv is True) (default: 0)
-    cscale : array[ndeg], optional
-        continuum polynomial coefficients (not used unless fix_c is True) (default: None)
-    fix_c : bool, optional
-        use old continuum instead of recalculating it (default: False)
-    fix_rv : bool, optional
-        use old radial velocity instead of recalculating it (default: False)
+    sme : SME_Struct
+        input sme structure with all the parameters
+    segment : int
+        index of the wavelength segment to match, or -1 when dealing with the whole spectrum
+    x_syn : array of size (n,)
+        wavelength of the synthetic spectrum
+    y_syn : array of size (n,)
+        intensitz of the synthetic spectrum
 
     Returns
     -------
     rvel : float
         new radial velocity
-    cscale : array[ndeg]
+    cscale : array of size (ndeg + 1,)
         new continuum coefficients
     """
 
