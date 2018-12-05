@@ -118,7 +118,8 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
         # Then minimize the least squares for a better fit
         # as cross correlation can only find
         def func(rv):
-            tmp = np.interp(x_obs[lines] * (1 - rv / c_light), x_syn, y_syn)
+            rv_factor = np.sqrt((1 + rv / c_light) / (1 - rv / c_light))
+            tmp = np.interp(x_obs[lines], x_syn * rv_factor, y_syn)
             return np.sum((y_obs[lines] - tmp) ** 2 * u_obs[lines] ** -2)
 
         res = minimize(func, x0=rvel)

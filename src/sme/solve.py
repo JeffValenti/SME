@@ -479,28 +479,42 @@ def get_wavelengthrange(wran, vrad, vsini):
 
 def new_wavelength_grid(wint):
     """ Generate new wavelength grid within bounds of wint"""
+    # Determine step size for a new model wavelength scale, which must be uniform
+    # to facilitate convolution with broadening kernels. The uniform step size
+    # is the larger of:
+    #
+    # [1] smallest wavelength step in WINT_SEG, which has variable step size
+    # [2] 10% the mean dispersion of WINT_SEG
+    # [3] 0.05 km/s, which is 1% the width of solar line profiles
+
     wbeg, wend = wint[[0, -1]]
     wmid = 0.5 * (wend + wbeg)  # midpoint of segment
     wspan = wend - wbeg  # width of segment
-    jmin = np.argmin(np.diff(wint))
-    vstep1 = np.diff(wint)[jmin]
-    vstep1 = vstep1 / wint[jmin] * clight  # smallest step
+    diff = wint[1:] - wint[:-1]
+    jmin = np.argmin(diff)
+    vstep1 = diff[jmin] / wint[jmin] * clight  # smallest step
     vstep2 = 0.1 * wspan / (len(wint) - 1) / wmid * clight  # 10% mean dispersion
     vstep3 = 0.05  # 0.05 km/s step
     vstep = max(vstep1, vstep2, vstep3)  # select the largest
 
     # Generate model wavelength scale X, with uniform wavelength step.
     nx = int(
-        np.abs(np.log10(wint[-1] / wint[0])) / np.log10(1 + vstep / clight) + 1
+        np.abs(np.log10(wend / wbeg)) / np.log10(1 + vstep / clight) + 1
     )  # number of wavelengths
     if nx % 2 == 0:
         nx += 1  # force nx to be odd
 
     # Resolution
-    resol_out = 1 / ((wint[-1] / wint[0]) ** (1 / (nx - 1)) - 1)
-    vstep = clight / resol_out
+    # IDL way
+    # resol_out = 1 / ((wend / wbeg) ** (1 / (nx - 1)) - 1)
+    # vstep = clight / resol_out
+    # x_seg = wbeg * (1 + 1 / resol_out) ** np.arange(nx)
 
-    x_seg = np.geomspace(wint[0], wint[-1], num=nx)
+    # Python way (not identical, as IDL endpoint != wend)
+    # difference approx 1e-7
+    x_seg = np.geomspace(wbeg, wend, num=nx)
+    resol_out = 1 / np.diff(np.log(x_seg[:2]))[0]
+    vstep = clight / resol_out
     return x_seg, vstep
 
 
@@ -615,6 +629,7 @@ def sme_func(
         wgrid, vstep = new_wavelength_grid(wint[il])
 
         # Continuum
+        # rtint = Radiative Transfer Integration
         cont_flux = rtint(sme.mu, cint[il], 1, 0, 0)
         cont_flux = np.interp(wgrid, wint[il], cont_flux)
 
@@ -624,16 +639,19 @@ def sme_func(
             y_integrated[imu] = np.interp(wgrid, wint[il], sint[il][imu])
 
         # Turbulence broadening
-        flux = rtint(sme.mu, y_integrated, vstep, abs(sme.vsini), abs(sme.vmac))
+        # Apply macroturbulent and rotational broadening while integrating intensities
+        # over the stellar disk to produce flux spectrum Y.
+        flux = rtint(sme.mu, y_integrated, vstep, sme.vsini, sme.vmac)
         # instrument broadening
         if "iptype" in sme:
             ipres = sme.ipres if np.size(sme.ipres) == 1 else sme.ipres[il]
             flux = broadening.apply_broadening(
-                ipres, wgrid, flux, type=sme["iptype"], sme=sme
+                ipres, wgrid, flux, type=sme.iptype, sme=sme
             )
 
         # Divide calculated spectrum by continuum
-        flux /= cont_flux
+        if sme.cscale_flag != -2:
+            flux /= cont_flux
 
         # Create a wavelength array if it doesn't exist
         if "wave" not in sme:
@@ -643,8 +661,6 @@ def sme_func(
             # Force endpoints == wavelength range
             wave[il] = np.concatenate(([wbeg], wgrid[itrim], [wend]))
             wind[il + 1] = wind[il] + len(wave[il])
-            sme.wave = wave[il]
-            sme.wind = wind[il : il + 2]
 
         # Fit continuum and radial velocity
         cscale[il], vrad[il] = match_rv_continuum(sme, il, wgrid, flux)
@@ -654,7 +670,6 @@ def sme_func(
             wgrid *= rv_factor
 
         # TODO: how to resample/interpolate here? Does it matter?
-        # smod[il] = np.interp(wave[il], x_seg, y_seg)
         # smod[il] = resamp(x_seg, y_seg, wave[il])
         smod[il] = interp1d(wgrid, flux, kind="cubic")(wave[il])
 

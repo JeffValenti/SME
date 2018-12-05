@@ -198,9 +198,9 @@ class Param(Collection):
 
         self.teff = None
         self.logg = None
-        self.vsini = None
-        self.vmac = None
-        self.vmic = None
+        self._vsini = 0
+        self._vmac = 0
+        self._vmic = 0
         self._abund = None
 
         # TODO: in the SME structure, the abundance values are in a different scheme than described in Abund
@@ -254,6 +254,32 @@ class Param(Collection):
     def set_abund(self, monh, abpatt, abtype):
         """ Set elemental abundances together with the metallicity """
         self._abund = Abund(monh, abpatt, abtype)
+
+    @property
+    def vmac(self):
+        """ Macro Turbulence Velocity """
+        return self._vmac
+
+    @vmac.setter
+    def vmac(self, value):
+        self._vmac = abs(value)
+
+    @property
+    def vmic(self):
+        """ Micro Turbulence Velocity """
+        return self._vmic
+
+    @vmic.setter
+    def vmic(self, value):
+        self._vmic = abs(value)
+
+    @property
+    def vsini(self):
+        return self._vsini
+
+    @vsini.setter
+    def vsini(self, value):
+        self._vsini = abs(value)
 
 
 class NLTE(Collection):
