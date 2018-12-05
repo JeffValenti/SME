@@ -1,7 +1,8 @@
 import numpy as np
+import logging
 
 from scipy.ndimage.filters import convolve
-from .bezier import bezier_interp
+from scipy.interpolate import interp1d
 
 
 def apply_broadening(ipres, x_seg, y_seg, type="gauss", sme=None):
@@ -44,7 +45,7 @@ def apply_broadening(ipres, x_seg, y_seg, type="gauss", sme=None):
 
     if type is None:
         type = sme.iptype
-        type = type.casefold()
+    type = type.casefold()
 
     if type == "table":
         y_seg = tablebroad(x_seg, y_seg, sme.ip_x, sme.ip_y)
@@ -102,7 +103,8 @@ def tablebroad(w, s, xip, yip):
     x = (
         np.arange(nip, dtype=float) - (nip - 1) / 2
     ) * dsdh  # offset in Hamilton pixels
-    ip = bezier_interp(xip, yip, x)  # spline onto new scale
+    ip = interp1d(xip, yip, kind="cubic")(x)
+    # ip = bezier_interp(xip, yip, x)  # spline onto new scale
     ip = ip[::-1]  # reverse for convolution
     ip = ip / np.sum(ip)  # ensure unit area
 
@@ -146,7 +148,7 @@ def gaussbroad(w, s, hwhm):
 
     # Warn user if hwhm is negative.
     if hwhm < 0:
-        print("Warning! Forcing negative smoothing width to zero.")
+        logging.warning("Forcing negative smoothing width to zero.")
 
     # Return input argument if half-width is nonpositive.
     if hwhm <= 0:
@@ -154,12 +156,13 @@ def gaussbroad(w, s, hwhm):
 
     # Calculate (uniform) dispersion.
     nw = len(w)  ## points in spectrum
-    dw = (w[-1] - w[0]) / (nw - 1)  # wavelength change per pixel
+    wrange = w[-1] - w[0]
+    dw = wrange / (nw - 1)  # wavelength change per pixel
 
     # Make smoothing gaussian# extend to 4 sigma.
     # Note: 4.0 / sqrt(2.0*alog(2.0)) = 3.3972872 and sqrt(alog(2.0))=0.83255461
     #  sqrt(alog(2.0)/pi)=0.46971864 (*1.0000632 to correct for >4 sigma wings)
-    if hwhm >= 5 * (w[-1] - w[0]):
+    if hwhm >= 5 * wrange:
         return np.full(nw, np.sum(s) / nw)
     nhalf = int(3.3972872 * hwhm / dw)  ## points in half gaussian
     ng = 2 * nhalf + 1  ## points in gaussian (odd!)
@@ -215,7 +218,7 @@ def sincbroad(w, s, hwhm):
 
     # Warn user if hwhm is negative.
     if hwhm < 0:
-        print("Warning! Forcing negative smoothing width to zero.")
+        logging.warning("Forcing negative smoothing width to zero.")
 
     # Return input argument if half-width is nonpositive.
     if hwhm <= 0:

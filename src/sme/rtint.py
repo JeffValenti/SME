@@ -3,7 +3,7 @@ import os.path
 import glob
 
 from scipy.ndimage.filters import convolve
-from .bezier import interpolate as spl_interp
+from scipy.interpolate import interp1d
 
 
 def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
@@ -100,7 +100,6 @@ def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
         vsini = vsini[0]
     if np.size(vrt) > 1:
         vrt = vrt[0]
-    vrt = abs(vrt)  # ensure real number
 
     # Determine oversampling factor.
     os = round(np.clip(osamp, 1, None))  # force integral value > 1
@@ -113,7 +112,7 @@ def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
     # Sort the projected radii and corresponding intensity spectra into ascending
     #  order (i.e. from disk center to the limb), which is equivalent to sorting
     #  MU in descending order.
-    isort = np.argsort(rmu)  # sorted indicies
+    isort = np.argsort(rmu)
     rmu = rmu[isort]  # reorder projected radii
     nmu = np.size(mu)  # number of radii
     if nmu == 1:
@@ -140,12 +139,14 @@ def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
     # sampled points fit exactly into one input bin. This makes it simple to
     # "integrate" the finely sampled points at the end of the routine.
     npts = inten.shape[1]  # number of points
-    xpix = np.arange(npts)  # point indices
-    nfine = int(os * npts)  # number of oversampled points
-    xfine = (0.5 / os) * (2 * np.arange(nfine) - os + 1)  # oversampled points indices
+    xpix = np.arange(npts, dtype=float)  # point indices
+    nfine = os * npts  # number of oversampled points
+    xfine = (0.5 / os) * (
+        2 * np.arange(nfine, dtype=float) - os + 1
+    )  # oversampled points indices
 
     # Loop through annuli, constructing and convolving with rotation kernels.
-    dummy = 0  # init call_ext() return value
+
     yfine = np.empty(nfine)  # init oversampled intensities
     flux = np.zeros(nfine)  # init flux vector
     for imu in range(nmu):  # loop thru integration annuli
@@ -158,7 +159,7 @@ def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
             yfine = ypix
         else:
             # spline onto fine wavelength scale
-            yfine = spl_interp(xpix, ypix, xfine)
+            yfine = interp1d(xpix, ypix, kind="cubic")(xfine)
 
         # Construct the convolution kernel which describes the distribution of
         # rotational velocities present in the current annulus. The distribution has
@@ -201,16 +202,14 @@ def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
         sigt = sigma * np.sqrt(1.0 - muval ** 2)  # reduce by np.sqrt(1-mu**2)
 
         # Figure out how many points to use in macroturbulence kernel.
-        nmk = np.clip(10 * sigma, None, (nfine - 3) / 2)
-        # extend kernel to 10 sigma
-        nmk = int(np.clip(nmk, 3, None))  # pad with at least 3 pixels
+        nmk = int(10 * sigma)
+        nmk = np.clip(nmk, 3, (nfine - 3) // 2)
 
         # Construct radial macroturbulence kernel with a sigma of mu*VRT/np.sqrt(2).
         if sigr > 0:
-            xarg = (np.arange(2 * nmk + 1) - nmk) / sigr  # expo!=ntial argument
-            mrkern = np.exp(
-                np.clip(-0.5 * xarg ** 2, -20, None)
-            )  # compute the gaussian
+            xarg = np.linspace(-nmk, nmk, 2 * nmk + 1) / sigr
+            xarg = np.clip(-0.5 * xarg ** 2, -20, None)
+            mrkern = np.exp(xarg)  # compute the gaussian
             mrkern = mrkern / np.sum(mrkern)  # normalize the profile
         else:
             mrkern = np.zeros(2 * nmk + 1)  # init with 0d0
@@ -218,10 +217,9 @@ def rtint(mu, inten, deltav, vsini, vrt, osamp=1):
 
         # Construct tangential kernel with a sigma of np.sqrt(1-mu**2)*VRT/np.sqrt(2).
         if sigt > 0:
-            xarg = (np.arange(2 * nmk + 1) - nmk) / sigt  # expo!=ntial argument
-            mtkern = np.exp(
-                np.clip(-0.5 * xarg ** 2, -20, None)
-            )  # compute the gaussian
+            xarg = np.linspace(-nmk, nmk, 2 * nmk + 1) / sigt
+            xarg = np.clip(-0.5 * xarg ** 2, -20, None)
+            mtkern = np.exp(xarg)  # compute the gaussian
             mtkern = mtkern / np.sum(mtkern)  # normalize the profile
         else:
             mtkern = np.zeros(2 * nmk + 1)  # init with 0d0
