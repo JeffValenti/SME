@@ -26,7 +26,7 @@ def determine_continuum(sme, segment):
     Parameters
     ----------
     sme : SME_Struct
-        input sme structure with sme.sob, sme.wave, and sme.mob
+        input sme structure with sme.sob, sme.wave, and sme.mask
     segment : int
         index of the wavelength segment to use, or -1 when dealing with the whole spectrum
 
@@ -59,15 +59,14 @@ def determine_continuum(sme, segment):
         if np.all(m != 2):
             # If no continuum mask has been set
             # Use the effective wavelength ranges of the lines to determine continuum points
-            cont = get_continuum_mask(x, sme.linelist)
-            cont = cont & (u != 0)
+            cont = get_continuum_mask(x, sme.linelist, mask=m)
             # Save mask for next iteration
             m[cont] = 2
             logging.info(
-                "No Continuum mask was set"
-                "using effective wavelength range of lines to find continuum instead"
+                "No Continuum mask was set\n"
+                "Using effective wavelength range of lines to find continuum instead"
             )
-            logging.debug("Continuum mask points: %i", np.count_nonzero(cont))
+            logging.debug("Continuum mask points: %i", np.count_nonzero(cont == 2))
         else:
             cont = (m == 2) & (u != 0)
 
@@ -87,7 +86,7 @@ def determine_continuum(sme, segment):
     return cscale
 
 
-def get_continuum_mask(wave, linelist, threshold=0.1):
+def get_continuum_mask(wave, linelist, threshold=0.1, mask=None):
     """
     Use the effective wavelength range of the lines,
     to find wavelength points that should be unaffected by lines
@@ -113,15 +112,17 @@ def get_continuum_mask(wave, linelist, threshold=0.1):
     if threshold <= 0:
         threshold = 0.01
 
+    if mask is None:
+        mask = np.full(len(wave), 1)
+
     width = sme_synth.GetLineRange(len(linelist))
 
-    mask = False
-    while not np.any(mask) or np.count_nonzero(mask) < len(wave) * 0.1:
-        mask = np.full(wave.size, True)
+    while np.count_nonzero(mask == 2) < len(wave) * 0.1:
         for i, line in enumerate(width):
             if linelist["depth"][i] > threshold:
                 w = (wave >= line[0]) & (wave <= line[1])
-                mask[w] = False
+                w = w & (mask != 0)
+                mask[w] = 2
 
         # TODO: Good value to increase threshold by?
         threshold *= 1.1

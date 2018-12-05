@@ -503,8 +503,10 @@ class SME_Struct(Param):
         self.wran = np.atleast_2d(self.wran)
         # Observation
         self.sob = None
-        self.uob = None
-        self.mob = None
+        self.uob = kwargs.pop("uob")
+        self.mob = kwargs.pop("mob")
+        if self.mob is not None:
+            self.mob = np.require(self.mob, requirements="W")
         self.obs_name = None
         self.obs_type = None
         # Instrument broadening
@@ -553,6 +555,12 @@ class SME_Struct(Param):
     def species(self):
         """ Names of the species of each spectral line """
         return self.linelist.species
+
+    @property
+    def mask(self):
+        if self.mob is not None and self.uob is not None:
+            self.mob[self.uob == 0] = 0
+        return self.mob
 
     def __getitem__(self, key):
         if key[-5:].casefold() == "abund":
@@ -645,7 +653,7 @@ class SME_Struct(Param):
         # this is pretty much the same as it was before, just with fancier indexing
         w = Iliffe_vector(None, index=section_index, values=wave)
         s = Iliffe_vector(None, index=section_index, values=obs_flux)
-        m = Iliffe_vector(None, index=section_index, values=self.mob)
+        m = Iliffe_vector(None, index=section_index, values=self.mask)
         u = Iliffe_vector(None, index=section_index, values=self.uob)
 
         # Apply continuum normalization
@@ -653,11 +661,11 @@ class SME_Struct(Param):
         if cont and not syn:
             if self.cscale.ndim == 1:
                 x = np.arange(len(wave))
-                s /= np.polyval(self.cscale[::-1], x)
+                s /= np.polyval(self.cscale, x)
             elif self.cscale.ndim == 2:
                 for i in range(len(s)):
                     x = np.arange(len(s[i]))
-                    s[i] /= np.polyval(self.cscale[i][::-1], x)
+                    s[i] /= np.polyval(self.cscale[i], x)
 
         args = [w, s]
         if return_mask:
