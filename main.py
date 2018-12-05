@@ -17,8 +17,8 @@ if len(sys.argv) > 1:
     in_file, vald_file, fitparameters = util.parse_args()
 else:
     # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
-    in_file = "./sun_6440_grid.out"
-    # in_file = "./wasp117_short.inp"
+    # in_file = "./sun_6440_grid.out"
+    in_file = "./wasp117_15.inp"
     # in_file = "./wasp117.npy"
     # vald_file = "sun.lin"
     vald_file = None
@@ -39,19 +39,27 @@ if len(fitparameters) == 0:
     else:
         fitparameters = ["teff", "logg", "monh"]
 
-resid = (sme.smod - sme.sob) / (sme.uob / sme.sob)
-z = resid ** 2
-z = 2 * ((1 + z) ** 0.5 - 1)
-initial_cost = 0.5 * np.sum(z)
-print(f"Initial Cost: {initial_cost:1.4e}")
+# orig = np.copy(sme.smod)
+# resid = (sme.smod - sme.sob) / (sme.uob / sme.sob)
+# z = resid ** 2
+# z = 2 * ((1 + z) ** 0.5 - 1)
+# initial_cost = 0.5 * np.sum(z)
+# print(f"Initial Cost: {initial_cost:1.4e}")
 
 fitparameters = ["teff", "logg", "monh"]  # , "Y Abund", "Mg Abund"]
-target = "sun"
+sme.vrad_flag = "each"
+target = "wasp117"
 # sme.nlte.set_nlte("Ca")
 
 # Start SME solver
 sme = solve(sme, fitparameters, filename=f"{target}.npy")
 
+
+resid = (sme.smod - sme.sob) / (sme.uob / sme.sob)
+z = resid ** 2
+z = 2 * ((1 + z) ** 0.5 - 1)
+initial_cost = 0.5 * np.sum(z)
+print(f"Final Cost: {initial_cost:1.4e}")
 
 # # Calculate stellar age based on abundances
 # solar = Abund.solar()
@@ -84,7 +92,9 @@ sme = solve(sme, fitparameters, filename=f"{target}.npy")
 fig = plot_jupyter.FinalPlot(sme)
 fig.save(filename=f"{target}.html")
 
-plt.plot(sme.wave, sme.sob - sme.smod)
+plt.plot(sme.wave, sme.sob - sme.smod, label="Residual Python")
+# plt.plot(sme.wave, sme.sob - orig, label="Residual IDL")
+plt.legend()
 plt.show()
 
 mask_plot = plot_pyplot.MaskPlot(sme)

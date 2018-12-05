@@ -57,19 +57,17 @@ def determine_continuum(sme, segment):
 
         # Set continuum mask
         if np.all(m != 2):
-            cont = False
-            threshold = 0.1
-            while not np.any(cont) or np.count_nonzero(cont) < len(x) * 0.1:
-                cont = get_continuum_mask(x, sme.linelist, threshold=threshold)
-                cont = cont & (u != 0)
-                threshold *= 1.1
+            # If no continuum mask has been set
+            # Use the effective wavelength ranges of the lines to determine continuum points
+            cont = get_continuum_mask(x, sme.linelist)
+            cont = cont & (u != 0)
             # Save mask for next iteration
             m[cont] = 2
             logging.info(
                 "No Continuum mask was set"
                 "using effective wavelength range of lines to find continuum instead"
             )
-            logging.debug("Ignoring lines with depth < %f", threshold)
+            logging.debug("Continuum mask points: %i", np.count_nonzero(cont))
         else:
             cont = (m == 2) & (u != 0)
 
@@ -90,16 +88,45 @@ def determine_continuum(sme, segment):
 
 
 def get_continuum_mask(wave, linelist, threshold=0.1):
-    """ Use the effective wavelength range of the lines,
-    to find wavelength points that should be unaffected by lines """
+    """
+    Use the effective wavelength range of the lines,
+    to find wavelength points that should be unaffected by lines
+    However one usually has to ignore the weak lines, as most points are affected by one line or another
+    Therefore keep increasing the threshold until enough lines have been found (>10%)
+
+    Parameters
+    ----------
+    wave : array of size (n,)
+        wavelength points
+    linelist : LineList
+        LineList object that was input into the Radiative Transfer
+    threshold : float, optional
+        starting threshold, lines with depth below this value are ignored
+        the actual threshold is increased until enough points are found (default: 0.1)
+
+    Returns
+    -------
+    mask : array(bool) of size (n,)
+        True for points between lines and False for points within lines
+    """
+
+    if threshold <= 0:
+        threshold = 0.01
+
     width = sme_synth.GetLineRange(len(linelist))
-    mask = np.full(wave.size, True)
 
-    for i, line in enumerate(width):
-        if linelist["depth"][i] > threshold:
-            w = (wave >= line[0]) & (wave <= line[1])
-            mask[w] = False
+    mask = False
+    while not np.any(mask) or np.count_nonzero(mask) < len(wave) * 0.1:
+        mask = np.full(wave.size, True)
+        for i, line in enumerate(width):
+            if linelist["depth"][i] > threshold:
+                w = (wave >= line[0]) & (wave <= line[1])
+                mask[w] = False
 
+        # TODO: Good value to increase threshold by?
+        threshold *= 1.1
+
+    logging.debug("Ignoring lines with depth < %f", threshold)
     return mask
 
 

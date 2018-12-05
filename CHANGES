@@ -1,0 +1,22 @@
+SME structure:
+    - Python Class object
+    - Can read IDL sav files, but not write, uses numpy npy format instead
+    - fitresult values in fitresult object
+    - idlver still called that, but contains information about Python version
+
+Abundance:
+    - Python Class object
+    - set of two default solar abundances
+    - can output abundances in different formats
+    - internal format is 'H=12', i.e. log(X/H) + 12
+
+Synthetic Spectrum:
+    - sme_func, gives almost the same results as in IDL
+    - there are slight differences in the interpolation of the atmospheres
+    - relative differences < 1e-6 (?)
+
+Solver:
+    - Switched solving algorithm to use scipy.optimize.least_squares with method="trf"
+    - Method "trf" = Trust-region Reflective
+    - also includes bounds, but only for the outer edges of the atmosphere grid
+    - will find different minima than IDL SME, but within a reasonable range and often with slightly better chi square
