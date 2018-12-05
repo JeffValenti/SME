@@ -59,13 +59,13 @@ def determine_continuum(sme, segment):
         if np.all(m != 2):
             # If no continuum mask has been set
             # Use the effective wavelength ranges of the lines to determine continuum points
-            cont = get_continuum_mask(x, sme.linelist, mask=m)
-            # Save mask for next iteration
-            m[cont] = 2
             logging.info(
                 "No Continuum mask was set, "
                 "Using effective wavelength range of lines to find continuum instead"
             )
+            cont = get_continuum_mask(x, sme.linelist, mask=m)
+            # Save mask for next iteration
+            m[cont] = 2
             logging.debug("Continuum mask points: %i", np.count_nonzero(cont == 2))
         else:
             cont = m == 2

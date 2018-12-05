@@ -1,5 +1,6 @@
 """ Handles reading and interpolation of atmopshere (grid) data """
 import itertools
+import logging
 import os
 
 import numpy as np
@@ -638,9 +639,10 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
     Mmin = np.min(Mlist)  # range of [M/H] in grid
     Mmax = np.max(Mlist)
     if MonH > Mmax:  # true: [M/H] too large
-        print(
-            "interp_atmo_grid: requested [M/H] (%.3f) larger than max grid value (%.3f). extrapolating."
-            % (MonH, Mmax)
+        logging.info(
+            "interp_atmo_grid: requested [M/H] (%.3f) larger than max grid value (%.3f). extrapolating.",
+            MonH,
+            Mmax,
         )
     if MonH < Mmin:  # true: logg too small
         raise ValueError(
@@ -659,7 +661,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
 
     # Trace diagnostics.
     if verbose >= 5:
-        print("[M/H]: %.3f < %.3f < %.3f" % (Mlo, MonH, Mup))
+        logging.info("[M/H]: %.3f < %.3f < %.3f", Mlo, MonH, Mup)
 
     # *** DETERMINATION OF LOG(G) BRACKETS AT [M/H] BRACKET VALUES ***
     # Set up for loop through [M/H] bounds.
@@ -673,9 +675,10 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
         Gmin = np.min(Glist)  # range of gravities in grid
         Gmax = np.max(Glist)
         if logg > Gmax:  # true: logg too large
-            print(
-                "interp_atmo_grid: requested log(g) (%.3f) larger than max grid value (%.3f). extrapolating."
-                % (logg, Gmax)
+            logging.info(
+                "interp_atmo_grid: requested log(g) (%.3f) larger than max grid value (%.3f). extrapolating.",
+                logg,
+                Gmax,
             )
 
         if logg < Gmin:  # true: logg too small
@@ -695,10 +698,8 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
 
         # Trace diagnostics.
         if verbose >= 5:
-            if iMb == 0:
-                print()
-            print(
-                "log(g) at [M/H]=%.3f: %.3f < %.3f < %.3f" % (Mb[iMb], Glo, logg, Gup)
+            logging.info(
+                "log(g) at [M/H]=%.3f: %.3f < %.3f < %.3f", Mb[iMb], Glo, logg, Gup
             )
 
     # End of loop through [M/H] bracket values.
@@ -722,9 +723,10 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
                     % (Teff, Tmax)
                 )
             if Teff < Tmin:  # true: logg too small
-                print(
-                    "interp_atmo_grid: requested Teff (%i) smaller than min grid value (%i). extrapolating."
-                    % (Teff, Tmin)
+                logging.info(
+                    "interp_atmo_grid: requested Teff (%i) smaller than min grid value (%i). extrapolating.",
+                    Teff,
+                    Tmin,
                 )
 
             # Find closest two temperatures in subgrid that bracket requested Teff.
@@ -738,11 +740,13 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
 
             # Trace diagnostics.
             if verbose >= 5:
-                if iGb == 0 and iMb == 0:
-                    print()
-                print(
-                    "Teff at log(g)=%.3f and [M/H]=%.3f: %i < %i < %i"
-                    % (Gb[iMb, iGb], Mb[iMb], Tlo, Teff, Tup)
+                logging.info(
+                    "Teff at log(g)=%.3f and [M/H]=%.3f: %i < %i < %i",
+                    Gb[iMb, iGb],
+                    Mb[iMb],
+                    Tlo,
+                    Teff,
+                    Tup,
                 )
 
     # End of loop through log(g) and [M/H] bracket values.
@@ -757,23 +761,24 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
         )[0]
         nwhr = iwhr.size
         if nwhr != 1:
-            print(
-                "interp_atmo_grid: %i models in grid with [M/H]=%.1f, log(g)=%.1f, and Teff=%i"
-                % (nwhr, Mb[iMb], Gb[iMb, iGb], Tb[iMb, iGb, iTb])
+            logging.info(
+                "interp_atmo_grid: %i models in grid with [M/H]=%.1f, log(g)=%.1f, and Teff=%i",
+                nwhr,
+                Mb[iMb],
+                Gb[iMb, iGb],
+                Tb[iMb, iGb, iTb],
             )
         icor[iMb, iGb, iTb] = iwhr[0]
 
     # Trace diagnostics.
     if verbose >= 1:
-        print()
-        print("Teff=%i,  log(g)=%.3f,  [M/H]=%.3f:" % (Teff, logg, MonH))
-        print()
-        print("indx  M/H  g   Teff     indx  M/H  g   Teff")
+        logging.info("Teff=%i,  log(g)=%.3f,  [M/H]=%.3f:", Teff, logg, MonH)
+        logging.info("indx  M/H  g   Teff     indx  M/H  g   Teff")
         for iMb in range(nb):
             for iGb in range(nb):
                 i0 = icor[iMb, iGb, 0]
                 i1 = icor[iMb, iGb, 1]
-                print(
+                logging.info(
                     i0,
                     atmo_grid[i0].monh,
                     atmo_grid[i0].logg,
@@ -783,7 +788,6 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
                     atmo_grid[i1].logg,
                     atmo_grid[i1].teff,
                 )
-            print()
 
     # The code below interpolates between 8 corner models to produce
     # the output atmosphere. In the first step, pairs of models at each
@@ -902,8 +906,8 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
                     "Input ATMO.GEOM='%s' not valid for requested model." % atmo.geom
                 )
             else:
-                print(
-                    "Input ATMO.GEOM='%s' overrides '%s' from grid." % (atmo.geom, geom)
+                logging.info(
+                    "Input ATMO.GEOM='%s' overrides '%s' from grid.", atmo.geom, geom
                 )
     atmo.geom = geom
 
