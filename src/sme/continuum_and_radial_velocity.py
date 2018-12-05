@@ -12,6 +12,8 @@ from scipy.interpolate import interp1d
 from scipy.optimize import least_squares
 from scipy.constants import speed_of_light
 
+from . import sme_synth
+
 
 c_light = speed_of_light * 1e-3  # speed of light in km/s
 
@@ -51,22 +53,54 @@ def determine_continuum(sme, segment):
 
         # Extract points in this segment
         x, y, m, u = sme.spectrum(return_uncertainty=True, return_mask=True)
-        x = x[segment]
-        y = y[segment]
-        u = u[segment]
-        m = m[segment]
+        x, y, u, m = x[segment], y[segment], u[segment], m[segment]
 
         # Set continuum mask
-        cont = (m == 2) & (u != 0)
-        x = x[cont]
-        y = y[cont]
-        u = u[cont]
+        if np.all(m != 2):
+            cont = False
+            threshold = 0.1
+            while not np.any(cont) or np.count_nonzero(cont) < len(x) * 0.1:
+                cont = get_continuum_mask(x, sme.linelist, threshold=threshold)
+                cont = cont & (u != 0)
+                threshold *= 1.1
+            # Save mask for next iteration
+            m[cont] = 2
+            logging.info(
+                "No Continuum mask was set"
+                "using effective wavelength range of lines to find continuum instead"
+            )
+            logging.debug("Ignoring lines with depth < %f", threshold)
+        else:
+            cont = (m == 2) & (u != 0)
+
+        x, y, u = x[cont], y[cont], u[cont]
 
         # Fit polynomial
-        cscale = np.polyfit(x, y, deg=ndeg, w=1 / u)
+        try:
+            func = lambda coef: (np.polyval(coef, x) - y) / u
+            c0 = [0] * ndeg + [1]
+            res = least_squares(func, x0=c0, loss="soft_l1")
+            cscale = res.x
+        except TypeError:
+            warnings.warn("Could not fit continuum, set continuum mask?")
+            cscale = [1]
 
     logging.debug("Continuum coefficients for segment %i: %s", segment, cscale)
     return cscale
+
+
+def get_continuum_mask(wave, linelist, threshold=0.1):
+    """ Use the effective wavelength range of the lines,
+    to find wavelength points that should be unaffected by lines """
+    width = sme_synth.GetLineRange(len(linelist))
+    mask = np.full(wave.size, True)
+
+    for i, line in enumerate(width):
+        if linelist["depth"][i] > threshold:
+            w = (wave >= line[0]) & (wave <= line[1])
+            mask[w] = False
+
+    return mask
 
 
 def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):

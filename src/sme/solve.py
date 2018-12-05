@@ -168,21 +168,6 @@ def linelist_errors(wave, spec, linelist):
     return sig_syst
 
 
-def determine_continuum(wave, spec, linelist, deg=2):
-    """ Use the effective wavelength range of the lines,
-    to find wavelength points that should be unaffected by lines """
-    width = sme_synth.GetLineRange(len(linelist))
-    mask = np.full(wave.size, True)
-
-    for line in width:
-        w = (wave >= line[0]) & (wave <= line[1])
-        mask[w] = False
-
-    coeff = np.polyfit(wave[mask], spec[mask], deg=deg)
-
-    return coeff
-
-
 def get_bounds(param_names, atmo_file):
     """
     Create Bounds based on atmosphere grid and general rules
