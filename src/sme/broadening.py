@@ -59,7 +59,7 @@ def apply_broadening(ipres, x_seg, y_seg, type="gauss", sme=None):
     return y_seg
 
 
-def tablebroad(w, s, xip, yip):
+def tablebroad(_, s, xip, yip):
     """
     Convolves a spectrum with an arbitrary instrumental profile.
 
