@@ -61,7 +61,7 @@ def start_logging(log_file="log.log"):
         logger.addHandler(file)
 
     # Turns print into logging.info
-    builtins.print = lambda msg, *args, **kwargs: logging.info(msg, *args)
+    # builtins.print = lambda msg, *args, **kwargs: logging.info(msg, *args)
     logging.captureWarnings(True)
 
     logging.debug("----------------------")
