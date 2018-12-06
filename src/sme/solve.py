@@ -587,6 +587,7 @@ def synthesize_spectrum(
     #   Apply instrumental and turbulence broadening
     #   Determine Continuum / Radial Velocity for each segment
     for il in range(n_segments):
+        logging.debug("Segment %i", il)
         # Input Wavelength range and Opacity
         vrad_seg = sme.vrad if np.size(sme.vrad) == 1 else sme.vrad[il]
         wbeg, wend = get_wavelengthrange(wran[il], vrad_seg, sme.vsini)
@@ -653,7 +654,9 @@ def synthesize_spectrum(
 
         # TODO: how to resample/interpolate here? Does it matter?
         # smod[il] = resamp(x_seg, y_seg, wave[il])
-        smod[il] = interp1d(wgrid, flux, kind="cubic")(wave[il])
+        smod[il] = interp1d(
+            wgrid, flux, kind="cubic", fill_value=0, bounds_error=False
+        )(wave[il])
 
     # Merge all segments
     sme.smod = smod = np.concatenate(smod)

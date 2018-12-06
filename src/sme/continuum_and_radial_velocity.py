@@ -7,6 +7,7 @@ import logging
 import warnings
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.signal import correlate
 from scipy.interpolate import interp1d
 from scipy.optimize import least_squares
@@ -65,11 +66,10 @@ def determine_continuum(sme, segment):
             )
             cont = get_continuum_mask(x, sme.linelist, mask=m)
             # Save mask for next iteration
-            m[cont] = 2
+            m[cont == 2] = 2
             logging.debug("Continuum mask points: %i", np.count_nonzero(cont == 2))
-        else:
-            cont = m == 2
 
+        cont = m == 2
         x, y, u = x[cont], y[cont], u[cont]
 
         # Fit polynomial
@@ -82,7 +82,7 @@ def determine_continuum(sme, segment):
             warnings.warn("Could not fit continuum, set continuum mask?")
             cscale = [1]
 
-    logging.debug("Continuum coefficients for segment %i: %s", segment, cscale)
+    logging.debug("Continuum coefficients %s", cscale)
     return cscale
 
 
@@ -234,6 +234,9 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
         x2 = x_obs[len(x_obs) // 2]
         rvel = c_light * (1 - x2 / x1)
 
+        rv_bounds = (-100, 100)
+        rvel = np.clip(rvel, *rv_bounds)
+
         lines = mask == 1
 
         # Then minimize the least squares for a better fit
@@ -246,12 +249,12 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
             return resid
 
         interpolator = interp1d(
-            x_syn, y_syn, kind="cubic", fill_value=y_syn[[0, -1]], bounds_error=False
+            x_syn, y_syn, kind="cubic", fill_value=0, bounds_error=False
         )
-        res = least_squares(func, x0=rvel, loss="soft_l1")
+        res = least_squares(func, x0=rvel, loss="soft_l1", bounds=rv_bounds)
         rvel = res.x[0]
 
-    logging.debug("Radial velocity for segment %i: %f", segment, rvel)
+    logging.debug("Radial velocity %f", rvel)
     return rvel
 
 
