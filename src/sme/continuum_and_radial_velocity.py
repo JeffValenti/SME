@@ -44,7 +44,9 @@ def determine_continuum(sme, segment):
         # If there is no observation, we have no continuum scale
         warnings.warn("Missing data for continuum fit")
         cscale = None
-    elif sme.cscale_flag < 0:
+    elif sme.cscale_flag in ["none", -3]:
+        cscale = 1
+    elif sme.cscale_flag in ["constant", -1, -2, 0]:
         # Continuum flag is set to no continuum
         cscale = sme.cscale
         cscale = cscale[segment] if len(cscale) > 1 else cscale[0]
