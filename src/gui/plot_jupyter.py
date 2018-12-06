@@ -51,11 +51,10 @@ class FinalPlot:
 
     def __init__(self, sme, segment=0):
         self.sme = sme
-        self.wave, self.spec, self.mask = sme.spectrum(return_mask=True)
-        self.wmod, self.smod = sme.spectrum(syn=True)
-        if self.wave is None:
-            self.wave = self.wmod
-
+        self.wave = sme.wave
+        self.spec = sme.spec
+        self.mask = sme.mask
+        self.smod = sme.synth
         self.nsegments = len(self.wave)
         self.segment = segment
         self.wind = sme.wind

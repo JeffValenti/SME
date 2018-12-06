@@ -31,11 +31,10 @@ class MaskPlot:
     # Shift key : Switch between "good/bad" and "line/cont" modes
 
     def __init__(self, sme, segment=0, axes=None, show=True):
-        self.wave, self.spec, self.mask = sme.spectrum(return_mask=True)
-        self.wmod, self.smod = sme.spectrum(syn=True)
-        if self.wave is None:
-            self.wave = self.wmod
-
+        self.wave = sme.wave
+        self.spec = sme.spec
+        self.mask = sme.mask
+        self.smod = sme.synth
         self.segment = segment
         self.nsegments = len(self.wave)
         self.wind = sme.wind

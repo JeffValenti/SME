@@ -59,12 +59,31 @@ class Iliffe_vector:
             )
 
         if isinstance(index[0], slice):
-            return Iliffe_vector(
-                None, index=self.__idx__[1:][index], values=self.__values__
-            )
+            start = index[0].start if index[0].start is not None else 0
+            stop = index[0].stop if index[0].stop is not None else len(self)
+            step = index[0].step if index[0].step is not None else 1
 
-        i0 = self.__idx__[index[0]]
-        i1 = self.__idx__[index[0] + 1]
+            if stop > len(self):
+                stop = len(self)
+
+            idx = self.__idx__
+            if step == 1:
+                values = self.__values__[idx[start] : idx[stop]]
+            else:
+                values = []
+                for i in range(start, stop, step):
+                    values += [self.__values__[idx[i] : idx[i + 1]]]
+                values = np.concatenate(values)
+            sizes = np.diff(idx)[index[0]]
+
+            return Iliffe_vector(sizes, values=values)
+
+        if index[0] >= 0:
+            i0 = self.__idx__[index[0]]
+            i1 = self.__idx__[index[0] + 1]
+        else:
+            i0 = self.__idx__[index[0] - 1]
+            i1 = self.__idx__[index[0]]
         if len(index) == 1:
             return self.__values__[i0:i1]
         if len(index) == 2:
@@ -90,9 +109,15 @@ class Iliffe_vector:
         else:
             raise KeyError("Key must be maximum 2D")
 
+    def max(self):
+        return np.max(self.__values__)
+
+    def min(self):
+        return np.min(self.__values__)
+
     @property
     def size(self):
-        """ number of segments in vector """
+        """ number of elements in vector """
         return self.__idx__[-1]
 
     @property
@@ -101,13 +126,18 @@ class Iliffe_vector:
         return len(self.__idx__) - 1, np.diff(self.__idx__)
 
     @property
+    def ndim(self):
+        """ its always 2D """
+        return 2
+
+    @property
     def dtype(self):
         """ numpy datatype of the values """
         return self.__values__.dtype
 
-    # @property
-    # def flat(self):
-    # return self.__values__.flat
+    @property
+    def flat(self):
+        return self.__values__.flat
 
     def flatten(self):
         """
@@ -494,13 +524,14 @@ class SME_Struct(Param):
         # wavelength grid
         # Illiffe vector?
         self.nseg = None
-        self.wave = None
+        self.wob = kwargs.pop("wave")
         self.wind = kwargs.pop("wind")
         if self.wind is not None:
             self.wind = np.array([0, *(self.wind + 1)])
         # Wavelength range of each section
         self.wran = kwargs.pop("wran", None)
-        self.wran = np.atleast_2d(self.wran)
+        if self.wran is not None:
+            self.wran = np.atleast_2d(self.wran)
         # Observation
         self.sob = None
         self.uob = kwargs.pop("uob")
@@ -557,10 +588,96 @@ class SME_Struct(Param):
         return self.linelist.species
 
     @property
+    def wave(self):
+        """ Wavelength """
+        if self.wob is None:
+            return None
+        w = Iliffe_vector(None, index=self.wind, values=self.wob)
+        return w
+
+    @wave.setter
+    def wave(self, value):
+        if isinstance(value, Iliffe_vector):
+            value = value.__values__
+        self.wob = value
+
+    @property
+    def spec(self):
+        """ Observed Spectrum """
+        if self.sob is None:
+            return None
+        s = Iliffe_vector(None, index=self.wind, values=self.sob)
+        return s
+
+    @spec.setter
+    def spec(self, value):
+        if isinstance(value, Iliffe_vector):
+            value = value.__values__
+        self.sob = value
+
+    @property
+    def uncs(self):
+        """ Uncertainties of the observed spectrum """
+        if self.uob is None:
+            return None
+        u = Iliffe_vector(None, index=self.wind, values=self.uob)
+        return u
+
+    @uncs.setter
+    def uncs(self, value):
+        if isinstance(value, Iliffe_vector):
+            value = value.__values__
+        self.uob = value
+
+    @property
+    def synth(self):
+        """ Synthetic Spectrum """
+        if self.smod is None:
+            return None
+        s = Iliffe_vector(None, index=self.wind, values=self.smod)
+        return s
+
+    @synth.setter
+    def synth(self, value):
+        if isinstance(value, Iliffe_vector):
+            value = value.__values__
+        self.smod = value
+
+    @property
     def mask(self):
+        """ Line and Continuum Mask """
+        if self.mob is None:
+            return None
         if self.mob is not None and self.uob is not None:
             self.mob[self.uob == 0] = 0
-        return self.mob
+        m = Iliffe_vector(None, index=self.wind, values=self.mob)
+        return m
+
+    @mask.setter
+    def mask(self, value):
+        if isinstance(value, Iliffe_vector):
+            value = value.__values__
+        self.mob = value
+
+    @property
+    def line_mask(self):
+        """ Line Mask """
+        return self.mask == 1
+
+    @property
+    def continuum_mask(self):
+        """ Continuum Mask """
+        return self.mask == 2
+
+    @property
+    def good_mask(self):
+        """ Good Pixel Mask """
+        return self.mask != 0
+
+    @property
+    def bad_mask(self):
+        """ Bad Pixel Mask """
+        return self.mask == 0
 
     def __getitem__(self, key):
         if key[-5:].casefold() == "abund":
@@ -612,9 +729,7 @@ class SME_Struct(Param):
             logging.info("Saving SME structure %s", filename)
         np.save(filename, self)
 
-    def spectrum(
-        self, syn=False, cont=False, return_mask=False, return_uncertainty=False
-    ):
+    def spectrum(self, syn=False, return_mask=False, return_uncertainty=False):
         """
         load the wavelength and spectrum, with wavelength sets seperated into seperate arrays
 
@@ -627,51 +742,14 @@ class SME_Struct(Param):
             As the size of each wavelength set is not equal in general, numpy can't usually create a 2d array from the results
         """
 
-        # wavelength grid
-        wave = self.wave
-        # wavelength indices of the various sections
-        # +1 because of different indexing between idl and python
-        section_index = self.wind
-
-        if syn:
-            # synthetic spectrum
-            obs_flux = self.smod
-        else:
-            # observed spectrum
-            obs_flux = self.sob
-
-        # Catch none existing data
-        if obs_flux is None:
-            args = [None, None]
-            if return_mask:
-                args += [None]
-            if return_uncertainty:
-                args += [None]
-            return args
-
-        # return as Iliffe vectors, where the arrays can have different sizes
-        # this is pretty much the same as it was before, just with fancier indexing
-        w = Iliffe_vector(None, index=section_index, values=wave)
-        s = Iliffe_vector(None, index=section_index, values=obs_flux)
-        m = Iliffe_vector(None, index=section_index, values=self.mask)
-        u = Iliffe_vector(None, index=section_index, values=self.uob)
-
-        # Apply continuum normalization
-        # but only to the real observations
-        if cont and not syn:
-            if self.cscale.ndim == 1:
-                x = np.arange(len(wave))
-                s /= np.polyval(self.cscale, x)
-            elif self.cscale.ndim == 2:
-                for i in range(len(s)):
-                    x = np.arange(len(s[i]))
-                    s[i] /= np.polyval(self.cscale[i], x)
+        w = self.wave
+        s = self.spec if not syn else self.synth
 
         args = [w, s]
         if return_mask:
-            args += [m]
+            args += [self.mask]
         if return_uncertainty:
-            args += [u]
+            args += [self.uncs]
         return args
 
 

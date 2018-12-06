@@ -313,10 +313,9 @@ def solve(
     p0 = [sme[s] for s in param_names]
 
     # Get constant data from sme structure
-    _, spec, mask, uncs = sme.spectrum(return_mask=True, return_uncertainty=True)
-    spec = spec.flatten()
-    mask = mask.flatten()
-    uncs = uncs.flatten()
+    spec = sme.spec.flatten()
+    uncs = sme.uncs.flatten()
+    mask = sme.mask.flatten()
 
     mask = mask != 0
     spec = spec[mask]
@@ -369,7 +368,7 @@ def solve(
     sme.fitresults.grad = res.grad
     sme.fitresults.pder = res.jac
     sme.fitresults.resid = res.fun
-    sme.fitresults.chisq = res.cost * 2 / (sme.sob.size - nparam)
+    sme.fitresults.chisq = res.cost * 2 / (sme.spec.size - nparam)
 
     sme.fitresults.punc = {}
     sme.fitresults.punc2 = {}
@@ -541,11 +540,11 @@ def synthesize_spectrum(
     nmu = np.size(sme.mu)
 
     # fix impossible input
-    if "sob" not in sme:
+    if "spec" not in sme:
         sme.vrad_flag = "none"
-    if "sob" not in sme and sme.cscale_flag >= -1:
-        sme.cscale_flag = -3
-    if "wint" not in sme and reuse_wavelength_grid:
+    if "spec" not in sme and sme.cscale_flag >= -1:
+        sme.cscale_flag = "none"
+    if "wint" not in sme:
         reuse_wavelength_grid = False
 
     # Prepare arrays
@@ -563,7 +562,7 @@ def synthesize_spectrum(
 
     # If wavelengths are already defined use those as output
     if "wave" in sme:
-        wave, _ = sme.spectrum()
+        wave = sme.wave
         wind = sme.wind
 
     # Input Model data to C library
