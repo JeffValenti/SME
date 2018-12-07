@@ -7,6 +7,8 @@ import logging
 import os.path
 import warnings
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 from scipy.constants import speed_of_light
 from scipy.interpolate import interp1d
@@ -16,10 +18,11 @@ from scipy.optimize._numdiff import approx_derivative
 
 from . import broadening, sme_synth
 from .abund import Abund
-from .atmosphere import interp_atmo_grid, krz_file
+from .atmosphere import interp_atmo_grid, krz_file, AtmosphereError
 from .continuum_and_radial_velocity import match_rv_continuum
 from .integrate_flux import integrate_flux
 from .nlte import update_depcoeffs
+from .util import safe_interpolation
 
 clight = speed_of_light * 1e-3  # km/s
 warnings.filterwarnings("ignore", category=OptimizeWarning)
@@ -86,10 +89,10 @@ def residuals(
     # run spectral synthesis
     try:
         sme2 = synthesize_spectrum(sme, reuse_wavelength_grid=reuse_wavelength_grid)
-    except ValueError as ve:
+    except AtmosphereError as ae:
         # Something went wrong (left the grid? Don't go there)
         # If returned value is not finite it will be ignored?
-        logging.debug(ve)
+        logging.debug(ae)
         return np.inf
 
     # Return values by reference to sme
@@ -646,6 +649,8 @@ def synthesize_spectrum(
 
         # Fit continuum and radial velocity
         cscale[il], vrad[il] = match_rv_continuum(sme, il, wgrid, flux)
+        logging.debug("Radial velocity: %f", vrad[il])
+        logging.debug("Continuum coefficients: %s", str(cscale[il]))
         # Interpolate spectrum on ouput wavelength grid
         if vrad[il] is not None:
             rv_factor = np.sqrt((1 + vrad[il] / clight) / (1 - vrad[il] / clight))
@@ -653,12 +658,14 @@ def synthesize_spectrum(
 
         # TODO: how to resample/interpolate here? Does it matter?
         # smod[il] = resamp(x_seg, y_seg, wave[il])
-        smod[il] = interp1d(
-            wgrid, flux, kind="cubic", fill_value=0, bounds_error=False
-        )(wave[il])
+        smod[il] = safe_interpolation(wgrid, flux, wave[il])
+
+        if cscale[il] is not None:
+            x = wave[il] - wave[il][0]
+            smod[il] *= np.polyval(cscale[il], x)
 
     # Merge all segments
-    sme.smod = smod = np.concatenate(smod)
+    sme.synth = smod = np.concatenate(smod)
     # if sme already has a wavelength this should be the same
     sme.wave = wave = np.concatenate(wave)
     sme.wind = wind

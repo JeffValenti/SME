@@ -9,11 +9,11 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import correlate
-from scipy.interpolate import interp1d
 from scipy.optimize import least_squares
 from scipy.constants import speed_of_light
 
 from . import sme_synth
+from . import util
 
 
 c_light = speed_of_light * 1e-3  # speed of light in km/s
@@ -46,13 +46,20 @@ def determine_continuum(sme, segment):
         cscale = None
     elif sme.cscale_flag in ["none", -3]:
         cscale = [1]
-    elif sme.cscale_flag in ["constant", -1, -2]:
+    elif sme.cscale_flag in ["fix", -1, -2]:
         # Continuum flag is set to no continuum
         cscale = sme.cscale
         cscale = cscale[segment] if len(cscale) > 1 else cscale[0]
     else:
         # fit a line to the continuum points
-        ndeg = sme.cscale_flag
+        if sme.cscale_flag in ["constant", 0]:
+            ndeg = 0
+        elif sme.cscale_flag in ["linear", 1]:
+            ndeg = 1
+        elif sme.cscale_flag in ["quadratic", 2]:
+            ndeg = 2
+        else:
+            ndeg = sme.cscale_flag
 
         # Extract points in this segment
         x, y, m, u = sme.wave, sme.spec, sme.mask, sme.uncs
@@ -72,6 +79,7 @@ def determine_continuum(sme, segment):
             logging.debug("Continuum mask points: %i", np.count_nonzero(cont == 2))
 
         cont = m == 2
+        x = x - x[0]
         x, y, u = x[cont], y[cont], u[cont]
 
         # Fit polynomial
@@ -84,7 +92,6 @@ def determine_continuum(sme, segment):
             warnings.warn("Could not fit continuum, set continuum mask?")
             cscale = [1]
 
-    logging.debug("Continuum coefficients %s", cscale)
     return cscale
 
 
@@ -250,14 +257,94 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
             resid = (y_obs[lines] - shifted) / u_obs[lines]
             return resid
 
-        interpolator = interp1d(
-            x_syn, y_syn, kind="cubic", fill_value=0, bounds_error=False
-        )
+        interpolator = util.safe_interpolation(x_syn, y_syn, None)
         res = least_squares(func, x0=rvel, loss="soft_l1", bounds=rv_bounds)
         rvel = res.x[0]
 
-    logging.debug("Radial velocity %f", rvel)
     return rvel
+
+
+def determine_rv_and_cont(sme, segment, x_syn, y_syn):
+
+    if "spec" not in sme or "mask" not in sme or "wave" not in sme or "uncs" not in sme:
+        # No observation no radial velocity
+        warnings.warn("Missing data for radial velocity/continuum determination")
+        return 0, [0]
+
+    x_obs = sme.wave[segment]
+    y_obs = sme.spec[segment]
+    u_obs = sme.uncs[segment]
+    x_num = x_obs - x_obs[0]
+
+    if sme.cscale_flag in [-3, "none"]:
+        cflag = False
+        cscale = [1]
+    if sme.cscale_flag in [-1, -2, "fix"]:
+        cflag = False
+        cscale = sme.cscale[segment]
+    elif sme.cscale_flag in [0, "constant"]:
+        ndeg = 0
+        cflag = True
+    elif sme.cscale_flag in [1, "linear"]:
+        ndeg = 1
+        cflag = True
+    elif sme.cscale_flag in [2, "quadratic"]:
+        ndeg = 2
+        cflag = True
+    else:
+        raise ValueError("cscale_flag not recognized")
+
+    if cflag:
+        cscale = np.zeros(ndeg + 1)
+        if sme.cscale is not None:
+            length = len(sme.cscale[segment])
+            if length == ndeg + 1:
+                cscale[:] = sme.cscale[segment]
+            elif length < ndeg + 1:
+                cscale[-length:] = sme.cscale[segment]
+            else:
+                cscale[:] = sme.cscale[segment][-(ndeg + 1) :]
+        else:
+            cscale[-1] = np.median(y_obs)
+
+    if sme.vrad_flag in ["none", -2]:
+        rvel = 0
+        vflag = False
+    elif sme.vrad_flag in ["whole", -1]:
+        rvel = sme.vrad[0]
+        vflag = segment == -1
+    elif sme.vrad_flag in ["each", 1]:
+        rvel = sme.vrad[segment]
+        vflag = True
+
+    interpolator = util.safe_interpolation(x_syn, y_syn, None)
+
+    def func(par):
+        # All the operations are inversed to the usual
+        # i.e the radial velocity shift is applied to the observation frame
+        # and the continuum is multiplied, rather than divided
+        if vflag:
+            rv = par[0]
+            rv_factor = np.sqrt((1 - rv / c_light) / (1 + rv / c_light))
+            shifted = interpolator(x_obs * rv_factor)
+        else:
+            shifted = x_obs
+
+        if cflag:
+            coef = par[1:]
+            shifted *= np.polyval(coef, x_num)
+
+        resid = (y_obs - shifted) / u_obs
+        resid = np.nan_to_num(resid, copy=False)
+        return resid
+
+    x0 = [rvel, *cscale]
+    res = least_squares(func, x0=x0, loss="soft_l1")
+
+    rvel = res.x[0]
+    cscale = res.x[1:]
+
+    return rvel, cscale
 
 
 def match_rv_continuum(sme, segment, x_syn, y_syn):
@@ -284,6 +371,8 @@ def match_rv_continuum(sme, segment, x_syn, y_syn):
     cscale : array of size (ndeg + 1,)
         new continuum coefficients
     """
+
+    # rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
 
     cscale = determine_continuum(sme, segment)
     rvel = determine_radial_velocity(sme, segment, cscale, x_syn, y_syn)

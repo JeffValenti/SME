@@ -11,6 +11,10 @@ from scipy.optimize import curve_fit
 from .sme import Atmo
 
 
+class AtmosphereError(Exception):
+    """ Something went wrong with the atmosphere interpolation """
+
+
 class sav_file(np.recarray):
     """ IDL savefile atmosphere grid """
 
@@ -239,7 +243,9 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
     ok_tau = "TAU" in tags1 and "TAU" in tags2
     ok_rhox = "RHOX" in tags1 and "RHOX" in tags2
     if not ok_tau and not ok_rhox:
-        raise ValueError("atmo1 and atmo2 structures must both contain RHOX or TAU")
+        raise AtmosphereError(
+            "atmo1 and atmo2 structures must both contain RHOX or TAU"
+        )
 
     # Set interpolation variable, if not specified by keyword argument.
     if interpvar is None:
@@ -248,7 +254,7 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
         else:
             interpvar = "RHOX"
     if interpvar != "TAU" and interpvar != "RHOX":
-        raise ValueError("interpvar must be 'TAU' (default) or 'RHOX'")
+        raise AtmosphereError("interpvar must be 'TAU' (default) or 'RHOX'")
 
     ##
     ## Define depth scale for both atmospheres
@@ -333,9 +339,9 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
 
         # Find vector in each structure.
         if vtag not in tags1:
-            raise ValueError("atmo1 does not contain " + vtag)
+            raise AtmosphereError("atmo1 does not contain " + vtag)
         if vtag not in tags2:
-            raise ValueError("atmo2 does not contain " + vtag)
+            raise AtmosphereError("atmo2 does not contain " + vtag)
 
         vect1 = np.log10(atmo1[vtag][itop1 : ibot1 + 1])
         vect2 = np.log10(atmo2[vtag][itop2 : ibot2 + 1])
@@ -361,7 +367,7 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
                 (depth1 >= min(depth2) + ipar[0]) & (depth1 <= max(depth2) + ipar[0])
             )[0]
             if igd.size < 2:
-                raise ValueError("unstable shift in temperature")
+                raise AtmosphereError("unstable shift in temperature")
 
     ##
     ## Use mean shift to construct output depth scale.
@@ -584,11 +590,11 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
     elif "TAU" in gtags:
         depth = "TAU"
     else:
-        raise ValueError("no value for ATMO.DEPTH")
+        raise AtmosphereError("no value for ATMO.DEPTH")
     if depth != "TAU" and depth != "RHOX":
-        raise ValueError("ATMO.DEPTH must be 'TAU' or 'RHOX', not '%s'" % depth)
+        raise AtmosphereError("ATMO.DEPTH must be 'TAU' or 'RHOX', not '%s'" % depth)
     if depth not in gtags:
-        raise ValueError(
+        raise AtmosphereError(
             "ATMO.DEPTH='%s', but ATMO. %s does not exist" % (depth, depth)
         )
 
@@ -608,11 +614,11 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
     elif "RHOX" in gtags:
         interp = "RHOX"
     else:
-        raise ValueError("no value for ATMO.INTERP")
+        raise AtmosphereError("no value for ATMO.INTERP")
     if interp not in ["TAU", "RHOX"]:
-        raise ValueError("ATMO.INTERP must be 'TAU' or 'RHOX', not '%s'" % interp)
+        raise AtmosphereError("ATMO.INTERP must be 'TAU' or 'RHOX', not '%s'" % interp)
     if interp not in gtags:
-        raise ValueError(
+        raise AtmosphereError(
             "ATMO.INTERP='%s', but ATMO. %s does not exist" % (interp, interp)
         )
 
@@ -645,7 +651,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
             Mmax,
         )
     if MonH < Mmin:  # true: logg too small
-        raise ValueError(
+        raise AtmosphereError(
             "interp_atmo_grid: requested [M/H] (%.3f) smaller than min grid value (%.3f). returning."
             % (MonH, Mmin)
         )
@@ -682,7 +688,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
             )
 
         if logg < Gmin:  # true: logg too small
-            raise ValueError(
+            raise AtmosphereError(
                 "interp_atmo_grid: requested log(g) (%.3f) smaller than min grid value (%.3f). returning."
                 % (logg, Gmin)
             )
@@ -718,7 +724,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
             Tmin = np.min(Tlist)  # range of temperatures in grid
             Tmax = np.max(Tlist)
             if Teff > Tmax:  # true: Teff too large
-                raise ValueError(
+                raise AtmosphereError(
                     "interp_atmo_grid: requested Teff (%i) larger than max grid value (%i). returning."
                     % (Teff, Tmax)
                 )
@@ -902,7 +908,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
     if "GEOM" in atags:
         if atmo.geom != "" and atmo.geom != geom:
             if atmo.geom == "SPH":
-                raise ValueError(
+                raise AtmosphereError(
                     "Input ATMO.GEOM='%s' not valid for requested model." % atmo.geom
                 )
             else:

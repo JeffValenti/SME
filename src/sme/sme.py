@@ -683,7 +683,10 @@ class SME_Struct(Param):
         self.md5 = None
         self.id = None
         # additional parameters
-        self.vrad = None
+        self.vrad = kwargs.pop("vrad")
+        if self.vrad is not None:
+            self.vrad = np.atleast_1d(self.vrad)
+            
         self.vrad_flag = None
         self.cscale = kwargs.pop("cscale", None)
         if self.cscale is not None:
@@ -719,6 +722,8 @@ class SME_Struct(Param):
         # Illiffe vector?
         self.nseg = None
         self.wob = kwargs.pop("wave")
+        if self.wob is not None:
+            self.wob = np.require(self.wob, requirements="W")
         self.wind = kwargs.pop("wind")
         if self.wind is not None:
             self.wind = np.array([0, *(self.wind + 1)])
@@ -727,8 +732,12 @@ class SME_Struct(Param):
         if self.wran is not None:
             self.wran = np.atleast_2d(self.wran)
         # Observation
-        self.sob = None
-        self.uob = kwargs.pop("uob")
+        self.sob = kwargs.pop("sob")
+        if self.sob is not None:
+            self.sob = np.require(self.sob, requirements="W")
+        self.uob = kwargs.pop("uob")        
+        if self.uob is not None:
+            self.uob = np.require(self.uob, requirements="W")
         self.mob = kwargs.pop("mob")
         if self.mob is not None:
             self.mob = np.require(self.mob, requirements="W")
@@ -900,6 +909,10 @@ class SME_Struct(Param):
             a, b = max(wave[i]), min(wave[i])
             c0 = (a - b) * (c - d) / (a * c - b * d) ** 2
             c1 = (a - b) / (a * c - b * d)
+
+            # Shift zero point to first wavelength of the segment
+            c1 += c0 * self.spec[i][0]
+
             self.cscale[i] = [c0, c1]
 
     @staticmethod

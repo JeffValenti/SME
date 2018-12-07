@@ -4,9 +4,8 @@ reads and interpolates departure coefficients from library files
 """
 
 import itertools
-import os.path
-
 import logging
+import os.path
 import warnings
 
 import numpy as np
