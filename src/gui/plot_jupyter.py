@@ -225,7 +225,7 @@ class FinalPlot:
             if self.smod is not None:
                 data += [
                     dict(
-                        x=self.wmod[seg],
+                        x=self.wave[seg],
                         y=self.smod[seg],
                         name="Synthethic",
                         line={"color": fmt["Syn"]["color"]},

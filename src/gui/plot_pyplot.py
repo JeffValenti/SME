@@ -168,7 +168,7 @@ class MaskPlot:
 
         if self.smod is not None and not update:
             self.im.plot(
-                self.wmod[self.segment],
+                self.wave[self.segment],
                 self.smod[self.segment],
                 label="Synthethic",
                 **fmt["Syn"],
