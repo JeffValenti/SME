@@ -265,6 +265,31 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
 
 
 def determine_rv_and_cont(sme, segment, x_syn, y_syn):
+    """
+    Fits both radial velocity and continuum level simultaneously
+    by comparing the synthetic spectrum to the observation
+
+    The best fit is determined using robust least squares between
+    a shifted and scaled synthetic spectrum and the observation
+
+    Parameters
+    ----------
+    sme : SME_Struct
+        contains the observation
+    segment : int
+        wavelength segment to fit
+    x_syn : array of size (ngrid,)
+        wavelength of the synthetic spectrum
+    y_syn : array of size (ngrid,)
+        intensity of the synthetic spectrum
+    
+    Returns
+    -------
+    rvel : float
+        radial velocity in km/s
+    cscale : array of size (ndeg+1,)
+        polynomial coefficients of the continuum
+    """
 
     if "spec" not in sme or "mask" not in sme or "wave" not in sme or "uncs" not in sme:
         # No observation no radial velocity
@@ -320,9 +345,9 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     interpolator = util.safe_interpolation(x_syn, y_syn, None)
 
     def func(par):
-        # All the operations are inversed to the usual
-        # i.e the radial velocity shift is applied to the observation frame
-        # and the continuum is multiplied, rather than divided
+        # The radial velocity shift is inversed
+        # i.e. the wavelength grid of the observation is shifted to match the synthetic spectrum
+        # but thats ok, because the shift is symmetric
         if vflag:
             rv = par[0]
             rv_factor = np.sqrt((1 - rv / c_light) / (1 + rv / c_light))
