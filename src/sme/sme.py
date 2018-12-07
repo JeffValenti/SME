@@ -26,7 +26,7 @@ class Iliffe_vector:
     Instead the index is a pointer to segments of a 1D array with varying sizes
     """
 
-    def __init__(self, sizes, index=None, values=None, dtype=float):
+    def __init__(self, sizes, values=None, index=None, dtype=float):
         # sizes = size of the individual parts
         # the indices are then [0, s1, s1+s2, s1+s2+s3, ...]
         if index is None:
@@ -57,6 +57,11 @@ class Iliffe_vector:
             return Iliffe_vector(
                 None, index=self.__idx__, values=self.__values__[index]
             )
+
+        if isinstance(index, Iliffe_vector):
+            if not self.__equal_size__(index):
+                raise ValueError("Index vector has a different shape")
+            return self.__values__[index.__values__]
 
         if isinstance(index[0], slice):
             start = index[0].start if index[0].start is not None else 0
@@ -109,6 +114,183 @@ class Iliffe_vector:
         else:
             raise KeyError("Key must be maximum 2D")
 
+    # Math operators
+    # If both are Iliffe vectors of the same size, use element wise operations
+    # Otherwise apply the operator to __values__
+    def __equal_size__(self, other):
+        if not isinstance(other, Iliffe_vector):
+            return NotImplemented
+
+        if self.shape[0] != other.shape[0]:
+            return False
+
+        return np.array_equal(self.__idx__, other.__idx__)
+
+    def __operator__(self, other, operator):
+        if isinstance(other, Iliffe_vector):
+            if not self.__equal_size__(other):
+                return NotImplemented
+            other = other.__values__
+
+        operator = getattr(self.__values__, operator)
+        values = operator(other)
+        if values is NotImplemented:
+            return NotImplemented
+        iv = Iliffe_vector(None, index=self.__idx__, values=values)
+        return iv
+
+    def __eq__(self, other):
+        return self.__operator__(other, "__eq__")
+
+    def __ne__(self, other):
+        return self.__operator__(other, "__ne__")
+
+    def __lt__(self, other):
+        return self.__operator__(other, "__lt__")
+
+    def __gt__(self, other):
+        return self.__operator__(other, "__gt__")
+
+    def __le__(self, other):
+        return self.__operator__(other, "__le__")
+
+    def __ge__(self, other):
+        return self.__operator__(other, "__ge__")
+
+    def __add__(self, other):
+        return self.__operator__(other, "__add__")
+
+    def __sub__(self, other):
+        return self.__operator__(other, "__sub__")
+
+    def __mul__(self, other):
+        return self.__operator__(other, "__mul__")
+
+    def __truediv__(self, other):
+        return self.__operator__(other, "__truediv__")
+
+    def __floordiv__(self, other):
+        return self.__operator__(other, "__floordiv__")
+
+    def __mod__(self, other):
+        return self.__operator__(other, "__mod__")
+
+    def __divmod__(self, other):
+        return self.__operator__(other, "__divmod__")
+
+    def __pow__(self, other):
+        return self.__operator__(other, "__pow__")
+
+    def __lshift__(self, other):
+        return self.__operator__(other, "__lshift__")
+
+    def __rshift__(self, other):
+        return self.__operator__(other, "__rshift__")
+
+    def __and__(self, other):
+        return self.__operator__(other, "__and__")
+
+    def __or__(self, other):
+        return self.__operator__(other, "__or__")
+
+    def __xor__(self, other):
+        return self.__operator__(other, "__xor__")
+
+    def __radd__(self, other):
+        return self.__operator__(other, "__radd__")
+
+    def __rsub__(self, other):
+        return self.__operator__(other, "__rsub__")
+
+    def __rmul__(self, other):
+        return self.__operator__(other, "__rmul__")
+
+    def __rtruediv__(self, other):
+        return self.__operator__(other, "__rtruediv__")
+
+    def __rfloordiv__(self, other):
+        return self.__operator__(other, "__rfloordiv__")
+
+    def __rmod__(self, other):
+        return self.__operator__(other, "__rmod__")
+
+    def __rdivmod__(self, other):
+        return self.__operator__(other, "__rdivmod__")
+
+    def __rpow__(self, other):
+        return self.__operator__(other, "__rpow__")
+
+    def __rlshift__(self, other):
+        return self.__operator__(other, "__rlshift__")
+
+    def __rrshift__(self, other):
+        return self.__operator__(other, "__rrshift__")
+
+    def __rand__(self, other):
+        return self.__operator__(other, "__rand__")
+
+    def __ror__(self, other):
+        return self.__operator__(other, "__ror__")
+
+    def __rxor__(self, other):
+        return self.__operator__(other, "__rxor__")
+
+    def __iadd__(self, other):
+        return self.__operator__(other, "__iadd__")
+
+    def __isub__(self, other):
+        return self.__operator__(other, "__isub__")
+
+    def __imul__(self, other):
+        return self.__operator__(other, "__imul__")
+
+    def __itruediv__(self, other):
+        return self.__operator__(other, "__itruediv__")
+
+    def __ifloordiv__(self, other):
+        return self.__operator__(other, "__ifloordiv__")
+
+    def __imod__(self, other):
+        return self.__operator__(other, "__imod__")
+
+    def __ipow__(self, other):
+        return self.__operator__(other, "__ipow__")
+
+    def __iand__(self, other):
+        return self.__operator__(other, "__iand__")
+
+    def __ior__(self, other):
+        return self.__operator__(other, "__ior__")
+
+    def __ixor__(self, other):
+        return self.__operator__(other, "__ixor__")
+
+    def __neg__(self):
+        values = -self.__values__
+        iv = Iliffe_vector(None, index=self.__idx__, values=values)
+        return iv
+
+    def __pos__(self):
+        return self
+
+    def __abs__(self):
+        values = abs(self.__values__)
+        iv = Iliffe_vector(None, index=self.__idx__, values=values)
+        return iv
+
+    def __invert__(self):
+        values = ~self.__values__
+        iv = Iliffe_vector(None, index=self.__idx__, values=values)
+        return iv
+
+    def __str__(self):
+        s = [str(i) for i in self]
+        s = str(s).replace("'", "")
+        return s
+
+    def __repr__(self):
+        return f"Iliffe_vector({self.sizes}, {self.__values__})"
+
     def max(self):
         return np.max(self.__values__)
 
@@ -123,7 +305,12 @@ class Iliffe_vector:
     @property
     def shape(self):
         """ number of segments, array with size of each segment """
-        return len(self.__idx__) - 1, np.diff(self.__idx__)
+        return len(self), self.sizes
+
+    @property
+    def sizes(self):
+        """ Sizes of the different segments """
+        return list(np.diff(self.__idx__))
 
     @property
     def ndim(self):
@@ -137,12 +324,14 @@ class Iliffe_vector:
 
     @property
     def flat(self):
+        """ Flat iterator through the values """
         return self.__values__.flat
 
     def flatten(self):
         """
         Returns a new(!) flattened version of the vector
-        Values are identical to __values__ iff the segments don't overlap
+        Values are identical to __values__ if the size
+        of all segements equals the size of __values__
         """
         return np.concatenate([self[i] for i in range(len(self))])
 
@@ -151,6 +340,11 @@ class Iliffe_vector:
         idx = np.copy(self.__idx__)
         values = np.copy(self.__values__)
         return Iliffe_vector(None, index=idx, values=values)
+
+    def append(self, other):
+        """ Append a new segment to the end of the vector"""
+        self.__values__ = np.concatenate((self.__values__, other))
+        self.__idx__ = np.concatenate((self.__idx__, len(other)))
 
 
 class Collection(object):
