@@ -12,6 +12,7 @@ import logging
 import numpy as np
 from scipy.interpolate import interp1d
 
+from ...version import version as __version__
 from platform import python_version
 from numpy import __version__ as npversion
 from scipy import __version__ as spversion
@@ -79,6 +80,7 @@ def start_logging(log_file="log.log"):
 
     logging.debug("----------------------")
     logging.debug("Python version: %s", python_version())
+    logging.debug("SME version: %s", __version__)
     logging.debug("Numpy version: %s", npversion)
     logging.debug("Scipy version: %s", spversion)
     logging.debug("Pandas version: %s", spversion)
