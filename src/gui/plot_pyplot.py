@@ -196,41 +196,44 @@ class MaskPlot:
                 **fmt["ContMask"],
             )
 
-        if self.lines is not None and not update:
-            self.lock = True
-            xlim = self.wave[self.segment][[0, -1]]
-            xlim *= 1 - self.vrad[self.segment] / clight
-            self.lines_segment = self.lines[
-                (self.lines.wlcent >= xlim[0]) & (self.lines.wlcent <= xlim[1])
-            ]
+        try:
+            if self.lines is not None and not update:
+                self.lock = True
+                xlim = self.wave[self.segment][[0, -1]]
+                xlim *= 1 - self.vrad[self.segment] / clight
+                self.lines_segment = self.lines[
+                    (self.lines.wlcent >= xlim[0]) & (self.lines.wlcent <= xlim[1])
+                ]
 
-            importance = self.lines_segment.depth - min(self.lines_segment.depth)
-            importance /= max(importance)
-            self.line_plot = [[None, None] for _ in self.lines_segment]
-            for i, line in enumerate(self.lines_segment):
-                # if i > threshold:
-                wl = line.wlcent * (1 + self.vrad[self.segment] / clight)
-                self.line_plot[i][0] = self.im.text(
-                    wl,
-                    1.1,
-                    f"{line.species} {line.wlcent:.2f}",
-                    rotation="vertical",
-                    horizontalalignment="right",
-                    verticalalignment="top",
-                    alpha=importance[i],
-                )
-                if self.spec is not None:
-                    depth = np.interp(
-                        wl, self.wave[self.segment], self.spec[self.segment]
+                importance = self.lines_segment.depth - min(self.lines_segment.depth)
+                importance /= max(importance)
+                self.line_plot = [[None, None] for _ in self.lines_segment]
+                for i, line in enumerate(self.lines_segment):
+                    # if i > threshold:
+                    wl = line.wlcent * (1 + self.vrad[self.segment] / clight)
+                    self.line_plot[i][0] = self.im.text(
+                        wl,
+                        1.1,
+                        f"{line.species} {line.wlcent:.2f}",
+                        rotation="vertical",
+                        horizontalalignment="right",
+                        verticalalignment="top",
+                        alpha=importance[i],
                     )
-                else:
-                    depth = np.interp(
-                        wl, self.wave[self.segment], self.smod[self.segment]
+                    if self.spec is not None:
+                        depth = np.interp(
+                            wl, self.wave[self.segment], self.spec[self.segment]
+                        )
+                    else:
+                        depth = np.interp(
+                            wl, self.wave[self.segment], self.smod[self.segment]
+                        )
+                    self.line_plot[i][1] = self.im.vlines(
+                        wl, ymin=depth, ymax=1.1, alpha=importance[i]
                     )
-                self.line_plot[i][1] = self.im.vlines(
-                    wl, ymin=depth, ymax=1.1, alpha=importance[i]
-                )
-            self.lock = False
+                self.lock = False
+        except ValueError:
+            pass
 
         self.im.figure.suptitle("SME Fit\nSegment %i" % self.segment)
         self.im.set_xlabel("Wavelength [Å]")
