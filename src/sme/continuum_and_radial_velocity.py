@@ -305,7 +305,7 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     if sme.cscale_flag in [-3, "none"]:
         cflag = False
         cscale = [1]
-    if sme.cscale_flag in [-1, -2, "fix"]:
+    elif sme.cscale_flag in [-1, -2, "fix"]:
         cflag = False
         cscale = sme.cscale[segment]
     elif sme.cscale_flag in [0, "constant"]:
