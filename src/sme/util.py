@@ -13,6 +13,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 from ...version import version as __version__
+from .sme_synth import SMELibraryVersion
 from platform import python_version
 from numpy import __version__ as npversion
 from scipy import __version__ as spversion
@@ -75,20 +76,22 @@ def start_logging(log_file="log.log"):
         logger.addHandler(file)
 
     # Turns print into logging.info
-    builtins.print = lambda msg, *args, **kwargs: logging.info(msg, *args)
+    # But messes with the debugger
+    # builtins.print = lambda msg, *args, **kwargs: logging.info(msg, *args)
     logging.captureWarnings(True)
 
     logging.debug("----------------------")
     logging.debug("Python version: %s", python_version())
-    logging.debug("SME version: %s", __version__)
+    logging.debug("SME CLib version: %s", SMELibraryVersion())
+    logging.debug("PySME version: %s", __version__)
     logging.debug("Numpy version: %s", npversion)
     logging.debug("Scipy version: %s", spversion)
-    logging.debug("Pandas version: %s", spversion)
+    logging.debug("Pandas version: %s", pdversion)
 
 
 def parse_args():
     """Parse command line arguments
-    
+
     Returns
     -------
     sme : str

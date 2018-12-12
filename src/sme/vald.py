@@ -144,8 +144,11 @@ class ValdFile:
             linelist["reference"] = comment
 
             # Parse energy level terms
-            term_lower = [t.replace("'", "").split(maxsplit=1)[-1] for t in term_lower]
-            term_upper = [t.replace("'", "").split(maxsplit=1)[-1] for t in term_upper]
+            term_lower = [t.replace("'", "").split(maxsplit=1) for t in term_lower]
+            term_upper = [t.replace("'", "").split(maxsplit=1) for t in term_upper]
+            term_lower = [t[-1][:-1] if len(t) != 0 else "" for t in term_lower]
+            term_upper = [t[-1][:-1] if len(t) != 0 else "" for t in term_upper]
+
             linelist["term_lower"] = term_lower
             linelist["term_upper"] = term_upper
 

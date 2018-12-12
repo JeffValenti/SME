@@ -246,7 +246,7 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
         rv_bounds = (-100, 100)
         rvel = np.clip(rvel, *rv_bounds)
 
-        lines = mask == 1
+        lines = mask != 0
 
         # Then minimize the least squares for a better fit
         # as cross correlation can only find
@@ -255,6 +255,7 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
             shifted = interpolator(x_obs[lines] * rv_factor)
             # shifted = np.interp(x_obs[lines], x_syn * rv_factor, y_syn)
             resid = (y_obs[lines] - shifted) / u_obs[lines]
+            resid = np.nan_to_num(resid, copy=False)
             return resid
 
         interpolator = util.safe_interpolation(x_syn, y_syn, None)
@@ -282,7 +283,7 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
         wavelength of the synthetic spectrum
     y_syn : array of size (ngrid,)
         intensity of the synthetic spectrum
-    
+
     Returns
     -------
     rvel : float
@@ -322,13 +323,7 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     if cflag:
         cscale = np.zeros(ndeg + 1)
         if sme.cscale is not None:
-            length = len(sme.cscale[segment])
-            if length == ndeg + 1:
-                cscale[:] = sme.cscale[segment]
-            elif length < ndeg + 1:
-                cscale[-length:] = sme.cscale[segment]
-            else:
-                cscale[:] = sme.cscale[segment][-(ndeg + 1) :]
+            cscale = sme.cscale[segment]
         else:
             cscale[-1] = np.median(y_obs)
 
@@ -338,9 +333,21 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     elif sme.vrad_flag in ["whole", -1]:
         rvel = sme.vrad[0]
         vflag = segment == -1
-    elif sme.vrad_flag in ["each", 1]:
+    elif sme.vrad_flag in ["each", 0]:
         rvel = sme.vrad[segment]
         vflag = True
+    else:
+        raise ValueError(f"Radial velocity Flag not understood {sme.vrad_flag}")
+
+    # Get a first rough estimate from cross correlation
+    # Subtract median (rough continuum estimate) for better correlation
+    y_tmp = np.interp(x_obs, x_syn, y_syn)
+    corr = correlate(y_obs - np.median(y_obs), y_tmp - np.median(y_tmp), mode="same")
+    offset = np.argmax(corr)
+
+    x1 = x_obs[offset]
+    x2 = x_obs[len(x_obs) // 2]
+    rvel = c_light * (1 - x2 / x1)
 
     interpolator = util.safe_interpolation(x_syn, y_syn, None)
 
@@ -397,9 +404,9 @@ def match_rv_continuum(sme, segment, x_syn, y_syn):
         new continuum coefficients
     """
 
-    # rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
+    rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
 
-    cscale = determine_continuum(sme, segment)
-    rvel = determine_radial_velocity(sme, segment, cscale, x_syn, y_syn)
+    # cscale = determine_continuum(sme, segment)
+    # rvel = determine_radial_velocity(sme, segment, cscale, x_syn, y_syn)
 
     return cscale, rvel

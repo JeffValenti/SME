@@ -23,6 +23,7 @@ from .continuum_and_radial_velocity import match_rv_continuum
 from .integrate_flux import integrate_flux
 from .nlte import update_depcoeffs
 from .util import safe_interpolation
+from .uncertainties import uncertainties
 
 clight = speed_of_light * 1e-3  # km/s
 warnings.filterwarnings("ignore", category=OptimizeWarning)
@@ -106,10 +107,11 @@ def residuals(
     if save:
         sme2.save(fname, verbose=False)
 
-    _, synth = sme2.spectrum(syn=True)
-    synth = synth.flatten()
+    synth = sme2.synth
     if mask is not None:
         synth = synth[mask]
+    else:
+        synth = synth.ravel()
 
     # TODO: update based on lineranges
     uncs_linelist = 0
@@ -263,6 +265,16 @@ def get_scale(param_names):
     return scales
 
 
+def default(name):
+    """ Default parameter values for each name """
+    d = {"teff": 5778, "logg": 4.4, "monh": 0, "vmac": 1, "vmic": 1}
+    d.update({f"{el} abund": v for el, v in Abund.solar()().items()})
+
+    logging.info(f"No value for {name} set, using default value {d[name]}")
+
+    return d[name]
+
+
 def solve(
     sme, param_names=("teff", "logg", "monh"), filename="sme.npy", fig=None, **kwargs
 ):
@@ -313,16 +325,12 @@ def solve(
     scales = get_scale(param_names)
 
     # Starting values
-    p0 = [sme[s] for s in param_names]
+    p0 = [sme[s] if sme[s] is not None else default(s) for s in param_names]
 
     # Get constant data from sme structure
-    spec = sme.spec.flatten()
-    uncs = sme.uncs.flatten()
-    mask = sme.mask.flatten()
-
-    mask = mask != 0
-    spec = spec[mask]
-    uncs = uncs[mask]
+    mask = sme.mask_good
+    spec = sme.spec[mask]
+    uncs = sme.uncs[mask]
 
     # Divide the uncertainties by the spectrum, to improve the fit in the continuum
     # Just as in IDL SME
@@ -354,7 +362,7 @@ def solve(
     # Update SME structure
     popt = res.x
     sme.pfree = np.atleast_2d(popt)  # 2d for compatibility
-    sme.pname = param_names
+    sme.fitparameters = param_names
 
     for i, name in enumerate(param_names):
         sme[name] = popt[i]
@@ -381,6 +389,8 @@ def solve(
         # Errors based on ad-hoc metric
         tmp = np.abs(res.fun) / np.clip(np.median(np.abs(res.jac[:, i])), 1e-5, None)
         sme.fitresults.punc2[param_names[i]] = np.median(tmp)
+
+    # punc3 = uncertainties(res.jac, res.fun, uncs, param_names, plot=False)
 
     sme.nlte.flags = sme_synth.GetNLTEflags(len(sme.linelist))
 
@@ -540,7 +550,7 @@ def synthesize_spectrum(
 
     # Define constants
     n_segments = sme.nseg
-    nmu = np.size(sme.mu)
+    nmu = sme.nmu
 
     # fix impossible input
     if "spec" not in sme:
@@ -667,7 +677,7 @@ def synthesize_spectrum(
     # Merge all segments
     sme.synth = smod = np.concatenate(smod)
     # if sme already has a wavelength this should be the same
-    sme.wave = wave = np.concatenate(wave)
+    sme.wave = wave
     sme.wind = wind
     sme.wint = wint
 

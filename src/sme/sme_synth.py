@@ -26,7 +26,8 @@ class check_error:
 
 def SMELibraryVersion():
     """ Retern SME library version """
-    return idl_call_external("SMELibraryVersion")
+    version = idl_call_external("SMELibraryVersion")
+    return version.decode()
 
 
 @check_error
@@ -115,7 +116,7 @@ def InputModel(teff, grav, vturb, atmo):
     xne = atmo.xne
     xna = atmo.xna
     rho = atmo.rho
-    vt = np.full(ndepth, vturb) if vturb.size == 1 else vturb
+    vt = np.full(ndepth, vturb) if np.size(vturb) == 1 else vturb
     wlstd = atmo.get("wlstd", 5000.0)
     opflag = atmo.get(
         "opflag", np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0])

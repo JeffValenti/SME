@@ -4,13 +4,13 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.sme import util
-from src.gui import plot_jupyter, plot_pyplot
-from src.sme import sme as SME
-from src.sme.vald import ValdFile
-from src.sme.solve import solve
+from SME.src.sme import util
+from SME.src.gui import plot_jupyter, plot_pyplot
+from SME.src.sme import sme as SME
+from SME.src.sme.vald import ValdFile
+from SME.src.sme.solve import solve
 
-target = "wasp117"
+target = "sun"
 util.start_logging(f"{target}.log")
 
 # Get input files
@@ -19,11 +19,14 @@ if len(sys.argv) > 1:
 else:
     # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
     # in_file = "./sun_6440_grid.out"
-    in_file = "./wasp117_15.inp"
+    in_file = "./UVES.2010-04-02.ech"
+    # in_file = "./wasp117_15.inp"
     # in_file = "./wasp117.npy"
     # in_file = "./wasp117.npy"
-    # vald_file = "sun.lin"
+    # vald_file = "./4000-6920.lin"
+    # atmo_file = "marcs2012p_t2.0.sav"
     vald_file = None
+    atmo_file = None
     fitparameters = []
 
 # Load files
@@ -33,11 +36,15 @@ if vald_file is not None:
     vald = ValdFile(vald_file)
     sme.linelist = vald.linelist
 
+if atmo_file is not None:
+    sme.atmo.source = atmo_file
+    sme.atmo.method = "grid"
+
 # Choose free parameters, i.e. sme.pname
 if len(fitparameters) == 0:
     # ["teff", "logg", "monh", "Mg Abund", "Y Abund"]
-    if sme.pname is not None:
-        fitparameters = sme.pname
+    if sme.fitparameters is not None and len(sme.fitparameters) != 0:
+        fitparameters = sme.fitparameters
     else:
         fitparameters = ["teff", "logg", "monh"]
 
@@ -84,15 +91,15 @@ sme = solve(sme, fitparameters, filename=f"{target}.npy")
 # plt.ylabel("Probability")
 # plt.show()
 
-# # Plot results
-fig = plot_jupyter.FinalPlot(sme)
-fig.save(filename=f"{target}.html")
+# # # Plot results
+# fig = plot_jupyter.FinalPlot(sme)
+# fig.save(filename=f"{target}.html")
 
-if "synth" in sme:
-    plt.plot(sme.wob, sme.sob - sme.smod, label="Residual Python")
-    # plt.plot(sme.wave, sme.sob - orig, label="Residual IDL")
-    plt.legend()
-    plt.show()
+# if "synth" in sme:
+#     plt.plot(sme.wob, sme.sob - sme.smod, label="Residual Python")
+#     # plt.plot(sme.wave, sme.sob - orig, label="Residual IDL")
+#     plt.legend()
+#     plt.show()
 
-mask_plot = plot_pyplot.MaskPlot(sme)
-input("Wait a second...")
+# mask_plot = plot_pyplot.MaskPlot(sme)
+# input("Wait a second...")

@@ -4,20 +4,21 @@ Notably all SME objects will be Collections, which can accessed both by attribut
 """
 
 
-import sys
+import inspect
 import logging
 import os.path
 import platform
-import inspect
+import sys
+from datetime import datetime as dt
+import hashlib
+
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import readsav
 
-try:
-    from .abund import Abund
-    from .vald import LineList
-except ModuleNotFoundError:
-    from abund import Abund
-    from vald import LineList
+from . import echelle
+from .abund import Abund
+from .vald import LineList
 
 
 class Iliffe_vector:
@@ -335,6 +336,9 @@ class Iliffe_vector:
         """
         return np.concatenate([self[i] for i in range(len(self))])
 
+    def ravel(self):
+        return self.__values__
+
     def copy(self):
         """ Create a copy of the current vector """
         idx = np.copy(self.__idx__)
@@ -442,9 +446,9 @@ class Param(Collection):
 
     def __str__(self):
         text = (
-            f"Teff={self.teff} K, logg={self.logg:.3f}, "
-            f"[M/H]={self.monh:.3f}, Vmic={self.vmic:.2f}, "
-            f"Vmac={self.vmac:.2f}, Vsini={self.vsini:.1f}\n"
+            f"Teff={self.teff} K, logg={self.logg}, "
+            f"[M/H]={self.monh}, Vmic={self.vmic}, "
+            f"Vmac={self.vmac}, Vsini={self.vsini}\n"
         )
         text += str(self._abund)
         return text
@@ -645,28 +649,16 @@ class Fitresults(Collection):
 
     def __init__(self, **kwargs):
         self.maxiter = kwargs.pop("maxiter", None)
-        self.chirat = kwargs.pop("chirat", None)
         self.chisq = kwargs.pop("chisq", None)
-        self.rchisq = kwargs.pop("rchisq", None)
-        self.crms = kwargs.pop("crms", None)
-        self.lrms = kwargs.pop("lrms", None)
         self.punc = kwargs.pop("punc", None)
-        self.psig_l = kwargs.pop("psig_l", None)
-        self.psig_r = kwargs.pop("psig_r", None)
         self.covar = kwargs.pop("covar", None)
         super().__init__(**kwargs)
 
     def clear(self):
         """ reset all values to None """
         self.maxiter = None
-        self.chirat = None
         self.chisq = None
-        self.rchisq = None
-        self.crms = None
-        self.lrms = None
         self.punc = None
-        self.psig_l = None
-        self.psig_r = None
         self.covar = None
 
 
@@ -677,98 +669,95 @@ class SME_Struct(Param):
     and perform a fit to existing data
     """
 
+    mask_values = {"bad": 0, "line": 1, "continuum": 2}
+
     def __init__(self, atmo=None, nlte=None, idlver=None, **kwargs):
         # Meta information
-        self.version = None
-        self.md5 = None
-        self.id = None
+        self.object = kwargs.pop("obs_name", None)
+        self.version = "5.1"
+        self.id = str(dt.now())
         # additional parameters
-        self.vrad = kwargs.pop("vrad")
-        if self.vrad is not None:
-            self.vrad = np.atleast_1d(self.vrad)
-            
-        self.vrad_flag = None
-        self.cscale = kwargs.pop("cscale", None)
-        if self.cscale is not None:
-            self.cscale = np.atleast_2d(self.cscale)
-        self.cscale_flag = None
-        self.gam6 = None
-        self.h2broad = None
-        self.accwi = None
-        self.accrt = None
-        self.clim = None
-        self.nmu = None
-        self.mu = np.atleast_1d(kwargs.pop("mu"))
+        self.vrad = 0
+        self.vrad_flag = "none"
+        self.cscale = 1
+        self.cscale_flag = "none"
+        self.gam6 = 1
+        self.h2broad = False
+        self.accwi = 0.003
+        self.accrt = 0.001
+        self.mu = 1
         # linelist
-        self.linelist = LineList(
-            None,
-            species=kwargs.pop("species"),
-            atomic=kwargs.pop("atomic"),
-            lande=kwargs.pop("lande"),
-            depth=kwargs.pop("depth"),
-            reference=kwargs.pop("lineref"),
-            short_line_format=kwargs.pop("short_line_format"),
-            line_extra=kwargs.pop("line_extra", None),
-            line_lulande=kwargs.pop("line_lulande", None),
-            line_term_low=kwargs.pop("line_term_low", None),
-            line_term_upp=kwargs.pop("line_term_upp", None),
-        )
+        try:
+            self.linelist = LineList(
+                None,
+                species=kwargs.pop("species"),
+                atomic=kwargs.pop("atomic"),
+                lande=kwargs.pop("lande"),
+                depth=kwargs.pop("depth"),
+                reference=kwargs.pop("lineref"),
+                short_line_format=kwargs.pop("short_line_format", None),
+                line_extra=kwargs.pop("line_extra", None),
+                line_lulande=kwargs.pop("line_lulande", None),
+                line_term_low=kwargs.pop("line_term_low", None),
+                line_term_upp=kwargs.pop("line_term_upp", None),
+            )
+        except KeyError:
+            # some data is unavailable
+            logging.warning("No or incomplete linelist data present")
+            self.linelist = None
         # free parameters
-        self.pfree = None
-        self.pname = None
-        self.glob_free = None
-        self.ab_free = None
+        self.pfree = []
+        pname = kwargs.pop("pname", [])
+        glob_free = kwargs.pop("glob_free", [])
+        ab_free = kwargs.pop("ab_free", [])
+        self.fitparameters = np.concatenate((pname, glob_free, ab_free))
+        self.fitparameters = np.unique(self.fitparameters).astype("U")
+
         # wavelength grid
-        # Illiffe vector?
-        self.nseg = None
-        self.wob = kwargs.pop("wave")
-        if self.wob is not None:
-            self.wob = np.require(self.wob, requirements="W")
-        self.wind = kwargs.pop("wind")
+        self.wob = None
+        self.wind = kwargs.pop("wind", None)
         if self.wind is not None:
             self.wind = np.array([0, *(self.wind + 1)])
         # Wavelength range of each section
-        self.wran = kwargs.pop("wran", None)
-        if self.wran is not None:
-            self.wran = np.atleast_2d(self.wran)
+        self.wran = None
         # Observation
-        self.sob = kwargs.pop("sob")
-        if self.sob is not None:
-            self.sob = np.require(self.sob, requirements="W")
-        self.uob = kwargs.pop("uob")        
-        if self.uob is not None:
-            self.uob = np.require(self.uob, requirements="W")
-        self.mob = kwargs.pop("mob")
-        if self.mob is not None:
-            self.mob = np.require(self.mob, requirements="W")
-        self.obs_name = None
-        self.obs_type = None
+        self.sob = None
+        self.uob = None
+        self.mob = None
         # Instrument broadening
         self.iptype = None
         self.ipres = None
-        self.vmac_pro = None
-        self.cintb = None
-        self.cintr = None
         # Fit results
         self.fitresults = Fitresults(
             maxiter=kwargs.pop("maxiter", None),
-            chirat=kwargs.pop("chirat", None),
             chisq=kwargs.pop("chisq", None),
-            rchisq=kwargs.pop("rchisq", None),
-            crms=kwargs.pop("crms", None),
-            lrms=kwargs.pop("lrms", None),
             punc=kwargs.pop("punc", None),
-            psig_l=kwargs.pop("psig_l", None),
-            psig_r=kwargs.pop("psig_r", None),
             covar=kwargs.pop("covar", None),
         )
-        self.smod_orig = None
-        self.cmod_orig = None
         self.smod = None
-        self.cmod = None
-        self.jint = None
-        self.wint = None
-        self.sint = None
+        # remove old keywords
+        _ = kwargs.pop("smod_orig", None)
+        _ = kwargs.pop("cmod_orig", None)
+        _ = kwargs.pop("cmod", None)
+        _ = kwargs.pop("jint", None)
+        _ = kwargs.pop("wint", None)
+        _ = kwargs.pop("sint", None)
+        _ = kwargs.pop("psig_l", None)
+        _ = kwargs.pop("psig_r", None)
+        _ = kwargs.pop("rchisq", None)
+        _ = kwargs.pop("crms", None)
+        _ = kwargs.pop("lrms", None)
+        _ = kwargs.pop("chirat", None)
+        _ = kwargs.pop("vmac_pro", None)
+        _ = kwargs.pop("cintb", None)
+        _ = kwargs.pop("cintr", None)
+        _ = kwargs.pop("obs_type", None)
+        _ = kwargs.pop("clim", None)
+        _ = kwargs.pop("nmu", None)
+        _ = kwargs.pop("nseg", None)
+        _ = kwargs.pop("md5", None)
+
+
         # Substructures
         self.idlver = Version(idlver)
         self.atmo = Atmo(atmo)
@@ -783,12 +772,190 @@ class SME_Struct(Param):
     def atomic(self):
         """ Atomic linelist data, usually passed to the C library
         Use sme.linelist instead for other purposes """
+        if self.linelist is None:
+            return None
         return self.linelist.atomic
 
     @property
     def species(self):
         """ Names of the species of each spectral line """
+        if self.linelist is None:
+            return None
         return self.linelist.species
+
+    @property
+    def nmu(self):
+        if self.mu is None:
+            return 0
+        else:
+            return np.size(self.mu)
+
+    @property
+    def nseg(self):
+        if self.wind is None:
+            return None
+        else:
+            return len(self.wind) - 1
+
+    @property
+    def md5(self):
+        m = hashlib.md5(str(self).encode())
+        if self.wob is not None:
+            m.update(self.wob)
+        if self.sob is not None:        
+            m.update(self.sob)
+        if self.uob is not None:
+            m.update(self.uob)
+        if self.mob is not None:
+            m.update(self.mob)
+        if self.smod is not None:
+            m.update(self.smod)
+
+        return m.hexdigest()
+
+    @property
+    def wob(self):
+        return self._wob
+
+    @wob.setter
+    def wob(self, value):
+        if value is not None:
+            value = np.require(value, requirements="W")
+        self._wob = value
+
+    @property
+    def sob(self):
+        return self._sob
+
+    @sob.setter
+    def sob(self, value):
+        if value is not None:
+            value = np.require(value, requirements="W")
+        self._sob = value
+
+    @property
+    def uob(self):
+        return self._uob
+
+    @uob.setter
+    def uob(self, value):
+        if value is not None:
+            value = np.require(value, requirements="W")
+        self._uob = value
+
+    @property
+    def mob(self):
+        return self._mob
+
+    @mob.setter
+    def mob(self, value):
+        if value is not None:
+            value = np.require(value, requirements="W")
+        self._mob = value
+
+    @property
+    def smod(self):
+        return self._smod
+
+    @smod.setter
+    def smod(self, value):
+        if value is not None:
+            value = np.require(value, requirements="W")
+        self._smod = value
+
+    @property
+    def wran(self):
+        return self._wran
+
+    @wran.setter
+    def wran(self, value):
+        if value is not None:
+            value = np.atleast_2d(value)
+        self._wran = value
+
+    @property
+    def mu(self):
+        return self._mu
+
+    @mu.setter
+    def mu(self, value):
+        if value is not None:
+            value = np.atleast_1d(value)
+        self._mu = value
+
+    @property
+    def vrad(self):
+        if self._vrad is None:
+            return None
+        if self.vrad_flag == "none":
+            return np.zeros(self.nseg)
+        else:
+            nseg = self._vrad.shape[0]
+            if nseg == self.nseg:
+                return self._vrad
+
+            rv = np.zeros(self.nseg)
+            rv[:nseg] = self._vrad[:nseg]
+            return rv
+
+        return self._vrad
+
+    @vrad.setter
+    def vrad(self, value):
+        if value is not None:
+            value = np.atleast_1d(value)
+        self._vrad = value
+
+    @property
+    def cscale(self):
+        if self._cscale is None:
+            return None
+        if self.cscale_flag == "none":
+            return np.ones((self.nseg, 1))
+
+        ndeg = {"fix": 1, "const":1, "linear":2, "quadratic":3}[self.cscale_flag]
+        nseg, length = self._cscale.shape
+
+        if length == ndeg and nseg == self.nseg:
+            return self._cscale
+
+        cs = np.zeros((self.nseg, ndeg))
+        if length == nseg:
+            cs[:nseg, :] = self._cscale[:nseg, :]
+        elif length < ndeg:
+            cs[:nseg, -length:] = self._cscale[:nseg, :]
+        else:
+            cs[:nseg, :] = self._cscale[:nseg, -ndeg :]
+
+        cs[nseg:, -1] = self._cscale[-1, -1]
+
+        return cs
+
+    @cscale.setter
+    def cscale(self, value):
+        if value is not None:
+            value = np.atleast_2d(value)
+        self._cscale = value
+
+    @property
+    def cscale_flag(self):
+        return self._cscale_flag
+
+    @cscale_flag.setter
+    def cscale_flag(self, value):
+        if isinstance(value, (int, np.integer)):
+            value = {-3:"none", -2:"fix", -1:"fix", 0:"constant", 1:"linear", 2:"quadratic"}[value]
+        self._cscale_flag = value
+
+    @property
+    def vrad_flag(self):
+        return self._vrad_flag
+
+    @vrad_flag.setter
+    def vrad_flag(self, value):
+        if isinstance(value, (int, np.integer)):
+            value = {-2:"none", -1:"whole", 0:"each"}[value]
+        self._vrad_flag = value
 
     @property
     def wave(self):
@@ -863,24 +1030,24 @@ class SME_Struct(Param):
         self.mob = value
 
     @property
-    def line_mask(self):
+    def mask_line(self):
         """ Line Mask """
-        return self.mask == 1
+        return self.mask == self.mask_values["line"]
 
     @property
-    def continuum_mask(self):
+    def mask_continuum(self):
         """ Continuum Mask """
-        return self.mask == 2
+        return self.mask == self.mask_values["continuum"]
 
     @property
-    def good_mask(self):
+    def mask_good(self):
         """ Good Pixel Mask """
-        return self.mask != 0
+        return self.mask != self.mask_values["bad"]
 
     @property
-    def bad_mask(self):
+    def mask_bad(self):
         """ Bad Pixel Mask """
-        return self.mask == 0
+        return self.mask == self.mask_values["bad"]
 
     def __getitem__(self, key):
         if key[-5:].casefold() == "abund":
@@ -921,12 +1088,30 @@ class SME_Struct(Param):
         logging.info("Loading SME file %s", filename)
         _, ext = os.path.splitext(filename)
         if ext == ".npy":
+            # Numpy Save file
             s = np.load(filename)
             s = np.atleast_1d(s)[0]
-        else:
+        elif ext in [".sav", ".out", ".inp"]:
+            # IDL save file (from SME)
             s = readsav(filename)["sme"]
             s = {name.casefold(): s[name][0] for name in s.dtype.names}
             s = SME_Struct(**s)
+        elif ext == ".ech":
+            # Echelle file (from REDUCE)
+            ech = echelle.read(filename)
+            s = SME_Struct()
+            s.wind = np.cumsum([0, *np.diff(ech.columns, axis=1).ravel()])
+            s.wave = np.ma.compressed(ech.wave)
+            s.spec = np.ma.compressed(ech.spec)
+            s.uncs = np.ma.compressed(ech.sig)
+            s.mask = np.full(s.sob.size, 1)
+            s.wran = [[w[0], w[-1]] for w in s.wave]
+            try:
+                s.object = ech.head["OBJECT"]
+            except KeyError:
+                pass
+        else:
+            raise ValueError("Data type not recognised")
 
         return s
 
