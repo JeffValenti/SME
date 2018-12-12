@@ -296,11 +296,11 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
         # No observation no radial velocity
         warnings.warn("Missing data for radial velocity/continuum determination")
         return 0, [0]
-
-    x_obs = sme.wave[segment]
-    y_obs = sme.spec[segment]
-    u_obs = sme.uncs[segment]
-    x_num = x_obs - x_obs[0]
+    mask = sme.mask_good[segment]
+    x_obs = sme.wave[segment][mask]
+    y_obs = sme.spec[segment][mask]
+    u_obs = sme.uncs[segment][mask]
+    x_num = x_obs - sme.wave[segment][0]
 
     if sme.cscale_flag in [-3, "none"]:
         cflag = False
