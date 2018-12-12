@@ -80,15 +80,15 @@ sigma_age = 1 / b * np.sqrt(sx ** 2 + sa ** 2 + ((x - a) / b) ** 2 * sb ** 2)
 sigma_age = abs(sigma_age)
 logging.info(f"Age       \t{age:.3f} +- {sigma_age:.3f} Gyr")
 
-p = np.linspace(0, 10, 1000)
-g = norm.pdf(p, loc=age, scale=sigma_age)
-# Rescale to area = 1
-area = np.sum(g * np.gradient(p))  # Cheap integral
-g *= 1 / area
-plt.plot(p, g)
-plt.xlabel("Age [Gyr]")
-plt.ylabel("Probability")
-plt.show()
+# p = np.linspace(0, 10, 1000)
+# g = norm.pdf(p, loc=age, scale=sigma_age)
+# # Rescale to area = 1
+# area = np.sum(g * np.gradient(p))  # Cheap integral
+# g *= 1 / area
+# plt.plot(p, g)
+# plt.xlabel("Age [Gyr]")
+# plt.ylabel("Probability")
+# plt.show()
 
 # # # Plot results
 fig = plot_jupyter.FinalPlot(sme)
