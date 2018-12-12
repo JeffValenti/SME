@@ -734,13 +734,13 @@ class SME_Struct(Param):
             punc=kwargs.pop("punc", None),
             covar=kwargs.pop("covar", None),
         )
+        self.wint = None
         self.smod = None
         # remove old keywords
         _ = kwargs.pop("smod_orig", None)
         _ = kwargs.pop("cmod_orig", None)
         _ = kwargs.pop("cmod", None)
         _ = kwargs.pop("jint", None)
-        _ = kwargs.pop("wint", None)
         _ = kwargs.pop("sint", None)
         _ = kwargs.pop("psig_l", None)
         _ = kwargs.pop("psig_r", None)
