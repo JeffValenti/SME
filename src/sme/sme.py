@@ -710,8 +710,10 @@ class SME_Struct(Param):
         pname = kwargs.pop("pname", [])
         glob_free = kwargs.pop("glob_free", [])
         ab_free = kwargs.pop("ab_free", [])
-        self.fitparameters = np.concatenate((pname, glob_free, ab_free))
-        self.fitparameters = np.unique(self.fitparameters).astype("U")
+        if len(ab_free) != 0:
+            ab_free = [f"{el} ABUND" for i, el in zip(ab_free, Abund._elem) if i == 1]
+        self.fitparameters = np.concatenate((pname, glob_free, ab_free)).astype("U")
+        self.fitparameters = np.unique(self.fitparameters)
 
         # wavelength grid
         self.wob = None
@@ -896,6 +898,7 @@ class SME_Struct(Param):
 
             rv = np.zeros(self.nseg)
             rv[:nseg] = self._vrad[:nseg]
+            rv[nseg:] = self._vrad[-1]
             return rv
 
         return self._vrad

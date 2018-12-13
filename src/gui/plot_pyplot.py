@@ -40,10 +40,8 @@ class MaskPlot:
         self.wind = sme.wind
         self.mode = "line/cont"
         self.lines = sme.linelist
-        self.vrad = np.atleast_1d(sme.vrad)
+        self.vrad = sme.vrad
         self.vrad = [v if v is not None else 0 for v in self.vrad]
-        if len(self.vrad) == 1:
-            self.vrad = self.vrad * self.nsegments
 
         self.line_plot = None
         self.lock = False

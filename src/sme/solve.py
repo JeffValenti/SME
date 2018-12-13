@@ -601,7 +601,7 @@ def synthesize_spectrum(
     for il in range(n_segments):
         logging.debug("Segment %i", il)
         # Input Wavelength range and Opacity
-        vrad_seg = sme.vrad if np.size(sme.vrad) == 1 else sme.vrad[il]
+        vrad_seg = sme.vrad[il]
         wbeg, wend = get_wavelengthrange(wran[il], vrad_seg, sme.vsini)
 
         sme_synth.InputWaveRange(wbeg, wend)

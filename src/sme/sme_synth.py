@@ -97,7 +97,6 @@ def ClearH2broad():
 def InputLineList(atomic, species):
     """ Read in line list """
     nlines = species.size
-
     species = np.asarray(species, "U8")
 
     # Sort list by wavelength
@@ -124,11 +123,12 @@ def OutputLineList():
 def UpdateLineList(atomic, species, index):
     """ Change line list parameters """
     nlines = atomic.shape[0]
+    atomic = atomic.T
     check_error(
         "UpdateLineList",
         nlines,
         species,
-        atomic.T,
+        atomic,
         index,
         type=("int", "str", "double", "short"),
     )

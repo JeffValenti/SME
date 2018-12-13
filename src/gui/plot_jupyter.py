@@ -60,10 +60,8 @@ class FinalPlot:
         self.wind = sme.wind
         self.wran = sme.wran
         self.lines = sme.linelist
-        self.vrad = np.atleast_1d(sme.vrad)
+        self.vrad = sme.vrad
         self.vrad = [v if v is not None else 0 for v in self.vrad]
-        if len(self.vrad) == 1:
-            self.vrad = self.vrad * self.nsegments
 
         self.mask_type = "good"
 
