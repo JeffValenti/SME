@@ -7,21 +7,55 @@ import numpy as np
 from .cwrapper import idl_call_external
 
 
-class check_error:
-    """
-    decorator that raises an error if a
-    function does not return b"", i.e. empty bytes string
-    """
+class DLL:
+    """ Stores the expected sizes of arrays, e.g. number of lines """
 
-    def __init__(self, func):
-        self.func = func
-        self.name = func.__name__
+    def __init__(self):
+        self._ndepth = None
+        self._nmu = None
+        self._nlines = None
 
-    def __call__(self, *args, **kwargs):
-        error = self.func(*args, **kwargs)
-        if error != b"":
-            raise ValueError(f"{self.name} (call external): {error.decode()}")
-        return error
+    @property
+    def ndepth(self):
+        if self._ndepth is None:
+            raise ValueError("No model atmosphere has been set")
+        return self._ndepth
+
+    @ndepth.setter
+    def ndepth(self, value):
+        self._ndepth = value
+
+    @property
+    def nmu(self):
+        if self._nmu is None:
+            raise ValueError("No radiative transfer has been calculated")
+        return self._nmu
+
+    @nmu.setter
+    def nmu(self, value):
+        self._nmu = value
+
+    @property
+    def nlines(self):
+        if self._nlines is None:
+            raise ValueError("No line list has been set")
+        return self._nlines
+
+    @nlines.setter
+    def nlines(self, value):
+        self._nlines = value
+
+
+dll = DLL()
+
+
+def check_error(name, *args, **kwargs):
+    """ run idl_call_external and check for errors in the output """
+    error = idl_call_external(name, *args, **kwargs)
+    error = error.decode()
+    if error != "":
+        raise ValueError(f"{name} (call external): {error}")
+    return error
 
 
 def SMELibraryVersion():
@@ -30,42 +64,36 @@ def SMELibraryVersion():
     return version.decode()
 
 
-@check_error
 def SetLibraryPath():
     """ Set the path to the library """
     prefix = os.path.dirname(__file__)
     libpath = os.path.join(prefix, "dll") + os.sep
-    return idl_call_external("SetLibraryPath", libpath)
+    check_error("SetLibraryPath", libpath)
 
 
-@check_error
 def InputWaveRange(wfirst, wlast):
     """ Read in Wavelength range """
-    return idl_call_external("InputWaveRange", wfirst, wlast, type="double")
+    check_error("InputWaveRange", wfirst, wlast, type="double")
 
 
-@check_error
 def SetVWscale(gamma6):
     """ Set van der Waals scaling factor """
-    return idl_call_external("SetVWscale", gamma6, type="double")
+    check_error("SetVWscale", gamma6, type="double")
 
 
-@check_error
 def SetH2broad(h2_flag=True):
     """ Set flag for H2 molecule """
     if h2_flag:
-        return idl_call_external("SetH2broad")
+        check_error("SetH2broad")
     else:
-        return ClearH2broad()
+        ClearH2broad()
 
 
-@check_error
 def ClearH2broad():
     """ Clear flag for H2 molecule """
-    return idl_call_external("ClearH2broad")
+    check_error("ClearH2broad")
 
 
-@check_error
 def InputLineList(atomic, species):
     """ Read in line list """
     nlines = species.size
@@ -78,25 +106,25 @@ def InputLineList(atomic, species):
     atomic = atomic[sort, :]
 
     atomic = atomic.T
-    return idl_call_external(
+    check_error(
         "InputLineList", nlines, species, atomic, type=("int", "string", "double")
     )
 
+    dll.nlines = nlines
 
-def OutputLineList(nlines):
+
+def OutputLineList():
     """ Return line list """
+    nlines = dll.nlines
     atomic = np.zeros((nlines, 6))
-    error = idl_call_external("OutputLineList", nlines, atomic, type=("int", "double"))
-    if error != b"":
-        raise ValueError(f"{__name__} (call external): {error.decode()}")
+    check_error("OutputLineList", nlines, atomic, type=("int", "double"))
     return atomic
 
 
-@check_error
 def UpdateLineList(atomic, species, index):
     """ Change line list parameters """
     nlines = atomic.shape[0]
-    return idl_call_external(
+    check_error(
         "UpdateLineList",
         nlines,
         species,
@@ -106,7 +134,6 @@ def UpdateLineList(atomic, species, index):
     )
 
 
-@check_error
 def InputModel(teff, grav, vturb, atmo):
     """ Read in model atmosphere """
     motype = atmo.depth
@@ -131,10 +158,11 @@ def InputModel(teff, grav, vturb, atmo):
         args = args[:5] + [radius] + args[5:] + [height]
         type = type[:5] + "d" + type[5:] + "d"
 
-    return idl_call_external("InputModel", *args, type=type)
+    dll.ndepth = ndepth
+
+    check_error("InputModel", *args, type=type)
 
 
-@check_error
 def InputAbund(abund):
     """
     Pass abundances to radiative transfer code.
@@ -147,14 +175,15 @@ def InputAbund(abund):
     # Convert abundances to the right format
     # metallicity is included in the abundance class, ignored in function call
     abund = abund("sme", raw=True)
-    return idl_call_external("InputAbund", abund, type="double")
+    check_error("InputAbund", abund, type="double")
 
 
-def Opacity(nmu=None, motype=1):
+def Opacity(getData=False, motype=1):
     """ Calculate opacities """
     args = []
     type = ""
-    if nmu is not None:
+    if getData:
+        nmu = dll.nmu
         copblu = np.zeros(nmu)
         copred = np.zeros(nmu)
         args = [nmu, copblu, copred]
@@ -165,12 +194,12 @@ def Opacity(nmu=None, motype=1):
             args += [copstd]
             type += ["d"]
 
-    check_error(idl_call_external)("Opacity", *args, type=type)
+    check_error("Opacity", *args, type=type)
 
     return args[1:]
 
 
-def GetOpacity(sme, switch, species=None, key=None):
+def GetOpacity(switch, species=None, key=None):
     """
     Returns specific cont. opacity
 
@@ -192,10 +221,7 @@ def GetOpacity(sme, switch, species=None, key=None):
          11: SIGEL
          12: SIGH2
     """
-    # j=*(short *)arg[0];   # IFOP number */
-    # i=*(short *)arg[1];   # Length of IDL arrays */
-    # a1=(double *)arg[2];
-    length = np.size(sme.mu)  # nmu
+    length = dll.nmu
     result = np.ones(length)
     args = [switch, length, result]
     type = ["s", "s", "d"]
@@ -214,14 +240,10 @@ def GetOpacity(sme, switch, species=None, key=None):
             args += [species]
             type += ["u"]
 
-    error = idl_call_external("GetOpacity", *args, type=type)
-
-    if error != b"":
-        raise ValueError(f"GetOpacity (call external): {error.decode()}")
+    check_error("GetOpacity", *args, type=type)
     return result
 
 
-# @check_error
 def Ionization(ion=0):
     """
     Calculate ionization balance for current atmosphere and abundances.
@@ -238,22 +260,31 @@ def Ionization(ion=0):
     """
     error = idl_call_external("Ionization", ion, type="short")
     if error != b"":
-        warnings.warn(f"{__name__} (call external): {error.decode()}", source=__name__)
+        warnings.warn(f"{__name__} (call external): {error.decode()}")
 
 
 def GetDensity():
-    """ """
-    raise NotImplementedError()
+    """ Retrieve density in each layer """
+    length = dll.ndepth
+    array = np.zeros(length, dtype=float)
+    check_error("GetDensity", length, array, type="sd")
+    return array
 
 
 def GetNatom():
-    """ """
-    raise NotImplementedError()
+    """ Get XNA """
+    length = dll.ndepth
+    array = np.zeros(length, dtype=float)
+    check_error("GetNatom", length, array, type="sd")
+    return array
 
 
 def GetNelec():
-    """ """
-    raise NotImplementedError()
+    """ Get XNE """
+    length = dll.ndepth
+    array = np.zeros(length, dtype=float)
+    check_error("GetNelec", length, array, type="sd")
+    return array
 
 
 def Transf(
@@ -311,7 +342,7 @@ def Transf(
 
     type = "sdddiiddddssu"  # s: short, d:double, i:int, u:unicode (string)
 
-    error = idl_call_external(
+    check_error(
         "Transf",
         nmu,
         mu,
@@ -327,13 +358,13 @@ def Transf(
         long_continuum,
         type=type,
     )
-    if error != b"":
-        raise ValueError(f"Transf (call external): {error.decode()}")
     nw = np.count_nonzero(wint_seg)
 
     wint_seg = wint_seg[:nw]
     sint_seg = sint_seg[:nw, :].T
     cint_seg = cint_seg[:nw, :].T
+
+    dll.nmu = nmu
 
     return nw, wint_seg, sint_seg, cint_seg
 
@@ -343,7 +374,7 @@ def CentralDepth():
     raise NotImplementedError()
 
 
-def GetLineOpacity(wave, nmu):
+def GetLineOpacity(wave):
     """
     Retrieve line opacity data from the C library
 
@@ -351,8 +382,6 @@ def GetLineOpacity(wave, nmu):
     ----------
     wave : float
         Wavelength of the line opacity to retrieve
-    nmu  : int
-        number of depth points in the atmosphere
 
     Returns
     ---------
@@ -367,53 +396,45 @@ def GetLineOpacity(wave, nmu):
     csf : array
         Continuum source function
     """
+    nmu = dll.nmu
     lop = np.zeros(nmu)
     cop = np.zeros(nmu)
     scr = np.zeros(nmu)
     tsf = np.zeros(nmu)
     csf = np.zeros(nmu)
     type = "dsddddd"
-    error = idl_call_external(
-        "GetLineOpacity", wave, nmu, lop, cop, scr, tsf, csf, type=type
-    )
-    if error != b"":
-        raise ValueError(f"GetLineOpacity (call external): {error.decode()}")
+    check_error("GetLineOpacity", wave, nmu, lop, cop, scr, tsf, csf, type=type)
     return lop, cop, scr, tsf, csf
 
 
-def GetLineRange(nlines):
+def GetLineRange():
     """ Get the effective wavelength range for each line
     i.e. the wavelengths for which the line has significant impact
-    
+
     Parameters
     ----------
     nlines : int
         number of lines in the linelist
-    
+
     Returns
     -------
     linerange : array of size (nlines, 2)
         lower and upper wavelength for each spectral line
     """
-
+    nlines = dll.nlines
     linerange = np.zeros((nlines, 2))
 
-    error = idl_call_external("GetLineRange", linerange, nlines, type=("double", "int"))
-    if error != b"":
-        raise ValueError(f"GetLineRange (call external): {error.decode()}")
+    check_error("GetLineRange", linerange, nlines, type=("double", "int"))
 
     return linerange
 
 
-@check_error
 def InputNLTE(bmat, lineindices):
     """ Input NLTE departure coefficients """
-    return idl_call_external(
-        "InputDepartureCoefficients", bmat, lineindices, type=("double", "int")
-    )
+    check_error("InputDepartureCoefficients", bmat, lineindices, type=("double", "int"))
 
 
-def GetNLTE(nrhox, line):
+def GetNLTE(line):
     """ Get the NLTE departure coefficients as stored in the C library
 
     Parameters
@@ -428,23 +449,21 @@ def GetNLTE(nrhox, line):
     bmat : array of size (2, nrhox)
         departure coefficients for the given line index
     """
+    nrhox = dll.ndepth
 
     bmat = np.full((2, nrhox), -1., dtype=float)
-    error = idl_call_external(
+    check_error(
         "GetDepartureCoefficients", bmat, nrhox, line, type=("double", "int", "int")
     )
-    if error != b"":
-        raise ValueError(f"ERROR {error.decode()}")
     return bmat
 
 
-@check_error
 def ResetNLTE():
     """ Reset departure coefficients from any previous call, to ensure LTE as default """
-    return idl_call_external("ResetDepartureCoefficients")
+    check_error("ResetDepartureCoefficients")
 
 
-def GetNLTEflags(nlines):
+def GetNLTEflags():
     """Get an array that tells us which lines have been used with NLTE correction
 
     Parameters
@@ -457,11 +476,9 @@ def GetNLTEflags(nlines):
     nlte_flags : array(bool) of size (nlines,)
         True if line was used with NLTE, False if line is only LTE
     """
-
+    nlines = dll.nlines
     nlte_flags = np.zeros(nlines, dtype=np.int16)
 
-    error = idl_call_external("GetNLTEflags", nlte_flags, nlines, type=("short", "int"))
-    if error != b"":
-        raise ValueError(f"GetNLTEflags (call external): {error.decode()}")
+    check_error("GetNLTEflags", nlte_flags, nlines, type=("short", "int"))
 
     return nlte_flags.astype(bool)

@@ -270,7 +270,7 @@ def default(name):
     d = {"teff": 5778, "logg": 4.4, "monh": 0, "vmac": 1, "vmic": 1}
     d.update({f"{el} abund": v for el, v in Abund.solar()().items()})
 
-    logging.info(f"No value for {name} set, using default value {d[name]}")
+    logging.info("No value for %s set, using default value %s", name, d[name])
 
     return d[name]
 
@@ -392,7 +392,7 @@ def solve(
 
     # punc3 = uncertainties(res.jac, res.fun, uncs, param_names, plot=False)
 
-    sme.nlte.flags = sme_synth.GetNLTEflags(len(sme.linelist))
+    sme.nlte.flags = sme_synth.GetNLTEflags()
 
     if filename is not None:
         sme.save(filename)
@@ -514,7 +514,7 @@ def new_wavelength_grid(wint):
 
 def synthesize_spectrum(
     sme,
-    setLineList=True,
+    passLineList=True,
     passAtmosphere=True,
     passNLTE=True,
     reuse_wavelength_grid=False,
@@ -579,7 +579,7 @@ def synthesize_spectrum(
         wind = sme.wind
 
     # Input Model data to C library
-    if setLineList:
+    if passLineList:
         sme_synth.SetLibraryPath()
         sme_synth.InputLineList(sme.atomic, sme.species)
     if passAtmosphere:

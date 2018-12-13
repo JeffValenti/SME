@@ -587,7 +587,7 @@ class Version(Collection):
         self.release = None
         self.build_date = None
         self.memory_bits = None
-        self.field_offset_bits = None
+        self.file_offset_bits = None
         self.host = None
         # self.info = sys.version
         if len(kwargs) == 0:
@@ -598,12 +598,12 @@ class Version(Collection):
         """ update version info with current machine data """
         self.arch = platform.machine()
         self.os = sys.platform
-        self.os_family = sys.platform
+        self.os_family = platform.system()
         self.os_name = platform.version()
         self.release = platform.python_version()
         self.build_date = platform.python_build()[1]
         self.memory_bits = int(platform.architecture()[0][:2])
-        self.field_offset_bits = int(platform.architecture()[0][:2])
+        self.file_offset_bits = int(platform.architecture()[0][:2])
         self.host = platform.node()
         # self.info = sys.version
 

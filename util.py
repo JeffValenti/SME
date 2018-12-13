@@ -14,8 +14,12 @@ from numpy import __version__ as npversion
 from pandas import __version__ as pdversion
 from scipy import __version__ as spversion
 
-from src.sme.sme_synth import SMELibraryVersion
-from version import version as __version__
+try:
+    from .src.sme.sme_synth import SMELibraryVersion
+    from .version import version as __version__
+except ImportError:
+    from src.sme.sme_synth import SMELibraryVersion
+    from version import version as __version__
 
 try:
     from IPython import get_ipython
