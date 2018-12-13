@@ -10,7 +10,7 @@ Welcome to SME's documentation!
    :maxdepth: 2
    :caption: Contents:
     
-   source/modules
+   _source/modules
 
 Indices and tables
 ==================
