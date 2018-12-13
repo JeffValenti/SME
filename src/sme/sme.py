@@ -464,7 +464,7 @@ class Param(Collection):
 
     @property
     def abund(self):
-        """ Elemental abundances """
+        """ Elemental abundances : Abund """
         return self._abund
 
     @abund.setter

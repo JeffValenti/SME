@@ -4,21 +4,39 @@ from .util import safe_interpolation
 
 def resamp(wold, sold, wnew):
     """
-    #Interpolates OR integrates a spectrum onto a new wavelength scale, depending
-    #  on whether number of pixels per angstrom increases or decreases. Integration
-    #  is effectively done analytically under a cubic spline fit to old spectrum.
-    # wold (input vector) old wavelngth scale.
-    # sold (input vector) old spectrum to be binned.
-    # wnew (input vector) new wavelength spectrum.
-    # snew (output vector) newly binned spectrum.
-    #10-Oct-90 JAV	Create.
-    #22-Sep-91 JAV	Translated from IDL to ANA.
-    #05-Aug-92 JAV	Changed f/ procedure to function. Renamed f/ rebin to resamp.
-    #		 Switched f/ intrinsic rebin() to total() - faster.
-    #25-Jan-15 JAV  Fixed logic that tests whether new wavelength range is a subset
-    #                of the old. Code was only catching the case when the new range
-    #                extended below the old range on both ends. Now code stops if
-    #                new range extends beyond old range on either end.
+    Interpolates OR integrates a spectrum onto a new wavelength scale, depending
+    on whether number of pixels per angstrom increases or decreases. Integration
+    is effectively done analytically under a cubic spline fit to old spectrum.
+    
+    Parameters
+    ---------
+    wold : array
+        old wavelngth scale.
+    sold : array
+        old spectrum to be binned.
+    wnew : array
+        new wavelength spectrum.
+     
+    Returns
+    -------
+    snew : array
+        newly binned spectrum.
+    """
+    """
+    History
+    -------
+    10-Oct-90 JAV
+        Created
+    22-Sep-91 JAV
+        Translated from IDL to ANA.
+    05-Aug-92 JAV
+        Changed f/ procedure to function. Renamed f/ rebin to resamp.
+        Switched f/ intrinsic rebin() to total() - faster.
+    25-Jan-15 JAV
+        Fixed logic that tests whether new wavelength range is a subset
+        of the old. Code was only catching the case when the new range
+        extended below the old range on both ends. Now code stops if
+        new range extends beyond old range on either end.
     """
 
     # Program flags.

@@ -53,12 +53,13 @@ def integrate_flux(mu, inten, deltav, vsini, vrt, osamp=1):
     value : array(float) of size (npts,)
         Disk integrated flux profile.
 
-    Author's request:
+    Note
     ------------
         If you use this algorithm in work that you publish, please cite
         Valenti & Anderson 1996, PASP, currently in preparation.
-
-    Notes
+    """
+    """
+    History
     -----------
     Feb-88  GM
         Created ANA version.

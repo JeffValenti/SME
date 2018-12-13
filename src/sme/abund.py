@@ -348,29 +348,7 @@ class Abund:
         """
         Transform the specified abundance pattern from type used
         internally by SME to the requested type. Valid abundance pattern
-        types are:
-
-        'sme' - For hydrogen, the abundance value is the fraction of all
-            nuclei that are hydrogen, including all ionization states
-            and treating molecules as constituent atoms. For the other
-            elements, the abundance values are log10 of the fraction of
-            nuclei of each element in any form relative to the total for
-            all elements in any form. For the Sun, the abundance values
-            of H, He, and Li are approximately 0.92, -1.11, and -11.0.
-        'n/nTot' - Abundance values are log10 of the fraction of nuclei
-            of each element in any form relative to the total for all
-            elements in any form. For the Sun, the abundance values of
-            H, He, and Li are approximately 0.92, 0.078, and 1.03e-11.
-        'n/nH' - Abundance values are log10 of the fraction of nuclei
-            of each element in any form relative to the number of
-            hydrogen nuclei in any form. For the Sun, the abundance
-            values of H, He, and Li are approximately 1, 0.085, and
-            1.12e-11.
-        'H=12' - Abundance values are log10 of the fraction of nuclei of
-            each element in any form relative to the number of hydrogen
-            in any form plus an offset of 12. For the Sun, the nuclei
-            abundance values of H, He, and Li are approximately 12,
-            10.9, and 1.05.
+        types are: 'sme', 'n/nTot', 'n/nH', 'H=12'
         """
         return self.totype(self._pattern, type, raw=raw)
 

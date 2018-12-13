@@ -77,8 +77,9 @@ def tablebroad(_, s, xip, yip):
     -------
     sout: array[n]
         the smoothed spectrum.
-
-    Notes
+    """
+    """
+    History
     -------
         22-May-92 JAV
             Switched instrumental profile from multiple gaussians
@@ -93,7 +94,6 @@ def tablebroad(_, s, xip, yip):
         Oct-18  AW
             Python version
     """
-
     dsdh = s
 
     # Define sizes.
@@ -131,8 +131,9 @@ def gaussbroad(w, s, hwhm):
     -------
     sout: array[n]
         the gaussian-smoothed spectrum.
-
-    Notes
+    """
+    """
+    History
     --------
         Dec-90 GB,GM
             Rewrote with fourier convolution algorithm.
@@ -160,8 +161,8 @@ def gaussbroad(w, s, hwhm):
     dw = wrange / (nw - 1)  # wavelength change per pixel
 
     # Make smoothing gaussian# extend to 4 sigma.
-    # Note: 4.0 / sqrt(2.0*alog(2.0)) = 3.3972872 and sqrt(alog(2.0))=0.83255461
-    #  sqrt(alog(2.0)/pi)=0.46971864 (*1.0000632 to correct for >4 sigma wings)
+    # 4.0 / sqrt(2.0*alog(2.0)) = 3.3972872 and sqrt(alog(2.0))=0.83255461
+    # sqrt(alog(2.0)/pi)=0.46971864 (*1.0000632 to correct for >4 sigma wings)
     if hwhm >= 5 * wrange:
         return np.full(nw, np.sum(s) / nw)
     nhalf = int(3.3972872 * hwhm / dw)  ## points in half gaussian
@@ -196,8 +197,9 @@ def sincbroad(w, s, hwhm):
     -------
     sout : array of size (n,)
         the sinc-smoothed spectrum.
-
-    Notes
+    """
+    """
+    History
     -------
     Dec-90 GB,GM
         Rewrote with fourier convolution algorithm.

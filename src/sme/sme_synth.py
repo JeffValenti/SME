@@ -7,7 +7,7 @@ import numpy as np
 from .cwrapper import idl_call_external
 
 
-class DLL:
+class _DLL:
     """ Stores the expected sizes of arrays, e.g. number of lines """
 
     def __init__(self):
@@ -46,20 +46,42 @@ class DLL:
         self._nlines = value
 
 
-dll = DLL()
+_dll = _DLL()
 
 
 def check_error(name, *args, **kwargs):
-    """ run idl_call_external and check for errors in the output """
+    """
+    run idl_call_external and check for errors in the output
+
+    Parameters
+    ----------
+    name : str
+        name of the external C function to call
+    args
+        parameters for the function
+    kwargs
+        keywords for the function
+
+    Raises
+    --------
+    ValueError
+        If the returned string is not empty, it means an error occured in the C library
+    """
     error = idl_call_external(name, *args, **kwargs)
     error = error.decode()
     if error != "":
         raise ValueError(f"{name} (call external): {error}")
-    return error
 
 
 def SMELibraryVersion():
-    """ Retern SME library version """
+    """
+    Return SME library version
+    
+    Returns
+    -------
+    version : str
+        SME library version
+    """
     version = idl_call_external("SMELibraryVersion")
     return version.decode()
 
@@ -72,12 +94,30 @@ def SetLibraryPath():
 
 
 def InputWaveRange(wfirst, wlast):
-    """ Read in Wavelength range """
+    """
+    Read in Wavelength range
+    
+    Will raise an exception if wfirst is larger than wlast
+
+    Parameters
+    ----------
+    wfirst : float
+        first wavelength of the segment
+    wlast : float
+        last wavelength of the segment
+    """
     check_error("InputWaveRange", wfirst, wlast, type="double")
 
 
 def SetVWscale(gamma6):
-    """ Set van der Waals scaling factor """
+    """
+    Set van der Waals scaling factor
+    
+    Parameters
+    ----------
+    gamma6 : float
+        van der Waals scaling factor
+    """
     check_error("SetVWscale", gamma6, type="double")
 
 
@@ -95,33 +135,63 @@ def ClearH2broad():
 
 
 def InputLineList(atomic, species):
-    """ Read in line list """
+    """
+    Read in line list
+
+    Parameters
+    ---------
+    atomic : array of size (nlines, 8)
+        atomic linelist data for each line
+        fields are: atom_number, ionization, wlcent, excit, gflog, gamrad, gamqst, gamvw
+    species : array(string) of size (nlines,)
+        names of the elements (with Ionization level)
+    """
     nlines = species.size
     species = np.asarray(species, "U8")
 
-    # Sort list by wavelength
-    sort = np.argsort(atomic[:, 2])
-    species = species[sort]
-    atomic = atomic[sort, :]
+    # # Sort list by wavelength
+    # sort = np.argsort(atomic[:, 2])
+    # species = species[sort]
+    # atomic = atomic[sort, :]
 
     atomic = atomic.T
     check_error(
         "InputLineList", nlines, species, atomic, type=("int", "string", "double")
     )
 
-    dll.nlines = nlines
+    _dll.nlines = nlines
 
 
 def OutputLineList():
-    """ Return line list """
-    nlines = dll.nlines
+    """
+    Return line list
+
+    Returns
+    -------
+    atomic : array of size (nlines, 6)
+        relevant data of the linelist
+        wlcent, excit, gflog, gamrad, gamqst, gamvw
+    """
+    nlines = _dll.nlines
     atomic = np.zeros((nlines, 6))
     check_error("OutputLineList", nlines, atomic, type=("int", "double"))
     return atomic
 
 
 def UpdateLineList(atomic, species, index):
-    """ Change line list parameters """
+    """
+    Change line list parameters
+
+    Parameters
+    ---------
+    atomic : array of size (nlines, 8)
+        atomic linelist data for each line
+        fields are: atom_number, ionization, wlcent, excit, gflog, gamrad, gamqst, gamvw
+    species : array(string) of size (nlines,)
+        names of the elements (with Ionization level)
+    index : array(int) of size (nlines,)
+        indices of the lines to update relative to the overall linelist
+    """
     nlines = atomic.shape[0]
     atomic = atomic.T
     check_error(
@@ -135,7 +205,19 @@ def UpdateLineList(atomic, species, index):
 
 
 def InputModel(teff, grav, vturb, atmo):
-    """ Read in model atmosphere """
+    """ Read in model atmosphere
+
+    Parameters
+    ---------
+    teff : float
+        effective Temperature in Kelvin
+    grav : float
+        surface gravity in log10(cgs)
+    vturb : float
+        turbulence velocity in km/s
+    atmo : Atmo
+        atmosphere structure (see Atmo for details)
+    """
     motype = atmo.depth
     depth = atmo[motype]
     ndepth = len(depth)
@@ -158,7 +240,7 @@ def InputModel(teff, grav, vturb, atmo):
         args = args[:5] + [radius] + args[5:] + [height]
         type = type[:5] + "d" + type[5:] + "d"
 
-    dll.ndepth = ndepth
+    _dll.ndepth = ndepth
 
     check_error("InputModel", *args, type=type)
 
@@ -167,10 +249,15 @@ def InputAbund(abund):
     """
     Pass abundances to radiative transfer code.
 
-    Calculate elemental abundances (abund) from abundance pattern (sme.abund)
-    and metallicity (sme.feh). Metallicity adjustment is not applied to H or He.
-    Renormalize abundances after applying metallicity [added 2012-Mar-08].
-    Introduced limiter in case the proposed step in abundance is too large [2018-Apr-25].
+    Calculate elemental abundances from abundance pattern and metallicity.
+    Metallicity adjustment is not applied to H or He.
+    Renormalize abundances after applying metallicity.
+    Introduced limiter in case the proposed step in abundance is too large.
+
+    Parameters
+    ---------
+    abund : Abund
+        abundance structure to be passed (see Abund for more details)
     """
     # Convert abundances to the right format
     # metallicity is included in the abundance class, ignored in function call
@@ -179,11 +266,29 @@ def InputAbund(abund):
 
 
 def Opacity(getData=False, motype=1):
-    """ Calculate opacities """
+    """ Calculate opacities
+
+    Parameters
+    ---------
+    getData : bool
+        if True copblu and copred (and copstd) will be returned
+        requires that radiative transfer was run
+    motype : int
+        if getData is True and motype is 0 then copstd will also be returned
+
+    Returns
+    -------
+    copblu : array of size (nmu,)
+        only if getData is True
+    copred : array of size (nmu,)
+        only if getData is True
+    copstd : array of size (nmu,)
+        only if getData is True and motype is 0
+    """
     args = []
     type = ""
     if getData:
-        nmu = dll.nmu
+        nmu = _dll.nmu
         copblu = np.zeros(nmu)
         copred = np.zeros(nmu)
         args = [nmu, copblu, copred]
@@ -206,24 +311,14 @@ def GetOpacity(switch, species=None, key=None):
     Parameters
     ----------
     switch : int
-        -3  = COPSTD
-        -2  = COPRED
-        -1  = COPBLU
-         0  = AHYD
-         1  = AH2P
-         2  = AHMIN
-         3  = SIGH
-         4  = AHE1
-         5  = AHE2
-         6  = AHEMIN
-         7  = SIGHE
-         8  = ACOOL, continuous opacity C1, Mg1, Al1, Si1, Fe1, CH, NH, OH
-         9  = ALUKE, continuous opacity N1, O1, Mg2, Si2, Ca2
-         10 = AHOT
-         11 = SIGEL
-         12 = SIGH2
+        | -3: COPSTD, -2: COPRED, -1: COPBLU, 0: AHYD,
+        | 1: AH2P, 2: AHMIN, 3: SIGH, 4: AHE1, 5: AHE2,
+        | 6: AHEMIN, 7: SIGHE,
+        | 8: ACOOL, continuous opacity C1, Mg1, Al1, Si1, Fe1, CH, NH, OH,
+        | 9: ALUKE, continuous opacity N1, O1, Mg2, Si2, Ca2,
+        | 10: AHOT, 11: SIGEL, 12: SIGH2
     """
-    length = dll.nmu
+    length = _dll.nmu
     result = np.ones(length)
     args = [switch, length, result]
     type = ["s", "s", "d"]
@@ -259,6 +354,11 @@ def Ionization(ion=0):
     instead of using values from model atmosphere. Different abundance patterns
     in the model atmosphere (usually scaled solar) and SME (may be non-solar)
     can affect line shape, e.g. shape of hydrogen lines.
+
+    Parameters
+    ----------
+    ion : int
+        flag that determines the behaviour of the C function
     """
     error = idl_call_external("Ionization", ion, type="short")
     if error != b"":
@@ -266,24 +366,45 @@ def Ionization(ion=0):
 
 
 def GetDensity():
-    """ Retrieve density in each layer """
-    length = dll.ndepth
+    """
+    Retrieve density in each layer
+
+    Returns
+    -------
+    density : array of size (ndepth,)
+        Density of the atmosphere in each layer
+    """
+    length = _dll.ndepth
     array = np.zeros(length, dtype=float)
     check_error("GetDensity", length, array, type="sd")
     return array
 
 
 def GetNatom():
-    """ Get XNA """
-    length = dll.ndepth
+    """
+    Get XNA
+
+    Returns
+    -------
+    XNA : array of size (ndepth,)
+        XNA in each layer
+    """
+    length = _dll.ndepth
     array = np.zeros(length, dtype=float)
     check_error("GetNatom", length, array, type="sd")
     return array
 
 
 def GetNelec():
-    """ Get XNE """
-    length = dll.ndepth
+    """
+    Get XNE
+
+    Returns
+    -------
+    XNE : array of size (ndepth,)
+        XNE in each layer
+    """
+    length = _dll.ndepth
     array = np.zeros(length, dtype=float)
     check_error("GetNelec", length, array, type="sd")
     return array
@@ -366,14 +487,39 @@ def Transf(
     sint_seg = sint_seg[:nw, :].T
     cint_seg = cint_seg[:nw, :].T
 
-    dll.nmu = nmu
+    _dll.nmu = nmu
 
     return nw, wint_seg, sint_seg, cint_seg
 
 
-def CentralDepth():
-    """ """
-    raise NotImplementedError()
+def CentralDepth(mu, accrt):
+    """
+    This subroutine explicitly solves the transfer equation
+    for a set of nodes on the star disk in the centers of spectral
+    lines. The results are specific intensities.
+
+    Parameters
+    ----------
+    mu : array of size (nmu,)
+        mu values along the stellar disk to calculate
+    accrt : float
+        precision of the radiative transfer calculation
+
+    Returns
+    -------
+    table : array of size (nlines,)
+        Centeral depth (i.e. specific intensity) of each line
+    """
+
+    nmu = np.size(mu)
+    nwsize = _dll.nlines
+    table = np.zeros(nwsize)
+
+    check_error("CentralDepth", nmu, mu, nwsize, table, accrt, type="idifd")
+
+    _dll.nmu = nmu
+
+    return table
 
 
 def GetLineOpacity(wave):
@@ -398,7 +544,7 @@ def GetLineOpacity(wave):
     csf : array
         Continuum source function
     """
-    nmu = dll.nmu
+    nmu = _dll.nmu
     lop = np.zeros(nmu)
     cop = np.zeros(nmu)
     scr = np.zeros(nmu)
@@ -423,7 +569,7 @@ def GetLineRange():
     linerange : array of size (nlines, 2)
         lower and upper wavelength for each spectral line
     """
-    nlines = dll.nlines
+    nlines = _dll.nlines
     linerange = np.zeros((nlines, 2))
 
     check_error("GetLineRange", linerange, nlines, type=("double", "int"))
@@ -431,9 +577,18 @@ def GetLineRange():
     return linerange
 
 
-def InputNLTE(bmat, lineindices):
-    """ Input NLTE departure coefficients """
-    check_error("InputDepartureCoefficients", bmat, lineindices, type=("double", "int"))
+def InputNLTE(bmat, lineindex):
+    """
+    Input NLTE departure coefficients
+
+    Parameters
+    ----------
+    bmat : array of size (2, ndepth,)
+        departure coefficient matrix
+    lineindex : float
+        index of the line in the linelist
+    """
+    check_error("InputDepartureCoefficients", bmat, lineindex, type=("double", "int"))
 
 
 def GetNLTE(line):
@@ -441,8 +596,6 @@ def GetNLTE(line):
 
     Parameters
     ----------
-    nrhox : int
-        number of layers
     line : int
         requested line index, i.e. between 0 and number of lines
 
@@ -451,7 +604,7 @@ def GetNLTE(line):
     bmat : array of size (2, nrhox)
         departure coefficients for the given line index
     """
-    nrhox = dll.ndepth
+    nrhox = _dll.ndepth
 
     bmat = np.full((2, nrhox), -1., dtype=float)
     check_error(
@@ -478,7 +631,7 @@ def GetNLTEflags():
     nlte_flags : array(bool) of size (nlines,)
         True if line was used with NLTE, False if line is only LTE
     """
-    nlines = dll.nlines
+    nlines = _dll.nlines
     nlte_flags = np.zeros(nlines, dtype=np.int16)
 
     check_error("GetNLTEflags", nlte_flags, nlines, type=("short", "int"))
