@@ -139,3 +139,4 @@ run_mcmc.py
 src/sme/atmospheres/*
 *.html
 test.py
+*.ech
