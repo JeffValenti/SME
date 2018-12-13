@@ -203,23 +203,25 @@ def GetOpacity(switch, species=None, key=None):
     """
     Returns specific cont. opacity
 
+    Parameters
+    ----------
     switch : int
-        -3 : COPSTD
-        -2 : COPRED
-        -1 : COPBLU
-         0 : AHYD
-         1 : AH2P
-         2 : AHMIN
-         3 : SIGH
-         4 : AHE1
-         5 : AHE2
-         6 : AHEMIN
-         7 : SIGHE
-         8 : ACOOL, continuous opacity C1, Mg1, Al1, Si1, Fe1, CH, NH, OH
-         9 : ALUKE, continuous opacity N1, O1, Mg2, Si2, Ca2
-         10: AHOT
-         11: SIGEL
-         12: SIGH2
+        -3  = COPSTD
+        -2  = COPRED
+        -1  = COPBLU
+         0  = AHYD
+         1  = AH2P
+         2  = AHMIN
+         3  = SIGH
+         4  = AHE1
+         5  = AHE2
+         6  = AHEMIN
+         7  = SIGHE
+         8  = ACOOL, continuous opacity C1, Mg1, Al1, Si1, Fe1, CH, NH, OH
+         9  = ALUKE, continuous opacity N1, O1, Mg2, Si2, Ca2
+         10 = AHOT
+         11 = SIGEL
+         12 = SIGH2
     """
     length = dll.nmu
     result = np.ones(length)
@@ -250,9 +252,9 @@ def Ionization(ion=0):
     Ionization state is stored in the external library.
     Set adopt_eos bit mask to 7 = 1 + 2 + 4 to:
 
-      (1) adopt particle number densities from EOS,
-      (2) adopt electron number densities from EOS,
-      (4) and adopt gas densities (g/cm^3) from EOS,
+    1: adopt particle number densities from EOS
+    2: adopt electron number densities from EOS
+    4: and adopt gas densities (g/cm^3) from EOS
 
     instead of using values from model atmosphere. Different abundance patterns
     in the model atmosphere (usually scaled solar) and SME (may be non-solar)

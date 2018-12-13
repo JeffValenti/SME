@@ -1,5 +1,12 @@
+"""
+Defines the colors to use in plotting
+"""
+
+
 class PlotColors:
-    def __init__(self, *args, **kwargs):
+    """ Define the colors to use in plotting """
+
+    def __init__(self):
         self.fmt = {
             "Obs": {"color": "#1f77b4", "linestyle": "solid"},
             "Syn": {"color": "#ff7f0e", "linestyle": "solid", "marker": ""},

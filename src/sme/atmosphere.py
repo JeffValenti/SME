@@ -132,7 +132,7 @@ def interp_atmo_pair(atmo1, atmo2, frac, interpvar="RHOX", itop=0):
     Interpolate between two model atmospheres, accounting for shifts in
     the mass column density or optical depth scale.
 
-    Inputs
+    Parameters
     ------
     atmo1 : Atmosphere
         first atmosphere to interpolate
@@ -469,7 +469,7 @@ def interp_atmo_grid(Teff, logg, MonH, atmo_in, verbose=0, reload=False):
     """
     General routine to interpolate in 3D grid of model atmospheres
 
-    Inputs
+    Parameters
     -----
     Teff : float
         effective temperature of desired model (K).
@@ -930,7 +930,7 @@ def interp_atmo_constrained(x, y, err, par, x2, y2, constraints=None, **kwargs):
     """
     Apply a constraint on each parameter, to have it approach zero
 
-    Input
+    Parameters
     -------
     x : array[n]
         x data
@@ -952,6 +952,13 @@ def interp_atmo_constrained(x, y, err, par, x2, y2, constraints=None, **kwargs):
         constraints : array[nconstraint], optional
             error vector for constrained parameters.
             Use errors of 0 for unconstrained parameters.
+    
+    Returns
+    --------
+    ret : list of floats
+        best fit parameters
+    yfit : array of size (n,)
+        best fit to data
     """
 
     # Evaluate with fixed paramters 3, 4
@@ -971,7 +978,7 @@ def interp_atmo_func(x1, par, x2, y2, ndep=None, y1=None):
     Apply a vertical shift to y2.
     Interpolate onto x1 the shifted y2 as a function of shifted x2.
 
-    Inputs
+    Parameters
     ---------
     x1 : array[ndep1]
         independent variable for output function

@@ -1,8 +1,6 @@
 """
 Wrapper for IDL style C libary code
-
-IDL Style:
-{return_type} {func_name}(int argv, void *argc[]);
+    >>> {return_type} {func_name}(int argv, void *argc[]);
 
 with argv = number of parameters
 and argc = list of pointers to those parameters
@@ -61,8 +59,15 @@ def get_typenames(arg):
 def get_dtype(type):
     """
     Get the ctypes dtype appropiate for the passed type string
+
+    Parameters
+    -------
     type : str
         One of 'int', 'short', 'long', 'float', 'double', 'unicode' or one of the first letters 'islfdu'
+    Returns
+    ------
+    type: class
+        corresponding ctypes type
     """
     if type in ["i", "int", int]:
         return ct.c_int
@@ -81,8 +86,9 @@ def get_dtype(type):
 
 
 def idl_call_external(funcname, *args, restype="str", type=None):
-    """Call an external C library (here the SME lib) function that uses the IDL type interface
-    i.e. restype func(int n, void *args[]), where n is the number of arguments, and args is a list of pointers to the arguments
+    """
+    Call an external C library (here the SME lib) function that uses the IDL type interface
+    i.e. restype func(int n, void \*args[]), where n is the number of arguments, and args is a list of pointers to the arguments
 
     Input arrays will be converted to the required datatype for the C function (see type keyword),
     and any changes to input arrays will be written back if possible.

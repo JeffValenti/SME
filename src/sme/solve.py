@@ -336,7 +336,7 @@ def solve(
     # Just as in IDL SME
     uncs /= spec
 
-    logging.info("Fitting Spectrum with Parameters: " + "%s, " * nparam, *param_names)
+    logging.info("Fitting Spectrum with Parameters " + "%s, " * nparam, *param_names)
 
     # Do the heavy lifting
     res = least_squares(

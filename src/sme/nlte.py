@@ -23,10 +23,11 @@ class DirectAccessFile:
     # of directory bocks        - short int
     directory block length      - short int
     # of used directory blocks  - short int
-    1st directory block:
-        key      - string of up to 256 characters padded with ' '
-        datatype - 32-bit int 23-element array returned by SIZE
-        pointer  - 64-bit int pointer to the beginning of the record
+    1st directory block
+    key      - string of up to 256 characters padded with ' '
+    datatype - 32-bit int 23-element array returned by SIZE
+    pointer  - 64-bit int pointer to the beginning of the record
+
     2nd directory block
     ...
     last directory block
@@ -259,16 +260,16 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     Match our NLTE terms to transitions in the vald3-format linelist.
 
     Level descriptions in the vald3 long format look like this:
-    	'LS                                                           2p6.3s                   2S'
-    	'LS                                                             2p6.3p                2P*'
+    'LS                                                           2p6.3s                   2S'
+    'LS                                                             2p6.3p                2P*'
     These are stored in line3_term_low and line3_term_upp.
     The array line3_extra has dimensions [3 x nline3s]. It stores J_low, E_up, J_up
     The sme.atomic array stores:
-        0) atomic number, 1) ionization state, 2) wavelength (in A),
-        3) excitation energy of lower level (in eV), 4) log(gf), 5) radiative,
-        6) Stark, 7) and van der Waals damping parameters
+    0) atomic number, 1) ionization state, 2) wavelength (in A),
+    3) excitation energy of lower level (in eV), 4) log(gf), 5) radiative,
+    6) Stark, 7) and van der Waals damping parameters
 
-    Parameters:
+    Parameters
     ----------
     sme : SME_Struct
         SME input structure. Communicates the linelist.
@@ -285,7 +286,7 @@ def select_levels(sme, elem, bgrid, conf, term, species, rotnum):
     rotnum : array (nl,)
         rotational number J of atomic state (for identification).
 
-    Returns:
+    Returns
     -------
     bgrid : array (nd, nlines, nx, nt, ng, nf,)
         grid of departure coefficients, reduced to the lines used

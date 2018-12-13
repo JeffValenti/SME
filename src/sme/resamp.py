@@ -1,5 +1,5 @@
 import numpy as np
-from .bezier import bezier_interp
+from .util import safe_interpolation
 
 
 def resamp(wold, sold, wnew):
@@ -39,7 +39,7 @@ def resamp(wold, sold, wnew):
         # Interpolation by cubic spline.
         if trace:
             print("Interpolating onto new wavelength scale.")
-        snew = bezier_interp(wold, sold, wnew)
+        snew = safe_interpolation(wold, sold, wnew)
     else:  # pixel scale increased
         #  Integration under cubic spline.
         if trace:
@@ -65,7 +65,7 @@ def resamp(wold, sold, wnew):
         #  Interpolate old spectrum (sold) onto wavelength scale w to make s. Then
         #    sum every xfac pixels in s to make a single pixel in the new spectrum
         #    (snew). Equivalent to integrating under cubic spline through sold.
-        s = bezier_interp(wold, sold, w)
+        s = safe_interpolation(wold, sold, w)
         s = s / xfac  # take average in each pixel
         s.shape = nnew, xfac  # initialize sdummy as array
         snew = np.sum(s, axis=1)  # most efficient pixel sum

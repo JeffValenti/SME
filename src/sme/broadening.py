@@ -63,7 +63,7 @@ def tablebroad(_, s, xip, yip):
     """
     Convolves a spectrum with an arbitrary instrumental profile.
 
-    Input:
+    Parameters
     -------
     w : array of size (n,)
         wavelength scale of spectrum to be smoothed
@@ -73,12 +73,12 @@ def tablebroad(_, s, xip, yip):
         x points of the instrument profile
     yip : array of size (m,)
         y points of the instrument profile
-    Output:
+    Returns
     -------
     sout: array[n]
         the smoothed spectrum.
 
-    History:
+    Notes
     -------
         22-May-92 JAV
             Switched instrumental profile from multiple gaussians
@@ -118,7 +118,7 @@ def gaussbroad(w, s, hwhm):
     """
     Smooths a spectrum by convolution with a gaussian of specified hwhm.
 
-    Input:
+    Parameters
     -------
     w : array[n]
         wavelength scale of spectrum to be smoothed
@@ -127,12 +127,12 @@ def gaussbroad(w, s, hwhm):
     hwhm : float
         half width at half maximum of smoothing gaussian.
 
-    Output:
+    Returns
     -------
     sout: array[n]
         the gaussian-smoothed spectrum.
 
-    History:
+    Notes
     --------
         Dec-90 GB,GM
             Rewrote with fourier convolution algorithm.
@@ -183,7 +183,7 @@ def sincbroad(w, s, hwhm):
     """
     Smooths a spectrum by convolution with a sinc function of specified hwhm.
 
-    Input:
+    Parameters
     ------
     w : array of size (n,)
         wavelength scale of spectrum to be smoothed
@@ -192,12 +192,12 @@ def sincbroad(w, s, hwhm):
     hwhm : float
         half width at half maximum of smoothing gaussian.
 
-    Output:
+    Returns
     -------
     sout : array of size (n,)
         the sinc-smoothed spectrum.
 
-    History:
+    Notes
     -------
     Dec-90 GB,GM
         Rewrote with fourier convolution algorithm.

@@ -23,7 +23,7 @@ def integrate_flux(mu, inten, deltav, vsini, vrt, osamp=1):
     DELTAV, VSINI, and VRT must all be in the same units (e.g. km/s).
     If specified, OSAMP should be a positive integer.
 
-    Parameters:
+    Parameters
     ----------
     mu : array(float) of size (nmu,)
         cosine of the angle between the outward normal and
@@ -41,14 +41,14 @@ def integrate_flux(mu, inten, deltav, vsini, vrt, osamp=1):
         of turbulent velocities. The same distribution function describes
         the radial motions of one component and the tangential motions of
         a second component. Each component covers half the stellar surface.
-        See _The Observation and Analysis of Stellar Photospheres_, Gray.
+        See 'The Observation and Analysis of Stellar Photospheres', Gray.
     osamp : int, optional
         internal oversampling factor for convolutions.
         By default convolutions are done using the input points (OSAMP=1),
         but when OSAMP is set to higher integer values, the input spectra
         are first oversampled by cubic spline interpolation.
 
-    Returns:
+    Returns
     -------
     value : array(float) of size (npts,)
         Disk integrated flux profile.
@@ -58,7 +58,7 @@ def integrate_flux(mu, inten, deltav, vsini, vrt, osamp=1):
         If you use this algorithm in work that you publish, please cite
         Valenti & Anderson 1996, PASP, currently in preparation.
 
-    History:
+    Notes
     -----------
     Feb-88  GM
         Created ANA version.
