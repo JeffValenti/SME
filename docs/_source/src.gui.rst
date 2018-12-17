@@ -12,10 +12,10 @@ src.gui.plot\_colors module
     :undoc-members:
     :show-inheritance:
 
-src.gui.plot\_jupyter module
+src.gui.plot\_plotly module
 ----------------------------
 
-.. automodule:: src.gui.plot_jupyter
+.. automodule:: src.gui.plot_plotly
     :members:
     :undoc-members:
     :show-inheritance:
