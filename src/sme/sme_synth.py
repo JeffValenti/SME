@@ -76,7 +76,7 @@ def check_error(name, *args, **kwargs):
 def SMELibraryVersion():
     """
     Return SME library version
-    
+
     Returns
     -------
     version : str
@@ -96,7 +96,7 @@ def SetLibraryPath():
 def InputWaveRange(wfirst, wlast):
     """
     Read in Wavelength range
-    
+
     Will raise an exception if wfirst is larger than wlast
 
     Parameters
@@ -106,13 +106,16 @@ def InputWaveRange(wfirst, wlast):
     wlast : float
         last wavelength of the segment
     """
+    assert (
+        wfirst < wlast
+    ), "Input Wavelength range is wrong, first wavelength is larger than last"
     check_error("InputWaveRange", wfirst, wlast, type="double")
 
 
 def SetVWscale(gamma6):
     """
     Set van der Waals scaling factor
-    
+
     Parameters
     ----------
     gamma6 : float
@@ -149,10 +152,12 @@ def InputLineList(atomic, species):
     nlines = species.size
     species = np.asarray(species, "U8")
 
-    # # Sort list by wavelength
-    # sort = np.argsort(atomic[:, 2])
-    # species = species[sort]
-    # atomic = atomic[sort, :]
+    assert (
+        atomic.shape[0] == nlines
+    ), f"Got wrong Linelist shape, expected ({nlines}, 8) but got {atomic.shape}"
+    assert (
+        atomic.shape[1] == 8
+    ), f"Got wrong Linelist shape, expected ({nlines}, 8) but got {atomic.shape}"
 
     atomic = atomic.T
     check_error(
@@ -193,7 +198,19 @@ def UpdateLineList(atomic, species, index):
         indices of the lines to update relative to the overall linelist
     """
     nlines = atomic.shape[0]
+    assert (
+        atomic.shape[1] == 8
+    ), f"Got wrong Linelist shape, expected ({nlines}, 8) but got {atomic.shape}"
+
+    assert (
+        len(index) == nlines
+    ), "Inconsistent number if lines, between index and linelist"
+    assert (
+        len(species) == nlines
+    ), "Inconsistent number if lines, between index and linelist"
+
     atomic = atomic.T
+
     check_error(
         "UpdateLineList",
         nlines,
@@ -588,6 +605,19 @@ def InputNLTE(bmat, lineindex):
     lineindex : float
         index of the line in the linelist
     """
+    ndepth = _dll.ndepth
+    nlines = _dll.nlines
+    assert (
+        bmat.shape[0] == 2
+    ), f"Departure coefficient matrix has the wrong shape, expected (2, {ndepth}) but got {bmat.shape} instead"
+    assert (
+        bmat.shape[1] == ndepth
+    ), f"Departure coefficient matrix has the wrong shape, expected (2, {ndepth}) but got {bmat.shape} instead"
+
+    assert (
+        0 <= lineindex < nlines
+    ), f"Lineindex out of range, expected value between 0 and {nlines}, but got {lineindex} instead"
+
     check_error("InputDepartureCoefficients", bmat, lineindex, type=("double", "int"))
 
 

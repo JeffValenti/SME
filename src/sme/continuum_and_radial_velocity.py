@@ -294,7 +294,7 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     if "spec" not in sme or "mask" not in sme or "wave" not in sme or "uncs" not in sme:
         # No observation no radial velocity
         warnings.warn("Missing data for radial velocity/continuum determination")
-        return 0, [0]
+        return 0, [1]
     mask = sme.mask_good[segment]
     x_obs = sme.wave[segment][mask]
     y_obs = sme.spec[segment][mask]

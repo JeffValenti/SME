@@ -298,6 +298,13 @@ def solve(
         same sme structure with fit results in sme.fitresults, and best fit spectrum in sme.smod
     """
 
+    assert "wave" in sme, "SME Structure has no wavelength"
+    assert "spec" in sme, "SME Structure has no observation"
+
+    if "uncs" not in sme:
+        sme.uncs = np.ones_like(sme.sob)
+        logging.warning("SME Structure has no uncertainties, using all ones instead")
+
     # Sanitize parameter names
     param_names = [p.casefold() for p in param_names]
     param_names = [p.capitalize() if p[-5:] == "abund" else p for p in param_names]
@@ -555,7 +562,7 @@ def synthesize_spectrum(
     # fix impossible input
     if "spec" not in sme:
         sme.vrad_flag = "none"
-    if "spec" not in sme and sme.cscale_flag >= -1:
+    if "spec" not in sme:
         sme.cscale_flag = "none"
     if "wint" not in sme:
         reuse_wavelength_grid = False
@@ -670,14 +677,14 @@ def synthesize_spectrum(
         # smod[il] = resamp(x_seg, y_seg, wave[il])
         smod[il] = safe_interpolation(wgrid, flux, wave[il])
 
-        if cscale[il] is not None:
+        if cscale[il] is not None and not np.all(cscale[il] == 0):
             x = wave[il] - wave[il][0]
             smod[il] *= np.polyval(cscale[il], x)
 
     # Merge all segments
     sme.synth = smod = np.concatenate(smod)
     # if sme already has a wavelength this should be the same
-    sme.wave = wave
+    sme.wave = wave = np.concatenate(wave)
     sme.wind = wind
     sme.wint = wint
 

@@ -922,7 +922,7 @@ class SME_Struct(Param):
         if length == ndeg and nseg == self.nseg:
             return self._cscale
 
-        cs = np.zeros((self.nseg, ndeg))
+        cs = np.ones((self.nseg, ndeg))
         if length == nseg:
             cs[:nseg, :] = self._cscale[:nseg, :]
         elif length < ndeg:
