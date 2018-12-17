@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 
 from scipy.stats import norm
 
-import util
-from src.gui import plot_jupyter, plot_pyplot
-from src.sme.abund import Abund
-from src.sme import sme as SME
-from src.sme.vald import ValdFile
-from src.sme.solve import solve
+from SME import util
+from SME.src.gui import plot_plotly, plot_pyplot
+from SME.src.sme.abund import Abund
+from SME.src.sme import sme as SME
+from SME.src.sme.vald import ValdFile
+from SME.src.sme.solve import solve
 
 if __name__ == "__main__":
     target = "sun"
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # plt.show()
 
     # # # Plot results
-    fig = plot_jupyter.FinalPlot(sme)
+    fig = plot_plotly.FinalPlot(sme)
     fig.save(filename=f"{target}.html")
 
     # if "synth" in sme:

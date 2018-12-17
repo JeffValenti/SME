@@ -24,12 +24,15 @@ except ImportError:
 try:
     from IPython import get_ipython
 
-    cfg = get_ipython().config
-    in_notebook = cfg["IPKernelApp"]["parent_appname"] == "ipython-notebook"
-except AttributeError:
+    cfg = get_ipython()
+    in_notebook = cfg is not None
+except (AttributeError, ImportError):
     in_notebook = False
-except ImportError:
-    in_notebook = False
+
+
+def has_logger(log_file="log.log"):
+    logger = logging.getLogger()
+    return len(logger.handlers) == 0
 
 
 def start_logging(log_file="log.log"):
@@ -47,10 +50,7 @@ def start_logging(log_file="log.log"):
     # Remove existing File handles
     hasStream = False
     for h in list(logger.handlers):
-        if isinstance(h, logging.FileHandler):
-            logger.removeHandler(h)
-        if isinstance(h, logging.StreamHandler):
-            hasStream = True
+        logger.removeHandler(h)
 
     # Command Line output
     # only if not running in notebook
