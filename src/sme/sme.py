@@ -35,7 +35,7 @@ class Iliffe_vector:
         else:
             if index[0] != 0:
                 index = [0, *index]
-            self.__idx__ = np.asarray(index)
+            self.__idx__ = np.asarray(index, dtype=int)
             sizes = index[-1]
         # this stores the actual data
         if values is None:
@@ -52,6 +52,11 @@ class Iliffe_vector:
 
         if len(index) == 0:
             return self.__values__
+
+        if isinstance(index, (list, np.ndarray)):
+            values = [self[i] for i in index]
+            sizes = [len(v) for v in values]
+            return Iliffe_vector(sizes, values=values)
 
         if isinstance(index, str):
             # This happens for example for np.recarrays
@@ -794,10 +799,10 @@ class SME_Struct(Param):
 
     @property
     def nseg(self):
-        if self.wind is None:
+        if self.wran is None:
             return None
         else:
-            return len(self.wind) - 1
+            return len(self.wran)
 
     @property
     def md5(self):
@@ -916,7 +921,7 @@ class SME_Struct(Param):
         if self.cscale_flag == "none":
             return np.ones((self.nseg, 1))
 
-        ndeg = {"fix": 1, "const":1, "linear":2, "quadratic":3}[self.cscale_flag]
+        ndeg = {"fix": 1, "constant":1, "linear":2, "quadratic":3}[self.cscale_flag]
         nseg, length = self._cscale.shape
 
         if length == ndeg and nseg == self.nseg:
@@ -948,7 +953,24 @@ class SME_Struct(Param):
     def cscale_flag(self, value):
         if isinstance(value, (int, np.integer)):
             value = {-3:"none", -2:"fix", -1:"fix", 0:"constant", 1:"linear", 2:"quadratic"}[value]
+
+        options = ["none", "fix", "constant", "linear", "quadratic"]
+        if value not in options:
+            raise ValueError(f"Expected one of {options} got {value}")
+
         self._cscale_flag = value
+
+    @property
+    def cscale_degree(self):
+        if self.cscale_flag == "constant":
+            return 0
+        if self.cscale_flag == "linear":
+            return 1
+        if self.cscale_flag == "quadratic":
+            return 2
+
+        # "none" and "fix"
+        return 0
 
     @property
     def vrad_flag(self):

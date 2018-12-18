@@ -12,7 +12,7 @@ from SME.src.gui import plot_plotly, plot_pyplot
 from SME.src.sme.abund import Abund
 from SME.src.sme import sme as SME
 from SME.src.sme.vald import ValdFile
-from SME.src.sme.solve import solve
+from SME.src.sme.solve import solve, synthesize_spectrum
 
 if __name__ == "__main__":
     target = "sun"
@@ -54,42 +54,44 @@ if __name__ == "__main__":
         else:
             fitparameters = ["teff", "logg", "monh"]
 
-    fitparameters = ["teff", "logg", "monh", "Y Abund", "Mg Abund"]
+    fitparameters = ["teff", "logg", "monh"]
     sme.vrad_flag = "each"
-    sme.cscale_flag = "linear"
-    sme.nlte.set_nlte("Ca")
+    sme.cscale_flag = "none"
+    # sme.nlte.set_nlte("Ca")
 
     # Start SME solver
     sme = solve(sme, fitparameters, filename=f"{target}.npy")
 
-    # Calculate stellar age based on abundances
-    solar = Abund.solar()
-    y, mg = sme.abund["Y"], sme.abund["Mg"]
-    sy, smg = sme.fitresults.punc["Y abund"], sme.fitresults.punc["Mg abund"]
-    x = y - mg - (solar["Y"] - solar["Mg"])
-    sx = np.sqrt(sy ** 2 + smg ** 2)
+    try:
+        # Calculate stellar age based on abundances
+        solar = Abund.solar()
+        y, mg = sme.abund["Y"], sme.abund["Mg"]
+        sy, smg = sme.fitresults.punc["Y abund"], sme.fitresults.punc["Mg abund"]
+        x = y - mg - (solar["Y"] - solar["Mg"])
+        sx = np.sqrt(sy ** 2 + smg ** 2)
 
-    # Values from paper
-    a = 0.175
-    sa = 0.011
-    b = -0.0404
-    sb = 0.0019
-    age = (x - a) / b
-    sigma_age = 1 / b * np.sqrt(sx ** 2 + sa ** 2 + ((x - a) / b) ** 2 * sb ** 2)
-    sigma_age = abs(sigma_age)
-    logging.info(f"Age       \t{age:.3f} +- {sigma_age:.3f} Gyr")
+        # Values from paper
+        a = 0.175
+        sa = 0.011
+        b = -0.0404
+        sb = 0.0019
+        age = (x - a) / b
+        sigma_age = 1 / b * np.sqrt(sx ** 2 + sa ** 2 + ((x - a) / b) ** 2 * sb ** 2)
+        sigma_age = abs(sigma_age)
+        logging.info(f"Age       \t{age:.3f} +- {sigma_age:.3f} Gyr")
+    except:
+        pass
+    p = np.linspace(0, 10, 1000)
+    g = norm.pdf(p, loc=age, scale=sigma_age)
+    # Rescale to area = 1
+    area = np.sum(g * np.gradient(p))  # Cheap integral
+    g *= 1 / area
+    plt.plot(p, g)
+    plt.xlabel("Age [Gyr]")
+    plt.ylabel("Probability")
+    plt.show()
 
-    # p = np.linspace(0, 10, 1000)
-    # g = norm.pdf(p, loc=age, scale=sigma_age)
-    # # Rescale to area = 1
-    # area = np.sum(g * np.gradient(p))  # Cheap integral
-    # g *= 1 / area
-    # plt.plot(p, g)
-    # plt.xlabel("Age [Gyr]")
-    # plt.ylabel("Probability")
-    # plt.show()
-
-    # # # Plot results
+    # # Plot results
     fig = plot_plotly.FinalPlot(sme)
     fig.save(filename=f"{target}.html")
 

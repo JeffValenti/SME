@@ -38,6 +38,7 @@ def residuals(
     mask,
     isJacobian=False,
     fname="sme.npy",
+    segments="all",
     fig=None,
     **_,
 ):
@@ -89,7 +90,9 @@ def residuals(
         sme[name] = value
     # run spectral synthesis
     try:
-        sme2 = synthesize_spectrum(sme, reuse_wavelength_grid=reuse_wavelength_grid)
+        sme2 = synthesize_spectrum(
+            sme, reuse_wavelength_grid=reuse_wavelength_grid, segments=segments
+        )
     except AtmosphereError as ae:
         # Something went wrong (left the grid? Don't go there)
         # If returned value is not finite it will be ignored?
@@ -107,7 +110,10 @@ def residuals(
     if save:
         sme2.save(fname, verbose=False)
 
-    synth = sme2.synth
+    if segments == "all":
+        segments = range(sme.nseg)
+
+    synth = sme2.synth[segments]
     if mask is not None:
         synth = synth[mask]
     else:
@@ -137,7 +143,7 @@ def residuals(
     return resid
 
 
-def jacobian(param, *args, bounds=None, **_):
+def jacobian(param, *args, bounds=None, segments="all", **_):
     """
     Approximate the jacobian numerically
     The calculation is the same as "3-point"
@@ -152,7 +158,7 @@ def jacobian(param, *args, bounds=None, **_):
         f0=residuals.resid,
         bounds=bounds,
         args=args,
-        kwargs={"isJacobian": True},
+        kwargs={"isJacobian": True, "segments": segments},
     )
 
 
@@ -160,7 +166,7 @@ def linelist_errors(wave, spec, linelist):
     """ make linelist errors, based on the effective wavelength range
     of each line and the uncertainty value of that line """
     rel_error = linelist.error
-    width = sme_synth.GetLineRange(len(linelist))
+    width = sme_synth.GetLineRange()
 
     sig_syst = np.zeros(wave.size, dtype=float)
 
@@ -276,7 +282,12 @@ def default(name):
 
 
 def solve(
-    sme, param_names=("teff", "logg", "monh"), filename="sme.npy", fig=None, **kwargs
+    sme,
+    param_names=("teff", "logg", "monh"),
+    filename="sme.npy",
+    fig=None,
+    segments="all",
+    **kwargs,
 ):
     """
     Find the least squares fit parameters to an observed spectrum
@@ -335,9 +346,11 @@ def solve(
     p0 = [sme[s] if sme[s] is not None else default(s) for s in param_names]
 
     # Get constant data from sme structure
-    mask = sme.mask_good
-    spec = sme.spec[mask]
-    uncs = sme.uncs[mask]
+    if segments == "all":
+        segments = range(sme.nseg)
+    mask = sme.mask_good[segments]
+    spec = sme.spec[segments][mask]
+    uncs = sme.uncs[segments][mask]
 
     # Divide the uncertainties by the spectrum, to improve the fit in the continuum
     # Just as in IDL SME
@@ -356,7 +369,7 @@ def solve(
         method="trf",
         verbose=2,
         args=(param_names, sme, spec, uncs, mask),
-        kwargs={"bounds": bounds, "fig": fig, "fname": filename},
+        kwargs={"bounds": bounds, "fig": fig, "fname": filename, "segments": segments},
         max_nfev=kwargs.get("maxiter"),
     )
 
@@ -521,6 +534,7 @@ def new_wavelength_grid(wint):
 
 def synthesize_spectrum(
     sme,
+    segments="all",
     passLineList=True,
     passAtmosphere=True,
     passNLTE=True,
@@ -558,6 +572,7 @@ def synthesize_spectrum(
     # Define constants
     n_segments = sme.nseg
     nmu = sme.nmu
+    cscale_degree = sme.cscale_degree
 
     # fix impossible input
     if "spec" not in sme:
@@ -567,23 +582,32 @@ def synthesize_spectrum(
     if "wint" not in sme:
         reuse_wavelength_grid = False
 
+    if segments == "all":
+        segments = range(n_segments)
+    else:
+        segments = np.atleast_1d(segments)
+
     # Prepare arrays
     wran = sme.wran
 
     wint = [None for _ in range(n_segments)]
     sint = [None for _ in range(n_segments)]
     cint = [None for _ in range(n_segments)]
-    vrad = [None for _ in range(n_segments)]
+    vrad = np.zeros(n_segments)
 
-    cscale = [None for _ in range(n_segments)]
+    cscale = np.zeros((n_segments, cscale_degree + 1))
+    cscale[:, -1] = 1
     wave = [None for _ in range(n_segments)]
-    smod = [None for _ in range(n_segments)]
-    wind = [0] + [None for _ in range(n_segments)]
+    smod = [[] for _ in range(n_segments)]
+    wind = np.zeros(n_segments + 1, dtype=int)
 
     # If wavelengths are already defined use those as output
     if "wave" in sme:
-        wave = sme.wave
-        wind = sme.wind
+        wave = [w for w in sme.wave]
+        wind = [0, *np.diff(sme.wind)]
+        smod = [np.zeros(len(w)) for w in wave]
+    if "synth" in sme:
+        smod = [s for s in sme.synth]
 
     # Input Model data to C library
     if passLineList:
@@ -605,7 +629,7 @@ def synthesize_spectrum(
     #   Interpolate onto geomspaced wavelength grid
     #   Apply instrumental and turbulence broadening
     #   Determine Continuum / Radial Velocity for each segment
-    for il in range(n_segments):
+    for il in segments:
         logging.debug("Segment %i", il)
         # Input Wavelength range and Opacity
         vrad_seg = sme.vrad[il]
@@ -617,7 +641,7 @@ def synthesize_spectrum(
         # Reuse adaptive wavelength grid in the jacobians
         wint_seg = sme.wint[il] if reuse_wavelength_grid else None
         # Only calculate line opacities in the first segment
-        keep_line_opacity = il != 0
+        keep_line_opacity = il != segments[0]
         #   Calculate spectral synthesis for each
         _, wint[il], sint[il], cint[il] = sme_synth.Transf(
             sme.mu,
@@ -652,17 +676,17 @@ def synthesize_spectrum(
             )
 
         # Divide calculated spectrum by continuum
-        if sme.cscale_flag != -2:
+        if sme.cscale_flag != "fix":
             flux /= cont_flux
 
         # Create a wavelength array if it doesn't exist
-        if "wave" not in sme:
+        if "wave" not in sme or len(sme.wave[il]) == 0:
             # trim padding
             wbeg, wend = wran[il]
             itrim = (wgrid > wbeg) & (wgrid < wend)
             # Force endpoints == wavelength range
             wave[il] = np.concatenate(([wbeg], wgrid[itrim], [wend]))
-            wind[il + 1] = wind[il] + len(wave[il])
+            wind[il + 1] = len(wave[il])
 
         # Fit continuum and radial velocity
         cscale[il], vrad[il] = match_rv_continuum(sme, il, wgrid, flux)
@@ -682,13 +706,21 @@ def synthesize_spectrum(
             smod[il] *= np.polyval(cscale[il], x)
 
     # Merge all segments
-    sme.synth = smod = np.concatenate(smod)
     # if sme already has a wavelength this should be the same
+    wave = [w for w in wave if w is not None]
     sme.wave = wave = np.concatenate(wave)
+    wind = np.cumsum(wind)
     sme.wind = wind
+
+    sme.synth = np.concatenate(smod)
+
+    for s in segments:
+        sme.synth[s] = smod[s]
+
     sme.wint = wint
 
-    sme.cscale = np.stack(cscale)
+    if sme.cscale_flag != "fix":
+        sme.cscale = np.stack(cscale)
 
     if sme.vrad_flag in [-1, "whole"]:
         # If we want to determine radial velocity on the whole spectrum at once (instead of segments)
