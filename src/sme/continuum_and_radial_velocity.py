@@ -6,11 +6,16 @@ and fit best radial velocity to observation
 import logging
 import warnings
 
+from itertools import product
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import correlate
+from scipy.ndimage.filters import median_filter
 from scipy.optimize import least_squares
+from scipy.linalg import lu_factor, lu_solve
 from scipy.constants import speed_of_light
+
 
 from . import sme_synth
 from . import util
@@ -378,6 +383,99 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     return rvel, cscale
 
 
+def cont_fit(xarg, yarg, weights, order, eps=1e-6):
+    """Fit a continuum when no continuum points exist
+
+    Parameters
+    ----------
+    xarg : array of size (n,)
+        wavelength points of the spectrum,
+    yarg : array of size (n,)
+        intensity of the spectrum
+    weights : array of size (n,)
+        1/ uncertainties of the spectrum
+    order : {0, 1, 2}
+        polynomial degree of the continuum fit
+    eps : float, optional
+        precision of the continuum fit, calculations will stop early when the deviation is smaller than eps
+        (default: 1e-6)
+
+    Returns
+    -------
+    continuum : array of size (n,)
+        continuum fit
+    """
+
+    if order <= 0 or order > 2:
+        # Only polynomial orders up to 2 are supported
+        # Return a constant scale otherwise (same as order == 0)
+        scl = np.sum(weights * yarg) / np.sum(weights)
+        return [scl]
+
+    iterations = 10
+    xx = (xarg - (np.max(xarg) - np.min(xarg)) * 0.5) / (
+        (np.max(xarg) - np.min(xarg)) * 0.5
+    )
+    fmin = np.min(yarg) - 1
+    fmax = np.max(yarg) + 1
+    ff = (yarg - fmin) / (fmax - fmin)
+    ff_old = ff
+
+    def linear(a, b):
+        a[1, 1] -= a[0, 1] ** 2 / a[0, 0]
+        b -= b[::-1] * a[0, 1] / np.diag(a)[::-1]
+        cfit = b / np.diag(a)
+        return cfit[::-1]
+
+    def quadratic(a, b):
+        lu, index = lu_factor(a)
+        cfit = lu_solve((lu, index), b)
+        return cfit[::-1]
+
+    if order == 1:
+        func = linear
+    elif order == 2:
+        func = quadratic
+
+    for _ in range(iterations):
+        n = order + 1
+        a = np.zeros((n, n))
+        b = np.zeros(n)
+
+        for j, k in product(range(order + 1), repeat=2):
+            a[j, k] = np.sum(weights * xx ** (j + k))
+
+        for j in range(order + 1):
+            b[j] = np.sum(weights * ff * xx ** j)
+
+        cfit = func(a, b)
+
+        dev = np.polyval(cfit, xx)
+        t = median_filter(dev, size=3)
+        tt = (t - ff) ** 2
+
+        for j in range(n):
+            b[j] = np.sum(weights * tt * xx ** j)
+
+        dev = np.polyval(cfit, xx)
+        dev = np.clip(dev, 0, None)
+        dev = np.sqrt(dev)
+
+        ff = np.clip(t - dev, ff, t + dev)
+        dev2 = np.max(weights * np.abs(ff - ff_old))
+        ff_old = ff
+
+        if dev2 < eps:
+            break
+
+    coef = np.polyfit(xx, ff, order)
+    t = np.polyval(coef, xx)
+    t = t * (fmax - fmin) + fmin
+    coef = np.polyfit(xarg - xarg[0], t, order)
+
+    return coef
+
+
 def match_rv_continuum(sme, segment, x_syn, y_syn):
     """
     Match both the continuum and the radial velocity of observed/synthetic spectrum
@@ -403,7 +501,30 @@ def match_rv_continuum(sme, segment, x_syn, y_syn):
         new continuum coefficients
     """
 
+    # sme.cscale_flag = "linear"
+
+    # rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
+
+    # eps = np.mean(sme.uncs[segment])
+    # weights = sme.spec[segment] / sme.uncs[segment] ** 2
+    # weights[sme.mask_bad[segment]] = 0
+
+    # order = {"constant": 0, "linear": 1, "quadratic": 2}[sme.cscale_flag]
+
+    # x = sme.wave[segment]
+    # y = sme.spec[segment]
+    # yc = np.interp(x * (1 - rvel / c_light), x_syn, y_syn)
+    # y = y / yc
+
+    # cont = cont_fit(x, y, weights, order, eps=eps)
+
     rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
+
+    # plt.plot(sme.spec[segment])
+    # plt.plot(np.polyval(cscale, x - x[0]), label="cscale")
+    # plt.plot(np.polyval(cont, x - x[0]), label="cont_fit")
+    # plt.legend()
+    # plt.show()
 
     # cscale = determine_continuum(sme, segment)
     # rvel = determine_radial_velocity(sme, segment, cscale, x_syn, y_syn)
