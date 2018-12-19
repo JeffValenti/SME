@@ -303,39 +303,41 @@ class Iliffe_vector:
         return f"Iliffe_vector({self.sizes}, {self.__values__})"
 
     def max(self):
+        """ Maximum value in all segments """
         return np.max(self.__values__)
 
     def min(self):
+        """ Minimum value in all segments """
         return np.min(self.__values__)
 
     @property
     def size(self):
-        """ number of elements in vector """
+        """int: number of elements in vector """
         return self.__idx__[-1]
 
     @property
     def shape(self):
-        """ number of segments, array with size of each segment """
+        """tuple(int, list(int)): number of segments, array with size of each segment """
         return len(self), self.sizes
 
     @property
     def sizes(self):
-        """ Sizes of the different segments """
+        """list(int): Sizes of the different segments """
         return list(np.diff(self.__idx__))
 
     @property
     def ndim(self):
-        """ its always 2D """
+        """int: its always 2D """
         return 2
 
     @property
     def dtype(self):
-        """ numpy datatype of the values """
+        """dtype: numpy datatype of the values """
         return self.__values__.dtype
 
     @property
     def flat(self):
-        """ Flat iterator through the values """
+        """iter: Flat iterator through the values """
         return self.__values__.flat
 
     def flatten(self):
@@ -343,25 +345,50 @@ class Iliffe_vector:
         Returns a new(!) flattened version of the vector
         Values are identical to __values__ if the size
         of all segements equals the size of __values__
+
+        Returns
+        -------
+        flatten: array
+            new flat (1d) array of the values within this Iliffe vector
         """
         return np.concatenate([self[i] for i in range(len(self))])
 
     def ravel(self):
+        """
+        View of the contained values as a 1D array.
+        Not a copy
+
+        Returns
+        -------
+        raveled: array
+            1d array of the contained values
+        """
+
         return self.__values__
 
     def copy(self):
-        """ Create a copy of the current vector """
+        """
+        Create a copy of the current vector
+
+        Returns
+        -------
+        copy : Iliffe_vector
+            A copy of this vector
+        """
         idx = np.copy(self.__idx__)
         values = np.copy(self.__values__)
         return Iliffe_vector(None, index=idx, values=values)
 
     def append(self, other):
-        """ Append a new segment to the end of the vector"""
+        """
+        Append a new segment to the end of the vector
+        This creates new memory arrays for the values and the index
+        """
         self.__values__ = np.concatenate((self.__values__, other))
         self.__idx__ = np.concatenate((self.__idx__, len(other)))
 
 
-class Collection(object):
+class Collection:
     """
     A dictionary that is case insensitive (always lowercase) and
     that can be accessed both by attribute or index (for names that don't start with "_")
@@ -397,7 +424,7 @@ class Collection(object):
 
     @property
     def names(self):
-        """ Names of all not None parameters in the Collection """
+        """list(str): Names of all not None parameters in the Collection """
         exclude = ["names", "dtype"]
         exclude += [
             s[0]
@@ -411,13 +438,26 @@ class Collection(object):
 
     @property
     def dtype(self):
-        """ emulate numpt recarray dtype names """
+        """:obj: emulate numpt recarray dtype names """
         dummy = lambda: None
         dummy.names = [s.upper() for s in self.names]
         return dummy
 
     def get(self, key, alt=None):
-        """ Get a value with name key if it exists and is not None or alt if not """
+        """
+        Get a value with name key if it exists and is not None or alt if not
+
+        Parameters
+        ----------
+        key: str
+            Name of the value to get
+        alt: obj, optional
+            alternative value to get if key does not exist (default: None)
+
+        Returns
+        -------
+        obj
+        """
         if key in self:
             return self[key]
         else:
@@ -434,14 +474,16 @@ class Param(Collection):
             kwargs["logg"] = kwargs["grav"]
             kwargs.pop("grav")
 
+        #:float: effective Temperature in K
         self.teff = None
+        #:float: surface gravity in log10(cgs)
         self.logg = None
+
         self._vsini = 0
         self._vmac = 0
         self._vmic = 0
         self._abund = None
 
-        # TODO: in the SME structure, the abundance values are in a different scheme than described in Abund
         # Helium is also fractional (sometimes?)
         if abund is not None and abund[1] > 0:
             abund = np.copy(abund)
@@ -465,7 +507,7 @@ class Param(Collection):
 
     @property
     def monh(self):
-        """ Metallicity """
+        """float: Metallicity """
         return self.abund.monh
 
     @monh.setter
@@ -474,7 +516,7 @@ class Param(Collection):
 
     @property
     def abund(self):
-        """ Elemental abundances : Abund """
+        """Abund: Elemental abundances """
         return self._abund
 
     @abund.setter
@@ -490,12 +532,23 @@ class Param(Collection):
             )
 
     def set_abund(self, monh, abpatt, abtype):
-        """ Set elemental abundances together with the metallicity """
+        """
+        Set elemental abundances together with the metallicity
+
+        Parameters
+        ----------
+        monh : float
+            Metallicity
+        abpatt : str or array of size (99,)
+            Abundance pattern. If string one of the valid presets, otherwise a list of the individual abundances
+        abtype : str
+            Abundance description format of the input. One of the valid values as described in Abund
+        """
         self._abund = Abund(monh, abpatt, abtype)
 
     @property
     def vmac(self):
-        """ Macro Turbulence Velocity """
+        """float: Macro Turbulence Velocity in km/s """
         return self._vmac
 
     @vmac.setter
@@ -504,7 +557,7 @@ class Param(Collection):
 
     @property
     def vmic(self):
-        """ Micro Turbulence Velocity """
+        """float: Micro Turbulence Velocity in km/s """
         return self._vmic
 
     @vmic.setter
@@ -513,6 +566,7 @@ class Param(Collection):
 
     @property
     def vsini(self):
+        """float: Rotational Velocity in km/s, times sine of the inclination """
         return self._vsini
 
     @vsini.setter
@@ -528,22 +582,24 @@ class NLTE(Collection):
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
             args.update(kwargs)
             kwargs = args
+        #:str: OBSOLETE name of the nlte function to use
         self.nlte_pro = kwargs.pop("sme_nlte", None)
         self.nlte_pro = "nlte"
         elements = kwargs.pop("nlte_elem_flags", [])
         elements = [Abund._elem[i] for i, j in enumerate(elements) if j == 1]
+        #:list(str): NLTE elements in use
         self.elements = elements
+        #:list of size (4,): OBSOLETE defines subgrid size that is kept in memory
         self.subgrid_size = kwargs.pop("nlte_subgrid_size", [2, 2, 2, 2])
 
         grids = kwargs.pop("nlte_grids", {})
-
         if isinstance(grids, (list, np.ndarray)):
             grids = {
                 Abund._elem[i]: name.decode()
                 for i, name in enumerate(grids)
                 if name != ""
             }
-
+        #:dict(str, str): NLTE grids to use for any given element
         self.grids = grids
         super().__init__(**kwargs)
 
@@ -561,12 +617,29 @@ class NLTE(Collection):
     }
 
     def set_nlte(self, element, grid=None):
-        """ add an element to the NLTE calculations """
+        """
+        Add an element to the NLTE calculations
+
+        Parameters
+        ----------
+        element : str
+            The abbreviation of the element to add to the NLTE calculations
+        grid : str, optional
+            Filename of the NLTE data grid to use for this element
+            the file must be in nlte_grids directory
+            Defaults to a set of "known" files for some elements
+        """
         if element in self.elements:
+            # Element already in NLTE
+            # Change grid if given
+            if grid is not None:
+                self.grids[element] = grid
             return
 
         if grid is None:
             # Use default grid
+            if element not in NLTE._default_grids.keys():
+                raise ValueError(f"No default grid known for element {element}")
             grid = NLTE._default_grids[element]
             logging.info("Using default grid %s for element %s", grid, element)
 
@@ -574,8 +647,16 @@ class NLTE(Collection):
         self.grids[element] = grid
 
     def remove_nlte(self, element):
-        """ remove an element from the NLTE calculations """
+        """
+        Remove an element from the NLTE calculations
+
+        Parameters
+        ----------
+        element : str
+            Abbreviation of the element to remove from NLTE
+        """
         if element not in self.elements:
+            # Element not included in NLTE anyways
             return
 
         self.elements.remove(element)
@@ -590,22 +671,30 @@ class Version(Collection):
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
             args.update(kwargs)
             kwargs = args
+        #:str: System architecture
         self.arch = None
+        #:str: Operating System
         self.os = None
+        #:str: Operating System Family
         self.os_family = None
+        #:str: OS Name
         self.os_name = None
+        #:str: Python Version
         self.release = None
+        #:str: Build date of the Python version used
         self.build_date = None
+        #:int: Platform architecture bit size (usually 32 or 64)
         self.memory_bits = None
+        #:int: OBSOLETE File offset bits (same as memory bits) ???
         self.file_offset_bits = None
+        #:str: Name of the machine that created the SME Structure
         self.host = None
-        # self.info = sys.version
         if len(kwargs) == 0:
             self.update()
         super().__init__(**kwargs)
 
     def update(self):
-        """ update version info with current machine data """
+        """ Update version info with current machine data """
         self.arch = platform.machine()
         self.os = sys.platform
         self.os_family = platform.system()
@@ -634,17 +723,29 @@ class Atmo(Param):
             args = {name.casefold(): args[0][name][0] for name in args[0].dtype.names}
             args.update(kwargs)
             kwargs = args
+        #:array of size (ndepth,): Mass column density, only rhox or tau needs to be specified
         self.rhox = None
+        #:array of size (ndepth,): Continuum optical depth, only rhox or tau needs to be specified
         self.tau = None
+        #:array of size (ndepth,): Temperatures in K of each layer
         self.temp = None
+        #:array of size (ndepth,): Number density of atoms in 1/cm**3
         self.xna = None
+        #:array of size (ndepth,): Number density of electrons in 1/cm**3
         self.xne = None
+        #:float: Turbulence velocity in km/s
         self.vturb = None
+        #:float: ???
         self.lonh = None
+        #:str: Method to use for interpolating atmospheres. Valid values "grid", "embedded"
         self.method = None
+        #:str: filename of the atmosphere grid
         self.source = None
+        #:str: Flag that determines wether to use RHOX or TAU for calculations. Values are "RHOX", "TAU"
         self.depth = None
+        #:str: Flag that determines wether RHOX or TAU are used for interpolation. Values are "RHOX", "TAU"
         self.interp = None
+        #:str: Flag that describes the geometry of the atmosphere model. Values are "PP" Plane Parallel, "SPH" Spherical
         self.geom = None
         super().__init__(**kwargs)
 
@@ -658,14 +759,18 @@ class Fitresults(Collection):
     """
 
     def __init__(self, **kwargs):
+        #:int: Maximum number of iterations in the solver
         self.maxiter = kwargs.pop("maxiter", None)
+        #:float: Reduced Chi square of the solution
         self.chisq = kwargs.pop("chisq", None)
+        #:array of size (nfree,): Uncertainties of the free parameters
         self.punc = kwargs.pop("punc", None)
+        #:array of size (nfree, nfree): Covariance matrix
         self.covar = kwargs.pop("covar", None)
         super().__init__(**kwargs)
 
     def clear(self):
-        """ reset all values to None """
+        """ Reset all values to None """
         self.maxiter = None
         self.chisq = None
         self.punc = None
@@ -679,25 +784,55 @@ class SME_Struct(Param):
     and perform a fit to existing data
     """
 
+    #:dict(str, int): Mask value specifier used in mob
     mask_values = {"bad": 0, "line": 1, "continuum": 2}
 
     def __init__(self, atmo=None, nlte=None, idlver=None, **kwargs):
+        """
+        Create a new SME Structure
+
+        Some properties have default values but most will be empty (i.e. None)
+        if not set specifically
+
+        When possible will convert values from IDL description to Python equivalent
+
+        Parameters
+        ----------
+        atmo : Atmo, optional
+            Atmopshere structure
+        nlte : NLTE, optional
+            NLTE structure
+        idlver : Version, optional
+            system information structure
+        **kwargs
+            additional values to set
+        """
         # Meta information
+        #:str: Name of the observation target
         self.object = kwargs.pop("obs_name", None)
+        #:str: Version of SME used to create this structure
         self.version = "5.1"
+        #:str: DateTime when this structure was created
         self.id = str(dt.now())
+
         # additional parameters
         self.vrad = 0
         self.vrad_flag = "none"
         self.cscale = 1
         self.cscale_flag = "none"
+
+        #:float: van der Waals scaling factor
         self.gam6 = 1
+        #:bool: flag determing wether to use H2 broadening or not
         self.h2broad = False
+        #:float: Minimum accuracy for linear spectrum interpolation vs. wavelength. Values below 1e-4 are not meaningful.
         self.accwi = 0.003
+        #:float: Minimum accuracy for synthethized spectrum at wavelength grid points in sme.wint. Values below 1e-4 are not meaningful.
         self.accrt = 0.001
         self.mu = 1
         # linelist
         try:
+            #:LineList: spectral line information
             self.linelist = LineList(
                 None,
                 species=kwargs.pop("species"),
@@ -716,17 +851,20 @@ class SME_Struct(Param):
             logging.warning("No or incomplete linelist data present")
             self.linelist = None
         # free parameters
+        #:list of float: values of free parameters
         self.pfree = []
         pname = kwargs.pop("pname", [])
         glob_free = kwargs.pop("glob_free", [])
         ab_free = kwargs.pop("ab_free", [])
         if len(ab_free) != 0:
             ab_free = [f"{el} ABUND" for i, el in zip(ab_free, Abund._elem) if i == 1]
-        self.fitparameters = np.concatenate((pname, glob_free, ab_free)).astype("U")
-        self.fitparameters = np.unique(self.fitparameters)
+        fitparameters = np.concatenate((pname, glob_free, ab_free)).astype("U")
+        #:array of size (nfree): Names of the free parameters
+        self.fitparameters = np.unique(fitparameters)
 
         # wavelength grid
         self.wob = None
+        #:array of size(nseg+1,): indices of the wavelength segments within wob
         self.wind = kwargs.pop("wind", None)
         if self.wind is not None:
             self.wind = np.array([0, *(self.wind + 1)])
@@ -736,16 +874,21 @@ class SME_Struct(Param):
         self.sob = None
         self.uob = None
         self.mob = None
+
         # Instrument broadening
+        #:str: Instrumental broadening type, values are "table", "gauss", "sinc"
         self.iptype = None
+        #:int: Instrumental resolution for instrumental broadening
         self.ipres = None
-        # Fit results
+        #:Fitresults: results from the latest fit
         self.fitresults = Fitresults(
             maxiter=kwargs.pop("maxiter", None),
             chisq=kwargs.pop("chisq", None),
             punc=kwargs.pop("punc", None),
             covar=kwargs.pop("covar", None),
         )
+
+        #:list of arrays: calculated adaptive wavelength grids
         self.wint = None
         self.smod = None
         # remove old keywords
@@ -771,8 +914,11 @@ class SME_Struct(Param):
 
 
         # Substructures
+        #:Version: System information
         self.idlver = Version(idlver)
+        #:Atmo: Stellar atmosphere
         self.atmo = Atmo(atmo)
+        #:NLTE: NLTE settings
         self.nlte = NLTE(nlte)
         super().__init__(**kwargs)
 
@@ -782,7 +928,7 @@ class SME_Struct(Param):
 
     @property
     def atomic(self):
-        """ Atomic linelist data, usually passed to the C library
+        """array of size (nlines, 8): Atomic linelist data, usually passed to the C library
         Use sme.linelist instead for other purposes """
         if self.linelist is None:
             return None
@@ -790,13 +936,14 @@ class SME_Struct(Param):
 
     @property
     def species(self):
-        """ Names of the species of each spectral line """
+        """array of size (nlines,): Names of the species of each spectral line """
         if self.linelist is None:
             return None
         return self.linelist.species
 
     @property
     def nmu(self):
+        """int: Number of mu values in mu property """
         if self.mu is None:
             return 0
         else:
@@ -804,6 +951,7 @@ class SME_Struct(Param):
 
     @property
     def nseg(self):
+        """int: Number of wavelength segments """
         if self.wran is None:
             return None
         else:
@@ -811,10 +959,11 @@ class SME_Struct(Param):
 
     @property
     def md5(self):
+        """hash: md5 hash of this SME structure """
         m = hashlib.md5(str(self).encode())
         if self.wob is not None:
             m.update(self.wob)
-        if self.sob is not None:        
+        if self.sob is not None:
             m.update(self.sob)
         if self.uob is not None:
             m.update(self.uob)
@@ -827,6 +976,7 @@ class SME_Struct(Param):
 
     @property
     def wob(self):
+        """array: Wavelength array """
         return self._wob
 
     @wob.setter
@@ -837,6 +987,7 @@ class SME_Struct(Param):
 
     @property
     def sob(self):
+        """array: Observed spectrum """
         return self._sob
 
     @sob.setter
@@ -847,6 +998,7 @@ class SME_Struct(Param):
 
     @property
     def uob(self):
+        """array: Uncertainties of the observed spectrum """
         return self._uob
 
     @uob.setter
@@ -857,6 +1009,7 @@ class SME_Struct(Param):
 
     @property
     def mob(self):
+        """array: bad/good/line/continuum Mask to apply to observations """
         return self._mob
 
     @mob.setter
@@ -867,6 +1020,7 @@ class SME_Struct(Param):
 
     @property
     def smod(self):
+        """array: Synthetic spectrum """
         return self._smod
 
     @smod.setter
@@ -877,6 +1031,7 @@ class SME_Struct(Param):
 
     @property
     def wran(self):
+        """array of size (nseg, 2): Beginning and end Wavelength points of each segment"""
         return self._wran
 
     @wran.setter
@@ -887,6 +1042,10 @@ class SME_Struct(Param):
 
     @property
     def mu(self):
+        """array of size (nmu,): Mu values to calculate radiative transfer at
+        mu values describe the distance from the center of the stellar disk to the edge
+        with mu = cos(theta), where theta is the angle of the observation,
+        i.e. mu = 1 at the center of the disk and 0 at the edge"""
         return self._mu
 
     @mu.setter
@@ -897,6 +1056,7 @@ class SME_Struct(Param):
 
     @property
     def vrad(self):
+        """array of size (nseg,): Radial velocity in km/s for each wavelength region"""
         if self._vrad is None:
             return None
         if self.vrad_flag == "none":
@@ -921,6 +1081,10 @@ class SME_Struct(Param):
 
     @property
     def cscale(self):
+        """array of size (nseg, ndegree): Continumm polynomial coefficients for each wavelength segment
+        The x coordinates of each polynomial are chosen so that x = 0, at the first wavelength point,
+        i.e. x is shifted by wave[segment][0]
+        """
         if self._cscale is None:
             return None
         if self.cscale_flag == "none":
@@ -952,6 +1116,15 @@ class SME_Struct(Param):
 
     @property
     def cscale_flag(self):
+        """str: Flag that describes how to correct for the continuum
+
+        allowed values are:
+            * "none": No continuum correction
+            * "fix": Use whatever continuum scale has been set, but don't change it
+            * "constant": Zeroth order polynomial, i.e. scale everything by a factor
+            * "linear": First order polynomial, i.e. approximate continuum by a straight line
+            * "quadratic": Second order polynomial, i.e. approximate continuum by a quadratic polynomial
+        """
         return self._cscale_flag
 
     @cscale_flag.setter
@@ -967,18 +1140,28 @@ class SME_Struct(Param):
 
     @property
     def cscale_degree(self):
+        """int: Polynomial degree of the continuum as determined by cscale_flag """
         if self.cscale_flag == "constant":
             return 0
         if self.cscale_flag == "linear":
             return 1
         if self.cscale_flag == "quadratic":
             return 2
+        if self.cscale_flag == "fix":
+            return self._cscale.shape[1]
 
-        # "none" and "fix"
+        # "none"
         return 0
 
     @property
     def vrad_flag(self):
+        """str: Flag that determines how the radial velocity is determined
+
+        allowed values are:
+            * "none": No radial velocity correction
+            * "each": Determine radial velocity for each segment individually
+            * "whole": Determine one radial velocity for the whole spectrum
+        """
         return self._vrad_flag
 
     @vrad_flag.setter
@@ -989,7 +1172,7 @@ class SME_Struct(Param):
 
     @property
     def wave(self):
-        """ Wavelength """
+        """Iliffe_vector of shape (nseg, ...): Wavelength """
         if self.wob is None:
             return None
         w = Iliffe_vector(None, index=self.wind, values=self.wob)
@@ -1003,7 +1186,7 @@ class SME_Struct(Param):
 
     @property
     def spec(self):
-        """ Observed Spectrum """
+        """Iliffe_vector of shape (nseg, ...): Observed Spectrum """
         if self.sob is None:
             return None
         s = Iliffe_vector(None, index=self.wind, values=self.sob)
@@ -1017,7 +1200,7 @@ class SME_Struct(Param):
 
     @property
     def uncs(self):
-        """ Uncertainties of the observed spectrum """
+        """Iliffe_vector of shape (nseg, ...): Uncertainties of the observed spectrum """
         if self.uob is None:
             return None
         u = Iliffe_vector(None, index=self.wind, values=self.uob)
@@ -1031,7 +1214,7 @@ class SME_Struct(Param):
 
     @property
     def synth(self):
-        """ Synthetic Spectrum """
+        """Iliffe_vector of shape (nseg, ...): Synthetic Spectrum """
         if self.smod is None:
             return None
         s = Iliffe_vector(None, index=self.wind, values=self.smod)
@@ -1045,7 +1228,7 @@ class SME_Struct(Param):
 
     @property
     def mask(self):
-        """ Line and Continuum Mask """
+        """Iliffe_vector of shape (nseg, ...): Line and Continuum Mask """
         if self.mob is None:
             return None
         if self.mob is not None and self.uob is not None:
@@ -1061,22 +1244,22 @@ class SME_Struct(Param):
 
     @property
     def mask_line(self):
-        """ Line Mask """
+        """Iliffe_vector of shape (nseg, ...): Line Mask """
         return self.mask == self.mask_values["line"]
 
     @property
     def mask_continuum(self):
-        """ Continuum Mask """
+        """Iliffe_vector of shape (nseg, ...): Continuum Mask """
         return self.mask == self.mask_values["continuum"]
 
     @property
     def mask_good(self):
-        """ Good Pixel Mask """
+        """Iliffe_vector of shape (nseg, ...): Good Pixel Mask """
         return self.mask != self.mask_values["bad"]
 
     @property
     def mask_bad(self):
-        """ Bad Pixel Mask """
+        """Iliffe_vector of shape (nseg, ...): Bad Pixel Mask """
         return self.mask == self.mask_values["bad"]
 
     def __getitem__(self, key):
@@ -1099,7 +1282,7 @@ class SME_Struct(Param):
         Convert IDL SME continuum scale to regular polynomial coefficients
         Uses Taylor series approximation, as IDL version used the inverse of the continuum
         """
-        wave, _ = self.spectrum()
+        wave = self.wave
         self.cscale = np.require(self.cscale, requirements="W")
         for i in range(len(self.cscale)):
             c, d = self.cscale[i]
@@ -1114,7 +1297,29 @@ class SME_Struct(Param):
 
     @staticmethod
     def load(filename="sme.npy"):
-        """ load SME data from disk """
+        """
+        Load SME data from disk
+
+        Currently supported file formats:
+            * ".npy": Numpy save file of an SME_Struct
+            * ".sav", ".inp", ".out": IDL save file with an sme structure
+            * ".ech": Echelle file from (Py)REDUCE
+
+        Parameters
+        ----------
+        filename : str, optional
+            name of the file to load (default: 'sme.npy')
+
+        Returns
+        -------
+        sme : SME_Struct
+            Loaded SME structure
+
+        Raises
+        ------
+        ValueError
+            If the file format extension is not recognized
+        """
         logging.info("Loading SME file %s", filename)
         _, ext = os.path.splitext(filename)
         if ext == ".npy":
@@ -1141,38 +1346,26 @@ class SME_Struct(Param):
             except KeyError:
                 pass
         else:
-            raise ValueError("Data type not recognised")
+            options = [".npy", ".sav", ".out", ".inp", ".ech"]
+            raise ValueError(f"File format not recognised, expected one of {options} but got {ext}")
 
         return s
 
     def save(self, filename="sme.npy", verbose=True):
-        """ save SME data to disk """
+        """
+        Save SME data to disk
+
+        Parameters
+        ----------
+        filename : str, optional
+            location to save the SME structure at (default: "sme.npy")
+            Should have ending ".npy", otherwise it will be appended to whatever was passed
+        verbose : bool, optional
+            if True will log the event
+        """
         if verbose:
             logging.info("Saving SME structure %s", filename)
         np.save(filename, self)
-
-    def spectrum(self, syn=False, return_mask=False, return_uncertainty=False):
-        """
-        load the wavelength and spectrum, with wavelength sets seperated into seperate arrays
-
-        syn : bool, optional
-            wether to load the synthetic spectrum instead (the default is False, which means the observed spectrum is used)
-
-        Returns
-        -------
-        wave, spec : Iliffe_vector
-            As the size of each wavelength set is not equal in general, numpy can't usually create a 2d array from the results
-        """
-
-        w = self.wave
-        s = self.spec if not syn else self.synth
-
-        args = [w, s]
-        if return_mask:
-            args += [self.mask]
-        if return_uncertainty:
-            args += [self.uncs]
-        return args
 
 
 if __name__ == "__main__":

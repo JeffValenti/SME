@@ -59,12 +59,20 @@ class krz_file(Atmo):
     """ Read .krz atmosphere files """
 
     def __init__(self, filename):
+        super().__init__()
         self.source = filename
         self.method = "embedded"
         self.load(filename)
 
     def load(self, filename):
-        """ Load data from disk """
+        """
+        Load data from disk
+
+        Parameters
+        ----------
+        filename : str
+            name of the file to load
+        """
         # TODO: this only works for some krz files
         # 1..2 lines header
         # 3 line opacity

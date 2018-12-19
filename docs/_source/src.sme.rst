@@ -89,6 +89,7 @@ src.sme.sme module
 
 .. automodule:: src.sme.sme
     :members:
+    :inherited-members:
     :undoc-members:
     :show-inheritance:
 

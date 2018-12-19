@@ -140,3 +140,4 @@ src/sme/atmospheres/*
 *.html
 test.py
 *.ech
+*.npy.tar.gz

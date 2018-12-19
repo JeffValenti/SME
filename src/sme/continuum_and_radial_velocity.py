@@ -128,7 +128,7 @@ def get_continuum_mask(wave, linelist, threshold=0.1, mask=None):
     if mask is None:
         mask = np.full(len(wave), 1)
 
-    width = sme_synth.GetLineRange(len(linelist))
+    width = sme_synth.GetLineRange()
     temp = False
     while np.count_nonzero(temp) < len(wave) * 0.1:
         temp = np.full(len(wave), True)

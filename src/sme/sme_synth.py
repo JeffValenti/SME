@@ -17,6 +17,7 @@ class _DLL:
 
     @property
     def ndepth(self):
+        """int: Number of depth layers in teh atmopshere"""
         if self._ndepth is None:
             raise ValueError("No model atmosphere has been set")
         return self._ndepth
@@ -27,6 +28,7 @@ class _DLL:
 
     @property
     def nmu(self):
+        """int: Number of mu points along the stellar disk"""
         if self._nmu is None:
             raise ValueError("No radiative transfer has been calculated")
         return self._nmu
@@ -37,6 +39,7 @@ class _DLL:
 
     @property
     def nlines(self):
+        """int: Number of lines in the linelist"""
         if self._nlines is None:
             raise ValueError("No line list has been set")
         return self._nlines
