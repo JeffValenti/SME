@@ -23,15 +23,15 @@ if __name__ == "__main__":
         in_file, vald_file, fitparameters = util.parse_args()
     else:
         # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
-        in_file = "./sun_6440_grid.out"
+        # in_file = "./sun_6440_grid.out"
         # in_file = "./UVES.2010-04-02.ech"
-        # in_file = "./wasp117_15.inp"
+        in_file = "./wasp117_15.inp"
         # in_file = "./wasp117.npy"
         # in_file = "./wasp117.npy"
         # vald_file = "./4000-6920.lin"
-        vald_file = "./sun.lin"
+        # vald_file = "./sun.lin"
         # atmo_file = "marcs2012p_t2.0.sav"
-        # vald_file = None
+        vald_file = None
         atmo_file = None
         fitparameters = []
 
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     fitparameters = ["teff", "logg", "monh"]
     sme.vrad_flag = "each"
-    sme.cscale_flag = "none"
+    sme.cscale_flag = "linear"
     # sme.nlte.set_nlte("Ca")
 
     # Start SME solver
@@ -79,17 +79,18 @@ if __name__ == "__main__":
         sigma_age = 1 / b * np.sqrt(sx ** 2 + sa ** 2 + ((x - a) / b) ** 2 * sb ** 2)
         sigma_age = abs(sigma_age)
         logging.info(f"Age       \t{age:.3f} +- {sigma_age:.3f} Gyr")
+
+        p = np.linspace(0, 10, 1000)
+        g = norm.pdf(p, loc=age, scale=sigma_age)
+        # Rescale to area = 1
+        area = np.sum(g * np.gradient(p))  # Cheap integral
+        g *= 1 / area
+        plt.plot(p, g)
+        plt.xlabel("Age [Gyr]")
+        plt.ylabel("Probability")
+        plt.show()
     except:
         pass
-    p = np.linspace(0, 10, 1000)
-    g = norm.pdf(p, loc=age, scale=sigma_age)
-    # Rescale to area = 1
-    area = np.sum(g * np.gradient(p))  # Cheap integral
-    g *= 1 / area
-    plt.plot(p, g)
-    plt.xlabel("Age [Gyr]")
-    plt.ylabel("Probability")
-    plt.show()
 
     # # Plot results
     fig = plot_plotly.FinalPlot(sme)

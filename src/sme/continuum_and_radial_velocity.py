@@ -383,28 +383,39 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     return rvel, cscale
 
 
-def cont_fit(xarg, yarg, weights, order, eps=1e-6):
-    """Fit a continuum when no continuum points exist
+def cont_fit(sme, segment, x_syn, y_syn, rvel=0):
+    """
+    Fit a continuum when no continuum points exist
 
     Parameters
     ----------
-    xarg : array of size (n,)
-        wavelength points of the spectrum,
-    yarg : array of size (n,)
-        intensity of the spectrum
-    weights : array of size (n,)
-        1/ uncertainties of the spectrum
-    order : {0, 1, 2}
-        polynomial degree of the continuum fit
-    eps : float, optional
-        precision of the continuum fit, calculations will stop early when the deviation is smaller than eps
-        (default: 1e-6)
+    sme : SME_Struct
+        sme structure with observation data
+    segment : int
+        index of the wavelength segment to fit
+    x_syn : array of size (n,)
+        wavelengths of the synthetic spectrum
+    y_syn : array of size (n,)
+        intensity of the synthetic spectrum
+    rvel : float, optional
+        radial velocity in km/s to apply to the wavelength (default: 0)
 
     Returns
     -------
-    continuum : array of size (n,)
-        continuum fit
+    continuum : array of size (ndeg,)
+        continuum fit polynomial coefficients
     """
+
+    eps = np.mean(sme.uncs[segment])
+    weights = sme.spec[segment] / sme.uncs[segment] ** 2
+    weights[sme.mask_bad[segment]] = 0
+
+    order = sme.cscale_degree
+
+    xarg = sme.wave[segment]
+    yarg = sme.spec[segment]
+    yc = np.interp(xarg * (1 - rvel / c_light), x_syn, y_syn)
+    yarg = yarg / yc
 
     if order <= 0 or order > 2:
         # Only polynomial orders up to 2 are supported
@@ -470,6 +481,8 @@ def cont_fit(xarg, yarg, weights, order, eps=1e-6):
 
     coef = np.polyfit(xx, ff, order)
     t = np.polyval(coef, xx)
+
+    # Get coefficients in the wavelength scale
     t = t * (fmax - fmin) + fmin
     coef = np.polyfit(xarg - xarg[0], t, order)
 
@@ -501,30 +514,10 @@ def match_rv_continuum(sme, segment, x_syn, y_syn):
         new continuum coefficients
     """
 
-    # sme.cscale_flag = "linear"
-
-    # rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
-
-    # eps = np.mean(sme.uncs[segment])
-    # weights = sme.spec[segment] / sme.uncs[segment] ** 2
-    # weights[sme.mask_bad[segment]] = 0
-
-    # order = {"constant": 0, "linear": 1, "quadratic": 2}[sme.cscale_flag]
-
-    # x = sme.wave[segment]
-    # y = sme.spec[segment]
-    # yc = np.interp(x * (1 - rvel / c_light), x_syn, y_syn)
-    # y = y / yc
-
-    # cont = cont_fit(x, y, weights, order, eps=eps)
-
     rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
 
-    # plt.plot(sme.spec[segment])
-    # plt.plot(np.polyval(cscale, x - x[0]), label="cscale")
-    # plt.plot(np.polyval(cont, x - x[0]), label="cont_fit")
-    # plt.legend()
-    # plt.show()
+    # Scale using relative depth (from Nikolai)
+    cscale = cont_fit(sme, segment, x_syn, y_syn, rvel=rvel)
 
     # cscale = determine_continuum(sme, segment)
     # rvel = determine_radial_velocity(sme, segment, cscale, x_syn, y_syn)

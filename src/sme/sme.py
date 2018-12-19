@@ -53,6 +53,10 @@ class Iliffe_vector:
         if len(index) == 0:
             return self.__values__
 
+
+        if isinstance(index, range):
+            index = list(index)
+
         if isinstance(index, (list, np.ndarray)):
             values = [self[i] for i in index]
             sizes = [len(v) for v in values]
@@ -63,6 +67,7 @@ class Iliffe_vector:
             return Iliffe_vector(
                 None, index=self.__idx__, values=self.__values__[index]
             )
+
 
         if isinstance(index, Iliffe_vector):
             if not self.__equal_size__(index):
