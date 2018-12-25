@@ -223,7 +223,7 @@ class LibSme:
             raise ValueError(error)
         return argv._atomic.data
 
-    def UpdateineList(self, linelist):
+    def UpdateLineList(self, linelist):
         libfunc = self.lib.UpdateLineList
         nlines = len(linelist)
         m = 8
