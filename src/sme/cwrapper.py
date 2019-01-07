@@ -147,7 +147,10 @@ def idl_call_external(funcname, *args, restype="str", type=None):
             )
             args[i] = ct.addressof(staying_alive[i])
         # Arrays
-        elif isinstance(args[i], np.ndarray):
+        elif isinstance(args[i], (list, np.ndarray)):
+            if isinstance(args[i], list):
+                # enforce numpy arrays
+                args[i] = np.array(args[i])
             if np.issubdtype(args[i].dtype, np.number) or np.issubdtype(
                 args[i].dtype, np.bool_
             ):

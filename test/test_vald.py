@@ -68,3 +68,9 @@ def test_valdfile():
     """
     testdir = Path(__file__).parent
     vf = ValdFile(testdir / "testcase1.lin")
+
+    linelist = vf.linelist
+
+    assert len(linelist) == 44
+    assert linelist.lineformat == "short"
+    assert linelist[0].species == "V 1"

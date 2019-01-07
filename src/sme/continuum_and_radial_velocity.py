@@ -304,11 +304,22 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
         # No observation no radial velocity
         warnings.warn("Missing data for radial velocity/continuum determination")
         return 0, [1]
+
+    if np.all(sme.mask_bad[segment]):
+        warnings.warn(
+            "Only bad pixels in this segments, can't determine radial velocity/continuum"
+        )
+        return 0, [1]
+
     mask = sme.mask_good[segment]
     x_obs = sme.wave[segment][mask]
     y_obs = sme.spec[segment][mask]
     u_obs = sme.uncs[segment][mask]
     x_num = x_obs - sme.wave[segment][0]
+
+    if len(x_obs) <= sme.cscale_degree:
+        warnings.warn("Not enough good pixels to determine radial velocity/continuum")
+        return 0, [1]
 
     if sme.cscale_flag in [-3, "none"]:
         cflag = False

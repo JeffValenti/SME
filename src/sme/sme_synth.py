@@ -38,13 +38,23 @@ class SME_DLL:
 
     def __init__(self):
         self.linelist = None
-        self.ndepth = None
         self.nmu = None
         self.abund = None
         self.wfirst = None
         self.wlast = None
         self.vw_scale = None
         self.H2broad = False
+        self.teff = None
+        self.grav = None
+        self.vturb = None
+        self.atmo = None
+
+    @property
+    def ndepth(self):
+        """int: Number of depth layers in the atmosphere model"""
+        assert self.atmo is not None, f"No model atmosphere has been set"
+        motype = self.atmo.depth
+        return len(self.atmo[motype])
 
     @property
     def nlines(self):
@@ -243,7 +253,10 @@ class SME_DLL:
 
         check_error("InputModel", *args, type=type)
 
-        self.ndepth = ndepth
+        self.teff = teff
+        self.grav = grav
+        self.vturb = vturb
+        self.atmo = atmo
 
     def InputAbund(self, abund):
         """
