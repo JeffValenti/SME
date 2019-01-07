@@ -16,6 +16,18 @@ class LineList:
     """Atomic data for a list of spectral lines
     """
 
+    _base_columns = [
+        "species",
+        "wlcent",
+        "excit",
+        "gflog",
+        "gamrad",
+        "gamqst",
+        "gamvw",
+        "atom_number",
+        "ionization",
+    ]
+
     @staticmethod
     def parse_line_error(error_flags, values):
         """ Transform Line Error flags into relative error values """
@@ -104,11 +116,26 @@ class LineList:
 
         return (linedata, lineformat)
 
-    def __init__(self, linedata, lineformat="short", **kwargs):
-        if linedata is None:
-            # everything is in the kwargs (usually by loading from old SME file)
-            linedata, lineformat = LineList.from_IDL_SME(**kwargs)
+    def __init__(self, *args, **kwargs):
+        lineformat = kwargs.pop("lineformat", "short")
+
+        if len(args) == 0:
+            if len(kwargs) == 0:
+                linedata = pd.DataFrame(data=[], columns=self._base_columns)
+            elif "atomic" in kwargs.keys():
+                # everything is in the kwargs (usually by loading from old SME file)
+                linedata, lineformat = LineList.from_IDL_SME(**kwargs)
+            else:
+                raise NotImplementedError
+                linedata = None
         else:
+            linedata = args[0]
+            if isinstance(linedata, (list, np.ndarray)):
+                # linedata = np.atleast_2d(linedata)
+                linedata = pd.DataFrame(
+                    data=[[*linedata, 0, 0]], columns=self._base_columns
+                )
+
             if "atom_number" in kwargs.keys():
                 linedata["atom_number"] = kwargs["atom_number"]
             elif "atom_number" not in linedata.columns:
@@ -201,3 +228,15 @@ class LineList:
         """ sort the linelist 'in place' """
         self._lines = self._lines.sort_values(by=field, ascending=ascending)
         return self._lines
+
+    def add(self, species, wlcent, excit, gflog, gamrad, gamqst, gamvw):
+        linedata = {
+            "species": species,
+            "wlcent": wlcent,
+            "excit": excit,
+            "gflog": gflog,
+            "gamrad": gamrad,
+            "gamqst": gamqst,
+            "gamvw": gamvw,
+        }
+        self._lines = self._lines.append([linedata])

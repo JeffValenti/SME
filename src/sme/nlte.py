@@ -11,8 +11,10 @@ import warnings
 import numpy as np
 from scipy import interpolate
 
-from . import sme_synth
+from .sme_synth import SME_DLL
 from .abund import Abund
+
+dll = SME_DLL()
 
 
 class DirectAccessFile:
@@ -482,7 +484,7 @@ def update_depcoeffs(sme):
 
     # Reset the departure coefficient every time, just to be sure
     # It would be more efficient to just Update the values, but this doesn't take long
-    sme_synth.ResetNLTE()
+    dll.ResetNLTE()
 
     elements = sme.nlte.elements
 
@@ -504,7 +506,7 @@ def update_depcoeffs(sme):
                 # loop through the list of relevant _lines_, substitute both their levels into the main b matrix
                 # Make sure both levels have corrections available
                 if lr[0] != -1 and lr[1] != -1:
-                    sme_synth.InputNLTE(bmat[:, lr].T, li)
+                    dll.InputNLTE(bmat[:, lr].T, li)
 
     # flags = sme_synth.GetNLTEflags(sme.linelist)
 

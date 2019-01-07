@@ -25,7 +25,7 @@ if __name__ == "__main__":
         # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
         # in_file = "./sun_6440_grid.out"
         # in_file = "./UVES.2010-04-02.ech"
-        in_file = "./wasp117_15.inp"
+        in_file = "./solarflux_150109.inp"
         # in_file = "./wasp117.npy"
         # in_file = "./wasp117.npy"
         # vald_file = "./4000-6920.lin"
@@ -55,8 +55,8 @@ if __name__ == "__main__":
             fitparameters = ["teff", "logg", "monh"]
 
     fitparameters = ["teff", "logg", "monh"]
-    sme.vrad_flag = "each"
-    sme.cscale_flag = "linear"
+    sme.vrad_flag = "none"
+    sme.cscale_flag = "fix"
     # sme.nlte.set_nlte("Ca")
 
     # Start SME solver
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         age = (x - a) / b
         sigma_age = 1 / b * np.sqrt(sx ** 2 + sa ** 2 + ((x - a) / b) ** 2 * sb ** 2)
         sigma_age = abs(sigma_age)
-        logging.info(f"Age       \t{age:.3f} +- {sigma_age:.3f} Gyr")
+        logging.info("Age       \t%.3f +- %.3f Gyr", age, sigma_age)
 
         p = np.linspace(0, 10, 1000)
         g = norm.pdf(p, loc=age, scale=sigma_age)

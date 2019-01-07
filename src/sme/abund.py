@@ -153,7 +153,14 @@ class Abund:
         the 'H=12' type to the output type. Valid abundance pattern types
         are 'sme', 'n/nTot', 'n/nH', and 'H=12'.
         """
-        abund = np.copy(pattern)
+        if isinstance(pattern, dict):
+            abund = [
+                pattern[el] if el in pattern.keys() else np.nan for el in Abund._elem
+            ]
+            abund = np.array(abund)
+        else:
+            abund = np.copy(pattern)
+
         elem = Abund._elem
         type = totype.lower()
         if np.isnan(abund[0]):
@@ -303,6 +310,8 @@ class Abund:
         """Set [M/H] metallicity, which is the logarithmic offset added to
         the abundance pattern for all elements except hydrogen and helium.
         """
+        if monh is not None:
+            monh = float(monh)
         self._monh = monh
 
     @property

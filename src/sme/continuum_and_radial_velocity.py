@@ -17,7 +17,7 @@ from scipy.linalg import lu_factor, lu_solve
 from scipy.constants import speed_of_light
 
 
-from . import sme_synth
+from .sme_synth import SME_DLL
 from . import util
 
 
@@ -128,7 +128,11 @@ def get_continuum_mask(wave, linelist, threshold=0.1, mask=None):
     if mask is None:
         mask = np.full(len(wave), 1)
 
-    width = sme_synth.GetLineRange()
+    # TODO make this better
+    dll = SME_DLL()
+    dll.linelist = linelist
+
+    width = dll.GetLineRange()
     temp = False
     while np.count_nonzero(temp) < len(wave) * 0.1:
         temp = np.full(len(wave), True)

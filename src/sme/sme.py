@@ -834,7 +834,6 @@ class SME_Struct(Param):
         try:
             #:LineList: spectral line information
             self.linelist = LineList(
-                None,
                 species=kwargs.pop("species"),
                 atomic=kwargs.pop("atomic"),
                 lande=kwargs.pop("lande"),

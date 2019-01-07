@@ -15,10 +15,10 @@ from pandas import __version__ as pdversion
 from scipy import __version__ as spversion
 
 try:
-    from .src.sme.sme_synth import SMELibraryVersion
+    from .src.sme.sme_synth import SME_DLL
     from .version import version as __version__
 except ImportError:
-    from src.sme.sme_synth import SMELibraryVersion
+    from src.sme.sme_synth import SME_DLL
     from version import version as __version__
 
 try:
@@ -79,9 +79,10 @@ def start_logging(log_file="log.log"):
     # builtins.print = lambda msg, *args, **kwargs: logging.info(msg, *args)
     logging.captureWarnings(True)
 
+    dll = SME_DLL()
     logging.debug("----------------------")
     logging.debug("Python version: %s", python_version())
-    logging.debug("SME CLib version: %s", SMELibraryVersion())
+    logging.debug("SME CLib version: %s", dll.SMELibraryVersion())
     logging.debug("PySME version: %s", __version__)
     logging.debug("Numpy version: %s", npversion)
     logging.debug("Scipy version: %s", spversion)

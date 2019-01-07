@@ -16,7 +16,8 @@ from scipy.io import readsav
 from scipy.optimize import OptimizeWarning, least_squares
 from scipy.optimize._numdiff import approx_derivative
 
-from . import broadening, sme_synth
+from . import broadening
+from .sme_synth import SME_DLL
 from .abund import Abund
 from .atmosphere import interp_atmo_grid, krz_file, AtmosphereError
 from .continuum_and_radial_velocity import match_rv_continuum
@@ -27,6 +28,8 @@ from .uncertainties import uncertainties
 
 clight = speed_of_light * 1e-3  # km/s
 warnings.filterwarnings("ignore", category=OptimizeWarning)
+
+dll = SME_DLL()
 
 
 def residuals(
@@ -412,7 +415,7 @@ def solve(
 
     # punc3 = uncertainties(res.jac, res.fun, uncs, param_names, plot=False)
 
-    sme.nlte.flags = sme_synth.GetNLTEflags()
+    sme.nlte.flags = dll.GetNLTEflags()
 
     if filename is not None:
         sme.save(filename)
@@ -611,15 +614,15 @@ def synthesize_spectrum(
 
     # Input Model data to C library
     if passLineList:
-        sme_synth.SetLibraryPath()
-        sme_synth.InputLineList(sme.atomic, sme.species)
+        dll.SetLibraryPath()
+        dll.InputLineList(sme.linelist)
     if passAtmosphere:
         sme = get_atmosphere(sme)
-        sme_synth.InputModel(sme.teff, sme.logg, sme.vmic, sme.atmo)
-        sme_synth.InputAbund(sme.abund)
-        sme_synth.Ionization(0)
-        sme_synth.SetVWscale(sme.gam6)
-        sme_synth.SetH2broad(sme.h2broad)
+        dll.InputModel(sme.teff, sme.logg, sme.vmic, sme.atmo)
+        dll.InputAbund(sme.abund)
+        dll.Ionization(0)
+        dll.SetVWscale(sme.gam6)
+        dll.SetH2broad(sme.h2broad)
     if passNLTE:
         update_depcoeffs(sme)
 
@@ -635,15 +638,15 @@ def synthesize_spectrum(
         vrad_seg = sme.vrad[il]
         wbeg, wend = get_wavelengthrange(wran[il], vrad_seg, sme.vsini)
 
-        sme_synth.InputWaveRange(wbeg, wend)
-        sme_synth.Opacity()
+        dll.InputWaveRange(wbeg, wend)
+        dll.Opacity()
 
         # Reuse adaptive wavelength grid in the jacobians
         wint_seg = sme.wint[il] if reuse_wavelength_grid else None
         # Only calculate line opacities in the first segment
         keep_line_opacity = il != segments[0]
         #   Calculate spectral synthesis for each
-        _, wint[il], sint[il], cint[il] = sme_synth.Transf(
+        _, wint[il], sint[il], cint[il] = dll.Transf(
             sme.mu,
             sme.accrt,  # threshold line opacity / cont opacity
             sme.accwi,
