@@ -1298,6 +1298,9 @@ class SME_Struct(Param):
                 self.cscale[i] = [c0, c1]
         elif self.cscale_flag == "fix":
             self.cscale = np.sqrt(1 / self.cscale)
+        elif self.cscale_flag == "constant":
+            self.cscale = np.sqrt(1 / self.cscale)
+
 
 
     @staticmethod
