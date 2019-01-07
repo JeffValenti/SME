@@ -343,15 +343,23 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     else:
         raise ValueError(f"Radial velocity Flag not understood {sme.vrad_flag}")
 
-    # Get a first rough estimate from cross correlation
-    # Subtract median (rough continuum estimate) for better correlation
-    y_tmp = np.interp(x_obs, x_syn, y_syn)
-    corr = correlate(y_obs - np.median(y_obs), y_tmp - np.median(y_tmp), mode="same")
-    offset = np.argmax(corr)
+    if vflag:
+        # Get a first rough estimate from cross correlation
+        # Subtract median (rough continuum estimate) for better correlation
+        y_tmp = np.interp(x_obs, x_syn, y_syn)
+        corr = correlate(
+            y_obs - np.median(y_obs), y_tmp - np.median(y_tmp), mode="same"
+        )
+        offset = np.argmax(corr)
 
-    x1 = x_obs[offset]
-    x2 = x_obs[len(x_obs) // 2]
-    rvel = c_light * (1 - x2 / x1)
+        x1 = x_obs[offset]
+        x2 = x_obs[len(x_obs) // 2]
+        rvel = c_light * (1 - x2 / x1)
+        if np.abs(rvel) >= c_light:
+            logging.warning(
+                f"Radial Velocity could not be estimated from cross correlation, using initial guess of 0 km/h. Please check results!"
+            )
+            rvel = 0
 
     interpolator = util.safe_interpolation(x_syn, y_syn, None)
 
@@ -377,8 +385,10 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     x0 = [rvel, *cscale]
     res = least_squares(func, x0=x0, loss="soft_l1")
 
-    rvel = res.x[0]
-    cscale = res.x[1:]
+    if vflag:
+        rvel = res.x[0]
+    if cflag:
+        cscale = res.x[1:]
 
     return rvel, cscale
 

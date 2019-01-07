@@ -1284,16 +1284,21 @@ class SME_Struct(Param):
         """
         wave = self.wave
         self.cscale = np.require(self.cscale, requirements="W")
-        for i in range(len(self.cscale)):
-            c, d = self.cscale[i]
-            a, b = max(wave[i]), min(wave[i])
-            c0 = (a - b) * (c - d) / (a * c - b * d) ** 2
-            c1 = (a - b) / (a * c - b * d)
 
-            # Shift zero point to first wavelength of the segment
-            c1 += c0 * self.spec[i][0]
+        if self.cscale_flag == "linear":
+            for i in range(len(self.cscale)):
+                c, d = self.cscale[i]
+                a, b = max(wave[i]), min(wave[i])
+                c0 = (a - b) * (c - d) / (a * c - b * d) ** 2
+                c1 = (a - b) / (a * c - b * d)
 
-            self.cscale[i] = [c0, c1]
+                # Shift zero point to first wavelength of the segment
+                c1 += c0 * self.spec[i][0]
+
+                self.cscale[i] = [c0, c1]
+        elif self.cscale_flag == "fix":
+            self.cscale = np.sqrt(1 / self.cscale)
+
 
     @staticmethod
     def load(filename="sme.npy"):

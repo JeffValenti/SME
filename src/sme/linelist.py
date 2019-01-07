@@ -67,6 +67,9 @@ class LineList:
             line_term_low = kwargs.pop("line_term_low").astype("U")
             line_term_upp = kwargs.pop("line_term_upp").astype("U")
 
+        # If there is only one line, it is 1D in the IDL structure, but we expect 2D
+        atomic = np.atleast_2d(atomic)
+
         data = {
             "species": species,
             "atom_number": atomic[:, 0],
