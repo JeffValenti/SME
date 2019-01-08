@@ -110,3 +110,16 @@ def test_cscale_degree():
         assert sme.cscale_degree == d
         assert sme.cscale.shape[0] == 1
         assert sme.cscale.shape[1] == d + 1
+
+
+def test_idlver():
+    sme = SME_Struct()
+    sme.idlver.update()
+    # assert sme.idlver.arch == "x86_64"
+
+
+def test_fitresults():
+    sme = SME_Struct()
+    sme.fitresults.chisq = 100
+    sme.fitresults.clear()
+    assert sme.fitresults.chisq is None

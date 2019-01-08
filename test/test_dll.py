@@ -1,5 +1,6 @@
 from os.path import dirname
 
+import pytest
 import numpy as np
 
 from sme.src.sme.abund import Abund
@@ -63,6 +64,9 @@ def test_linelist():
     # TODO
     # libsme.UpdateLineList()
 
+    with pytest.raises(TypeError):
+        libsme.InputLineList(None)
+
 
 def test_atmosphere():
     """ Test atmosphere behaviour """
@@ -76,6 +80,15 @@ def test_atmosphere():
     assert libsme.vturb == vturb
     assert libsme.ndepth == len(atmo[atmo.depth])
 
+    with pytest.raises(ValueError):
+        libsme.InputModel(-1000, grav, vturb, atmo)
+
+    with pytest.raises(ValueError):
+        libsme.InputModel(teff, grav, -10, atmo)
+
+    with pytest.raises(TypeError):
+        libsme.InputModel(teff, grav, vturb, None)
+
 
 def test_abund():
     """ Test abundance behaviour """
@@ -85,6 +98,9 @@ def test_abund():
     empty = Abund(0, "empty")
     empty.update_pattern({"H": 12})
     libsme.InputAbund(empty)
+
+    with pytest.raises(TypeError):
+        libsme.InputAbund(None)
 
 
 def test_transf():

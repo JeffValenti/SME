@@ -589,6 +589,8 @@ def synthesize_spectrum(
         segments = range(n_segments)
     else:
         segments = np.atleast_1d(segments)
+        if np.any(segments < 0) or np.any(segments >= n_segments):
+            raise IndexError("Segment(s) out of range")
 
     # Prepare arrays
     wran = sme.wran

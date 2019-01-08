@@ -152,8 +152,11 @@ class SME_DLL:
         species : array(string) of size (nlines,)
             names of the elements (with Ionization level)
         """
-        atomic = linelist.atomic.T
-        species = linelist.species
+        try:
+            atomic = linelist.atomic.T
+            species = linelist.species
+        except AttributeError:
+            raise TypeError("linelist has to be a LineList type")
 
         nlines = len(linelist)
         species = np.asarray(species, "U8")
@@ -237,28 +240,50 @@ class SME_DLL:
         atmo : Atmo
             atmosphere structure (see Atmo for details)
         """
-        motype = atmo.depth
-        depth = atmo[motype]
-        ndepth = len(depth)
-        t = atmo.temp
-        xne = atmo.xne
-        xna = atmo.xna
-        rho = atmo.rho
-        vt = np.full(ndepth, vturb) if np.size(vturb) == 1 else vturb
-        wlstd = atmo.get("wlstd", 5000.0)
-        opflag = atmo.get(
-            "opflag",
-            np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0]),
-        )
-        args = [ndepth, teff, grav, wlstd, motype, opflag, depth, t, xne, xna, rho, vt]
-        type = "sdddusdddddd"  # s : short, d: double, u: unicode (string)
 
-        if atmo.geom == "SPH":
-            radius = atmo.radius
-            height = atmo.height
-            motype = "SPH"
-            args = args[:5] + [radius] + args[5:] + [height]
-            type = type[:5] + "d" + type[5:] + "d"
+        if teff <= 0:
+            raise ValueError("Temperature must be positive (unit is Kelvin)")
+        if vturb < 0:
+            raise ValueError("Turbulence velocity must be positive or zero")
+
+        try:
+            motype = atmo.depth
+            depth = atmo[motype]
+            ndepth = len(depth)
+            t = atmo.temp
+            xne = atmo.xne
+            xna = atmo.xna
+            rho = atmo.rho
+            vt = np.full(ndepth, vturb) if np.size(vturb) == 1 else vturb
+            wlstd = atmo.get("wlstd", 5000.0)
+            opflag = atmo.get(
+                "opflag",
+                np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0]),
+            )
+            args = [
+                ndepth,
+                teff,
+                grav,
+                wlstd,
+                motype,
+                opflag,
+                depth,
+                t,
+                xne,
+                xna,
+                rho,
+                vt,
+            ]
+            type = "sdddusdddddd"  # s : short, d: double, u: unicode (string)
+
+            if atmo.geom == "SPH":
+                radius = atmo.radius
+                height = atmo.height
+                motype = "SPH"
+                args = args[:5] + [radius] + args[5:] + [height]
+                type = type[:5] + "d" + type[5:] + "d"
+        except AttributeError:
+            raise TypeError("atmo has to be an Atmo type")
 
         check_error("InputModel", *args, type=type)
 
@@ -284,6 +309,7 @@ class SME_DLL:
         # Convert abundances to the right format
         # metallicity is included in the abundance class, ignored in function call
         abund = abund("sme", raw=True)
+        assert isinstance(abund, np.ndarray)
         check_error("InputAbund", abund, type="double")
 
         self.abund = abund

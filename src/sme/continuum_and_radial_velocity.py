@@ -542,7 +542,7 @@ def match_rv_continuum(sme, segment, x_syn, y_syn):
     rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
 
     # Scale using relative depth (from Nikolai)
-    cscale = cont_fit(sme, segment, x_syn, y_syn, rvel=rvel)
+    # cscale = cont_fit(sme, segment, x_syn, y_syn, rvel=rvel)
 
     # cscale = determine_continuum(sme, segment)
     # rvel = determine_radial_velocity(sme, segment, cscale, x_syn, y_syn)
