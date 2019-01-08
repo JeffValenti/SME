@@ -45,7 +45,8 @@ class Abund:
         Transform the resulting abundances to the requested abundance type.
         """
         pattern = np.copy(self._pattern)
-        pattern[2:] += self._monh
+        if self.monh is not None:
+            pattern[2:] += self.monh
         return self.totype(pattern, type, raw=raw)
 
     def __getitem__(self, elems):
@@ -163,8 +164,6 @@ class Abund:
 
         elem = Abund._elem
         type = totype.lower()
-        if np.isnan(abund[0]):
-            raise ValueError("pattern must define abundance of H")
 
         if type == "h=12":
             pass
@@ -364,7 +363,7 @@ class Abund:
     def empty_pattern(self):
         """Return an abundance pattern with value None for all elements.
         """
-        return np.full(len(self._elem), np.nan)  # OrderedDict.fromkeys(self._elem)
+        return np.full(len(self._elem), np.nan)
 
     @staticmethod
     def solar():

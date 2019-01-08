@@ -479,9 +479,9 @@ class Param(Collection):
         #:float: surface gravity in log10(cgs)
         self.logg = None
 
-        self._vsini = 0
-        self._vmac = 0
-        self._vmic = 0
+        self._vsini = None
+        self._vmac = None
+        self._vmic = None
         self._abund = None
 
         # Helium is also fractional (sometimes?)
@@ -492,7 +492,7 @@ class Param(Collection):
         if abund is not None:
             self.set_abund(monh, abund, abund_pattern)
         else:
-            self.set_abund(monh, "asplund2009", "str")
+            self.set_abund(monh, "empty", "")
 
         super().__init__(**kwargs)
 
@@ -689,8 +689,8 @@ class Version(Collection):
         self.file_offset_bits = None
         #:str: Name of the machine that created the SME Structure
         self.host = None
-        if len(kwargs) == 0:
-            self.update()
+        # if len(kwargs) == 0:
+        #     self.update()
         super().__init__(**kwargs)
 
     def update(self):
@@ -1031,6 +1031,9 @@ class SME_Struct(Param):
     @property
     def wran(self):
         """array of size (nseg, 2): Beginning and end Wavelength points of each segment"""
+        if self._wran is None and self.wob is not None:
+            # Default to just one wavelength range with all points if not specified
+            return [self.wob[[0, -1]]]
         return self._wran
 
     @wran.setter
@@ -1056,7 +1059,7 @@ class SME_Struct(Param):
     @property
     def vrad(self):
         """array of size (nseg,): Radial velocity in km/s for each wavelength region"""
-        if self._vrad is None:
+        if self._vrad is None or self.nseg is None:
             return None
         if self.vrad_flag == "none":
             return np.zeros(self.nseg)
@@ -1084,7 +1087,7 @@ class SME_Struct(Param):
         The x coordinates of each polynomial are chosen so that x = 0, at the first wavelength point,
         i.e. x is shifted by wave[segment][0]
         """
-        if self._cscale is None:
+        if self._cscale is None or self.nseg is None:
             return None
         if self.cscale_flag == "none":
             return np.ones((self.nseg, 1))
@@ -1170,6 +1173,19 @@ class SME_Struct(Param):
         self._vrad_flag = value
 
     @property
+    def wind(self):
+        """array of shape (nseg + 1,): Indices of the wavelength segments in the overall arrays """
+        if self._wind is None:
+            if self.wob is None:
+                return None
+            return [0, len(self.wob)]
+        return self._wind
+
+    @wind.setter
+    def wind(self, value):
+        self._wind = value
+
+    @property
     def wave(self):
         """Iliffe_vector of shape (nseg, ...): Wavelength """
         if self.wob is None:
@@ -1244,21 +1260,29 @@ class SME_Struct(Param):
     @property
     def mask_line(self):
         """Iliffe_vector of shape (nseg, ...): Line Mask """
+        if self.mask is None:
+            return None
         return self.mask == self.mask_values["line"]
 
     @property
     def mask_continuum(self):
         """Iliffe_vector of shape (nseg, ...): Continuum Mask """
+        if self.mask is None:
+            return None
         return self.mask == self.mask_values["continuum"]
 
     @property
     def mask_good(self):
         """Iliffe_vector of shape (nseg, ...): Good Pixel Mask """
+        if self.mask is None:
+            return None
         return self.mask != self.mask_values["bad"]
 
     @property
     def mask_bad(self):
         """Iliffe_vector of shape (nseg, ...): Bad Pixel Mask """
+        if self.mask is None:
+            return None
         return self.mask == self.mask_values["bad"]
 
     def __getitem__(self, key):
