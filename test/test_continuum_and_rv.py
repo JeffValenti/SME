@@ -7,8 +7,8 @@ import numpy as np
 
 from scipy.constants import speed_of_light
 
-from SME.src.sme.sme import SME_Struct
-from SME.src.sme.continuum_and_radial_velocity import determine_rv_and_cont
+from sme.src.sme.sme import SME_Struct
+from sme.src.sme.continuum_and_radial_velocity import determine_rv_and_cont
 
 c_light = speed_of_light * 1e-3
 

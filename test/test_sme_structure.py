@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from os.path import dirname
 from os import remove
-from SME.src.sme.sme import SME_Struct
+from sme.src.sme.sme import SME_Struct
 
 cwd = dirname(__file__)
 filename = f"{cwd}/__test.npy"
@@ -31,7 +31,7 @@ def test_empty_structure():
     assert empty.mask_line is None
     assert empty.mask_continuum is None
 
-    assert empty.cscale is None
+    assert empty.cscale == [[1]]
     assert empty.vrad is None
     assert empty.cscale_flag == "none"
     assert empty.vrad_flag == "none"
@@ -96,3 +96,17 @@ def test_load_idl_savefile():
     assert sme.nseg == 1
     assert sme.cscale_flag == "linear"
     assert sme.vrad_flag == "each"
+
+
+def test_cscale_degree():
+    sme = SME_Struct()
+    sme.cscale = 1
+
+    flags = ["none", "fix", "constant", "linear", "quadratic"]
+    degrees = [0, 0, 0, 1, 2]
+
+    for f, d in zip(flags, degrees):
+        sme.cscale_flag = f
+        assert sme.cscale_degree == d
+        assert sme.cscale.shape[0] == 1
+        assert sme.cscale.shape[1] == d + 1

@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 
 from scipy.stats import norm
 
-from SME import util
-from SME.src.gui import plot_plotly, plot_pyplot
-from SME.src.sme.abund import Abund
-from SME.src.sme import sme as SME
-from SME.src.sme.vald import ValdFile
-from SME.src.sme.solve import solve, synthesize_spectrum
+from sme import util
+from sme.src.gui import plot_plotly, plot_pyplot
+from sme.src.sme.abund import Abund
+from sme.src.sme import sme as SME
+from sme.src.sme.vald import ValdFile
+from sme.src.sme.solve import solve, synthesize_spectrum
 
 if __name__ == "__main__":
     target = "sun"
@@ -25,7 +25,7 @@ if __name__ == "__main__":
         # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
         # in_file = "./sun_6440_grid.out"
         # in_file = "./UVES.2010-04-02.ech"
-        in_file = "./solarflux_150109.inp"
+        in_file = "./sun_6440_grid.inp"
         # in_file = "./wasp117.npy"
         # in_file = "./wasp117.npy"
         # vald_file = "./4000-6920.lin"

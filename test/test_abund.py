@@ -1,5 +1,5 @@
 import pytest
-from SME.src.sme.abund import Abund
+from sme.src.sme.abund import Abund
 from collections import OrderedDict
 
 import numpy as np

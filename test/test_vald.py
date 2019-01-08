@@ -1,6 +1,6 @@
 from pathlib import Path
-from SME.src.sme.linelist import LineList
-from SME.src.sme.vald import ValdFile
+from sme.src.sme.linelist import LineList
+from sme.src.sme.vald import ValdFile
 
 import numpy as np
 

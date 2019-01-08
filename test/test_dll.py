@@ -2,10 +2,10 @@ from os.path import dirname
 
 import numpy as np
 
-from SME.src.sme.abund import Abund
-from SME.src.sme.atmosphere import krz_file
-from SME.src.sme.linelist import LineList
-from SME.src.sme.sme_synth import SME_DLL
+from sme.src.sme.abund import Abund
+from sme.src.sme.atmosphere import krz_file
+from sme.src.sme.linelist import LineList
+from sme.src.sme.sme_synth import SME_DLL
 
 # Create Objects to pass to library
 # Their functionality is tested in other test files, so we assume it works

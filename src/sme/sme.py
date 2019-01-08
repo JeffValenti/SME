@@ -1087,26 +1087,28 @@ class SME_Struct(Param):
         The x coordinates of each polynomial are chosen so that x = 0, at the first wavelength point,
         i.e. x is shifted by wave[segment][0]
         """
-        if self._cscale is None or self.nseg is None:
+        if self._cscale is None:
             return None
+
+        nseg = self.nseg if self.nseg is not None else 1
         if self.cscale_flag == "none":
-            return np.ones((self.nseg, 1))
+            return np.ones((nseg, 1))
 
         ndeg = {"fix": 1, "constant":1, "linear":2, "quadratic":3}[self.cscale_flag]
-        nseg, length = self._cscale.shape
+        n, length = self._cscale.shape
 
-        if length == ndeg and nseg == self.nseg:
+        if length == ndeg and n == nseg:
             return self._cscale
 
-        cs = np.ones((self.nseg, ndeg))
-        if length == nseg:
-            cs[:nseg, :] = self._cscale[:nseg, :]
+        cs = np.ones((nseg, ndeg))
+        if length == n:
+            cs[:n, :] = self._cscale[:n, :]
         elif length < ndeg:
-            cs[:nseg, -length:] = self._cscale[:nseg, :]
+            cs[:n, -length:] = self._cscale[:n, :]
         else:
-            cs[:nseg, :] = self._cscale[:nseg, -ndeg :]
+            cs[:n, :] = self._cscale[:n, -ndeg :]
 
-        cs[nseg:, -1] = self._cscale[-1, -1]
+        cs[n:, -1] = self._cscale[-1, -1]
 
         return cs
 
@@ -1150,7 +1152,7 @@ class SME_Struct(Param):
         if self.cscale_flag == "quadratic":
             return 2
         if self.cscale_flag == "fix":
-            return self._cscale.shape[1]
+            return self._cscale.shape[1] - 1
 
         # "none"
         return 0
