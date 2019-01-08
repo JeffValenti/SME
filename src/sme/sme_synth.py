@@ -6,8 +6,6 @@ import numpy as np
 
 from .cwrapper import idl_call_external, get_lib_name
 
-# TODO Use a dedicated lib object instead
-
 
 def check_error(name, *args, **kwargs):
     """
@@ -37,16 +35,27 @@ class SME_DLL:
     """ Object Oriented interface for the SME C library """
 
     def __init__(self):
+        #:LineList: Linelist passed to the library
         self.linelist = None
+        #:int: Number of mu points passed to the library
         self.nmu = None
+        #:Abund: Elemental abundances passed to the library
         self.abund = None
+        #:float: First wavelength of the current segment in Angstrom
         self.wfirst = None
+        #:float: Last wavelength of the current segment in Angstrom
         self.wlast = None
+        #:float: Van der Waals broadening parameter set in the library
         self.vw_scale = None
+        #:bool: Wether the library uses H2 broadening or not
         self.H2broad = False
+        #:float: Effective temperature set in the model
         self.teff = None
+        #:float: Surface gravity set in the model
         self.grav = None
+        #:float: Turbulence velocity in the model in km/s
         self.vturb = None
+        #:Atmo: Atmosphere structure in the model
         self.atmo = None
 
     @property
