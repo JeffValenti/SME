@@ -9,7 +9,7 @@ import pandas as pd
 
 
 class FileError(Exception):
-    """Raise when attempt to read a VALD line data file fails"""
+    """Raise when attempt to read a line data file fails"""
 
 
 class LineList:

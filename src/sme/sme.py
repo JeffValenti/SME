@@ -601,6 +601,7 @@ class NLTE(Collection):
             }
         #:dict(str, str): NLTE grids to use for any given element
         self.grids = grids
+        self.flags = None
         super().__init__(**kwargs)
 
     _default_grids = {

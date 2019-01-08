@@ -1,8 +1,10 @@
 from pathlib import Path
 from sme.src.sme.linelist import LineList
-from sme.src.sme.vald import ValdFile
+from sme.src.sme.vald import ValdFile, ValdError
+from sme.src.sme.abund import Abund
 
 import numpy as np
+import pytest
 
 species = "Fe 1"
 wlcent = 5502.9931
@@ -74,3 +76,50 @@ def test_valdfile():
     assert len(linelist) == 44
     assert linelist.lineformat == "short"
     assert linelist[0].species == "V 1"
+
+    with pytest.raises(ValdError):
+        vf = ValdFile(testdir / "testcase1.npy")
+
+
+def test_short_format():
+    testdir = Path(__file__).parent
+    vf = ValdFile(testdir / "testcase1.lin")
+
+    linelist = vf.linelist
+
+    assert linelist.lineformat == "short"
+    assert len(linelist) == 44
+    assert linelist.atomic is not None
+    assert linelist.species is not None
+
+    with pytest.raises(AttributeError):
+        _ = linelist.lulande
+
+    with pytest.raises(AttributeError):
+        _ = linelist.extra
+
+    assert isinstance(vf.abund, Abund)
+    assert isinstance(vf.valdatmo, str)
+
+
+def test_long_format():
+    testdir = Path(__file__).parent
+    vf = ValdFile(testdir / "testcase3.lin")
+
+    linelist = vf.linelist
+
+    assert linelist.lineformat == "long"
+    assert len(linelist) == 67
+    assert linelist.atomic is not None
+    assert linelist.species is not None
+    assert linelist.lulande is not None
+    assert linelist.extra is not None
+
+    assert linelist.reference is not None
+    assert linelist.error is not None
+    assert linelist.term_lower is not None
+    assert linelist.term_upper is not None
+
+    assert isinstance(vf.abund, Abund)
+    assert isinstance(vf.valdatmo, str)
+

@@ -415,8 +415,6 @@ def solve(
 
     # punc3 = uncertainties(res.jac, res.fun, uncs, param_names, plot=False)
 
-    sme.nlte.flags = dll.GetNLTEflags()
-
     if filename is not None:
         sme.save(filename)
 
@@ -626,7 +624,7 @@ def synthesize_spectrum(
         dll.SetVWscale(sme.gam6)
         dll.SetH2broad(sme.h2broad)
     if passNLTE:
-        update_depcoeffs(sme)
+        update_depcoeffs(sme, dll)
 
     # Loop over segments
     #   Input Wavelength range and Opacity
@@ -740,5 +738,7 @@ def synthesize_spectrum(
         )(wave)
 
     sme.vrad = np.asarray(vrad)
+
+    sme.nlte.flags = dll.GetNLTEflags()
 
     return sme

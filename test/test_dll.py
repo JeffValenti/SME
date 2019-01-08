@@ -3,10 +3,12 @@ from os.path import dirname
 import pytest
 import numpy as np
 
+from sme import SME_Struct
 from sme.src.sme.abund import Abund
 from sme.src.sme.atmosphere import krz_file
 from sme.src.sme.linelist import LineList
 from sme.src.sme.sme_synth import SME_DLL
+from sme.src.sme.nlte import nlte
 
 # Create Objects to pass to library
 # Their functionality is tested in other test files, so we assume it works

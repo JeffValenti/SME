@@ -51,8 +51,12 @@ class ValdFile:
         """
         logging.info("Loading VALD file %s", filename)
 
-        with open(filename, "r") as file:
-            lines = file.readlines()
+        try:
+            with open(filename, "r") as file:
+                lines = file.readlines()
+        except Exception as ex:
+            raise ValdError(str(ex))
+
         self.parse_header(lines[0])
         # TODO how to recognise extended format
         fmt = "long" if lines[4][:2] == "' " else "short"

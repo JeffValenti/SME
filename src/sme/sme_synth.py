@@ -638,16 +638,27 @@ class SME_DLL:
         """
         ndepth = self.ndepth
         nlines = self.nlines
-        assert (
-            bmat.shape[0] == 2
-        ), f"Departure coefficient matrix has the wrong shape, expected (2, {ndepth}) but got {bmat.shape} instead"
-        assert (
-            bmat.shape[1] == ndepth
-        ), f"Departure coefficient matrix has the wrong shape, expected (2, {ndepth}) but got {bmat.shape} instead"
 
-        assert (
-            0 <= lineindex < nlines
-        ), f"Lineindex out of range, expected value between 0 and {nlines}, but got {lineindex} instead"
+        if not isinstance(bmat, (list, np.ndarray)):
+            raise TypeError("Departure coefficient matrix is not an array")
+
+        bmat = np.atleast_2d(bmat)
+        if bmat.shape[0] != 2:
+            raise ValueError(
+                f"Departure coefficient matrix has the wrong shape, expected (2, {ndepth}) but got {bmat.shape} instead"
+            )
+        if bmat.shape[1] != ndepth:
+            raise ValueError(
+                f"Departure coefficient matrix has the wrong shape, expected (2, {ndepth}) but got {bmat.shape} instead"
+            )
+
+        if not isinstance(lineindex, (int, np.integer)):
+            raise TypeError("Lineindex is not an integer type")
+
+        if not (0 <= lineindex < nlines):
+            raise ValueError(
+                f"Lineindex out of range, expected value between 0 and {nlines}, but got {lineindex} instead"
+            )
 
         check_error(
             "InputDepartureCoefficients", bmat, lineindex, type=("double", "int")
