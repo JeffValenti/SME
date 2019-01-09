@@ -64,16 +64,16 @@ and begin working in a new terminal window, so that the new
 :envvar:`PATH` definition takes effect.
 
 3. `Clone <https://help.github.com/articles/cloning-a-repository/>`_
-the `SME github repository`_ to a local :file:`sme` directory.
+the `SME github repository`_ to a local :file:`SME` directory.
 
 .. _SME github repository:
    https://github.com/JeffValenti/SME
 
 .. code-block:: bash
 
-    $ mkdir sme
-    $ cd sme
     $ git clone https://github.com/JeffValenti/SME.git
+    $ cd SME
+    SME$
 
 .. _conda-env-create-step:
 
@@ -88,8 +88,7 @@ new environment (*sme*) is specified in :file:`environment.yml`.
 
 .. code-block:: bash
 
-    $ cd sme
-    $ conda env create -f environment.yml
+    SME$ conda env create -f environment.yml
 
 5. Install SME from the local repository. Activate the *sme* environment,
 so that SME is installed in the *sme* environment, not the *base*
@@ -100,8 +99,8 @@ local repository.
 
 .. code-block:: bash
 
-    $ source activate sme
-    (sme) $ pip install --editable .
+    SME$ source activate sme
+    (sme) SME$ pip install --editable .
 
 
 Update environment
@@ -168,16 +167,16 @@ in the following table.
 
 =====================  ========  ========  ========  ========
 VALD job date          12/30/18  12/30/18  12/30/18  12/30/18
-VALD job number        045169    045170    045174    045175   
-Starting wavelength    6562      656.0188  49958.83  1999    
-Ending wavelength      6567      656.5186  50025.01  2001    
-Detection threshold    0.001     0.001     0.001     0.001   
-Microturbulence        0         0         0         0       
-Effective temperature  5750      5750      3500      3500    
-Log surface gravity    4.5       4.5       5.0       5.0     
-Extraction format      long      short     long      short   
-Energy level units     eV        cm-1      cm-1      eV     
-Medium                 vacuum    air       vacuum    air    
+VALD job number        045169    045170    045174    045175
+Starting wavelength    6562      656.0188  49958.83  1999
+Ending wavelength      6567      656.5186  50025.01  2001
+Detection threshold    0.001     0.001     0.001     0.001
+Microturbulence        0         0         0         0
+Effective temperature  5750      5750      3500      3500
+Log surface gravity    4.5       4.5       5.0       5.0
+Extraction format      long      short     long      short
+Energy level units     eV        cm-1      cm-1      eV
+Medium                 vacuum    air       vacuum    air
 Wavelength units       Angstrom  nm        cm-1      Angstrom
 Van der Waals syntax   extended  extended  extended  extended
 Isotopic scaling       on        on        off       off
