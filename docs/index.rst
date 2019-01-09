@@ -23,7 +23,7 @@ with those parameters.
    unless you want to contribute to the python development effort.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    Home <self>
    content/user.rst

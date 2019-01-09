@@ -64,9 +64,9 @@ and begin working in a new terminal window, so that the new
 :envvar:`PATH` definition takes effect.
 
 3. `Clone <https://help.github.com/articles/cloning-a-repository/>`_
-the `SME github repository`_ to a local :file:`SME` directory.
+the `SME repository`_ on GitHub to a local :file:`SME` directory.
 
-.. _SME github repository:
+.. _SME repository:
    https://github.com/JeffValenti/SME
 
 .. code-block:: bash
@@ -158,9 +158,61 @@ but not in Travis CI or other user environments. To add packages for
 all SME users, update the :file:`environment.yml` file and recreate
 the local *sme* environment.
 
-**********
-Test Files
-**********
+****************
+Software Testing
+****************
+
+SME uses the `pytest framework <https://docs.pytest.org/latest>`_
+to demonstrate that SME behaves as intended, despite inevitable
+changes to SME code, python modules, and the environment.
+
+Unit Tests
+==========
+
+Unit test code is located in the directory :file:`SME/test` in files
+named :file:`test_<module>.py`. Each such file contains functions
+named :code:`test_<purpose>`. Each such function contains python
+:code:`assert` statements that test whether a particular code path
+behaves as expected.
+
+Run unit tests locally before committing code. Use the `-v` option
+to see results for each individual test function. Use the `--cov=sme`
+option to see what fraction of statements in each SME module are
+covered by unit tests. Unit tests should cover 100% of statements.
+
+.. code-block:: bash
+
+    $ cd SME
+    SME$ source activate sme
+    (sme) SME$ pytest -v --cov=sme
+
+To see which specific statements are not covered, use a web browser
+to view the file :file:`htmlcov/index.nhtml`. On a mac, use `open`
+to view the file.
+
+.. code-block:: bash
+
+    (sme) SME$ open htmlcov/index.html
+
+
+Continuous Integration
+======================
+
+.. _Travis CI:
+   https://travis-ci.org/JeffValenti/SME/builds
+
+The `SME repository`_ on GitHub is linked to the `Travis CI`_
+continuous integration service. Updating SME on GitHub causes
+Travis CI to follow instructions in :file:`SME/.travis.yml`.
+These instructions build SME in one or more environments (e.g.,
+linux, osx) and run :command:`pytest`. When the tests complete,
+GitHub indicates the result with a green check mark (pass) or
+a red 'X' (fail). Resolve failures before merging a pull request
+or making a release.
+
+
+Test Data
+=========
 
 VALD3 generated data files for :func:`test_vald` using parameters
 in the following table.
