@@ -187,8 +187,8 @@ covered by unit tests. Unit tests should cover 100% of statements.
     (sme) SME$ pytest -v --cov=sme
 
 To see which specific statements are not covered, use a web browser
-to view the file :file:`htmlcov/index.nhtml`. On a mac, use `open`
-to view the file.
+to view the file :file:`htmlcov/index.html` and then click each
+module name. On a mac, use `open` to view the file.
 
 .. code-block:: bash
 
@@ -214,8 +214,8 @@ or making a release.
 Test Data
 =========
 
-VALD3 generated data files for :func:`test_vald` using parameters
-in the following table.
+Test data for :func:`test_vald` were generated using the VALD3
+`extract stellar` feature and the following parameter values.
 
 =====================  ========  ========  ========  ========
 VALD job date          12/30/18  12/30/18  12/30/18  12/30/18
@@ -233,3 +233,56 @@ Wavelength units       Angstrom  nm        cm-1      Angstrom
 Van der Waals syntax   extended  extended  extended  extended
 Isotopic scaling       on        on        off       off
 =====================  ========  ========  ========  ========
+
+*************
+Documentation
+*************
+
+.. _Sphinx:
+   https://www.sphinx-doc.org/en/master/contents.html
+
+.. _reStructuredText:
+   http://docutils.sourceforge.net/rst.html
+
+SME uses the `Sphinx`_ documentation builder to translate
+`reStructuredText`_ source files into various output formats,
+including HTML and PDF. SME documentation source is located in
+the directory :file:`SME/docs`.  The master document is
+:file:`SME/docs/index.rst`. Additional source files are in the
+subdirectory :file:`SME/docs/content`. SME has documentation
+for users and for developers.
+
+Online
+======
+
+.. _readthedocs:
+   https://sme.readthedocs.io
+
+The `SME repository`_ on GitHub is linked to the `readthedocs`_
+online documentation service. Updating SME on GitHub causes
+readthedocs to rebuild and publish the latest SME documentation
+from source.
+
+Local
+=====
+
+Use :command:`make` to build a local copy of the documentation in the
+directory :file:`SME/docs/_build`. Use the argument `html` to build
+HTML documentation and `latexpdf` to build PDF documentation.
+
+.. code-block:: bash
+
+    $ cd SME/docs
+    SME$ source activate sme
+    (sme) SME$ make html
+    (sme) SME$ make latexpdf
+
+Use a web browser to view the file :file:`_build/html/index.html`.
+Use a PDF browser to view the file :file:`_build/latex/SME.pdf`.
+On a mac, use `open` to view either type of output format.
+
+.. code-block:: bash
+
+    (sme) SME$ open _build/html/index.html
+    (sme) SME$ open _build/latex/SME.pdf
+
