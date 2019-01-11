@@ -26,7 +26,10 @@ search: True
 # Specify requirement files by hand, default is empty
 # default: empty
 # allowed: list
-requirements: environment.yml
+requirements:
+  - environment.yml:
+      update: all
+      pin: True
 
 # assign users to pull requests, default is not set
 # requires private repo permissions, even on public repos
