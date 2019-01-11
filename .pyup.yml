@@ -27,7 +27,7 @@ search: True
 # default: empty
 # allowed: list
 requirements:
-  - environment.yml:
+  - requirements.txt:
       update: all
       pin: True
 

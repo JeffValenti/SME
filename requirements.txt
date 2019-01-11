@@ -1,0 +1,7 @@
+ astropy
+ coverage
+ cython
+ flake8
+ python
+ pytest-cov
+ scipy
