@@ -1,11 +1,14 @@
-name: sme
+name: pysme
 channels:
   - defaults
+  - astropy
+  - anaconda
 dependencies:
   - astropy
-  - cython
-  - flake8
-  - python
+  - Ipython
+  - jupyter
+  - matplotlib
+  - pandas
+  - plotly
+  - pytest
   - scipy
-  - pip:
-    - tox

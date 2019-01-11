@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name="sme",
@@ -8,7 +8,7 @@ setup(
     description="Spectroscopy Made Easy",
     author="Jeff A. Valenti",
     author_email="valenti@stsci.edu",
-    packages=find_packages(),
-    #     package_dir={"": "src"},
-    #     package_data={"sme": ["dll/sme_synth.so.*", "dll/intel64_lin/*"]},
+    packages=["sme", "gui"],
+    package_dir={"": "src"},
+    package_data={"sme": ["dll/sme_synth.so.*", "dll/intel64_lin/*"]},
 )

@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 
 from sme import util
-from sme.src.gui import plot_plotly, plot_pyplot
-from sme.src.sme.abund import Abund
-from sme.src.sme import sme as SME
-from sme.src.sme.vald import ValdFile
-from sme.src.sme.solve import solve, synthesize_spectrum
+from gui import plot_plotly, plot_pyplot
+from sme.abund import Abund
+from sme import sme as SME
+from sme.vald import ValdFile
+from sme.solve import solve, synthesize_spectrum
 
 if __name__ == "__main__":
-    target = "sun"
+    target = "solcont"
     util.start_logging(f"{target}.log")
 
     # Get input files
@@ -25,7 +25,7 @@ if __name__ == "__main__":
         # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
         # in_file = "./sun_6440_grid.out"
         # in_file = "./UVES.2010-04-02.ech"
-        in_file = "./sun_6440_grid.inp"
+        in_file = "./solcont5500.inp"
         # in_file = "./wasp117.npy"
         # in_file = "./wasp117.npy"
         # vald_file = "./4000-6920.lin"
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     fitparameters = ["teff", "logg", "monh"]
     sme.vrad_flag = "none"
-    sme.cscale_flag = "fix"
+    sme.cscale_flag = "constant"
     # sme.nlte.set_nlte("Ca")
 
     # Start SME solver

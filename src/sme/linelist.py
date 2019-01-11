@@ -30,7 +30,20 @@ class LineList:
 
     @staticmethod
     def parse_line_error(error_flags, values):
-        """ Transform Line Error flags into relative error values """
+        """Transform Line Error flags into relative error values
+
+        Parameters
+        ----------
+        error_flags : list(str)
+            Error Flags as defined by various references
+        values : float
+            depths of the lines, to convert absolute to relative errors
+
+        Returns
+        -------
+        errors : list(float)
+            relative errors for each line
+        """
         nist = {
             "AAA": 0.003,
             "AA": 0.01,
@@ -157,7 +170,9 @@ class LineList:
             if "error" in kwargs.keys():
                 linedata["error"] = kwargs["error"]
 
+        #:{"short", "long"}: Defines how much information is available
         self.lineformat = lineformat
+        #:pandas.DataFrame: DataFrame that contains all the data
         self._lines = linedata  # should have all the fields (20)
 
     def __len__(self):
@@ -185,12 +200,12 @@ class LineList:
 
     @property
     def species(self):
-        """ Species name of each line """
+        """list(str) of size (nlines,): Species name of each line """
         return self._lines["species"].values
 
     @property
     def lulande(self):
-        """ Lower and Upper Lande factors """
+        """list(float) of size (nlines, 2): Lower and Upper Lande factors """
         if self.lineformat == "short":
             raise AttributeError(
                 "Lower and Upper Lande Factors are only available in the long line format"
@@ -202,7 +217,7 @@ class LineList:
 
     @property
     def extra(self):
-        """ additional line level information for NLTE calculation """
+        """list(float) of size (nlines, 3): additional line level information for NLTE calculation """
         if self.lineformat == "short":
             raise AttributeError("Extra is only available in the long line format")
         names = ["j_lo", "e_upp", "j_up"]
@@ -210,7 +225,7 @@ class LineList:
 
     @property
     def atomic(self):
-        """ Data array passed to C library, should only be used for this purpose """
+        """list(float) of size (nlines, 8): Data array passed to C library, should only be used for this purpose """
         names = [
             "atom_number",
             "ionization",
@@ -225,11 +240,51 @@ class LineList:
         return self._lines[names].values
 
     def sort(self, field="wlcent", ascending=True):
-        """ sort the linelist 'in place' """
+        """Sort the linelist
+
+        The underlying datastructure will be replaced, 
+        i.e. any references will not be sorted or updated
+
+        Parameters
+        ----------
+        field : str, optional
+            Field to use for sorting (default: "wlcent")
+        ascending : bool, optional
+            Wether to sort in ascending or descending order (default: True)
+
+        Returns
+        -------
+        self : LineList
+            The sorted LineList object
+        """
+
         self._lines = self._lines.sort_values(by=field, ascending=ascending)
-        return self._lines
+        return self
 
     def add(self, species, wlcent, excit, gflog, gamrad, gamqst, gamvw):
+        """Add a new line to the existing linelist
+
+        This replaces the underlying datastructure, 
+        i.e. any references (atomic, etc.) will not be updated
+
+        Parameters
+        ----------
+        species : str
+            Name of the element and ionization
+        wlcent : float
+            central wavelength
+        excit : float
+            excitation energy in eV
+        gflog : float
+            gf logarithm
+        gamrad : float
+            broadening factor radiation
+        gamqst : float
+            broadening factor qst
+        gamvw : float
+            broadening factor van der Waals
+        """
+
         linedata = {
             "species": species,
             "wlcent": wlcent,
