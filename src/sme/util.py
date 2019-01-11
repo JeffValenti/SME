@@ -153,3 +153,33 @@ def start_logging(log_file="log.log"):
     logging.debug("Numpy version: %s", npversion)
     logging.debug("Scipy version: %s", spversion)
     logging.debug("Pandas version: %s", pdversion)
+
+
+def parse_args():
+    """Parse command line arguments
+
+    Returns
+    -------
+    sme : str
+        filename to input sme structure
+    vald : str
+        filename of input linelist or None
+    fitparameters : list(str)
+        names of the parameters to fit, empty list if none are specified
+    """
+
+    parser = argparse.ArgumentParser(description="SME solve")
+    parser.add_argument(
+        "sme",
+        type=str,
+        help="an sme input file (either in IDL sav or Numpy npy format)",
+    )
+    parser.add_argument("--vald", type=str, default=None, help="the vald linelist file")
+    parser.add_argument(
+        "fitparameters",
+        type=str,
+        nargs="*",
+        help="Parameters to fit, abundances are 'Mg Abund'",
+    )
+    args = parser.parse_args()
+    return args.sme, args.vald, args.fitparameters
