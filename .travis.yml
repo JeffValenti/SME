@@ -18,7 +18,7 @@ install:
         ;;
       "osx" )
         MINICONDA_REPO="https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh"
-        brew update
+        # brew update
         ;;
     esac
   - wget $MINICONDA_REPO -O miniconda.sh
