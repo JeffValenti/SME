@@ -13,7 +13,7 @@ install:
     case $TRAVIS_OS_NAME in
       "linux" )
         MINICONDA_REPO="https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh"
-        export LD_LIBRARY_PATH=/home/travis/miniconda/envs/sme/lib/python3.6/site-packages/sme-0.0-py3.6.egg/sme/dll/intel64_lin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        # export LD_LIBRARY_PATH=/home/travis/miniconda/envs/sme/lib/python3.6/site-packages/sme-0.0-py3.6.egg/sme/dll/intel64_lin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
         sudo apt-get update
         ;;
       "osx" )
@@ -30,8 +30,14 @@ install:
   - conda info -a
   - conda create -q -n sme pytest
   - source activate sme
-  - echo $LD_LIBRARY_PATH
   - python setup.py install
+  - |
+    case $TRAVIS_OS_NAME in
+      "linux" )
+        SME_LIBRARY_PATH=$(python -c "from os.path import dirname, join; from sme import dll; print(join(dirname(dll.__file__),'dll/intel64_lin'))")
+        export LD_LIBRARY_PATH=$SME_LIBRARY_PATH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        ;;
+  - echo $LD_LIBRARY_PATH
 
 script:
   - pytest
