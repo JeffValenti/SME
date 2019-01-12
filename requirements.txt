@@ -4,5 +4,5 @@
  flake8
  pip
  python
- pytest-cov
+pytest-cov==2.6.1
  scipy
