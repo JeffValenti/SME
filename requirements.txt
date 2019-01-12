@@ -1,7 +1,7 @@
- astropy
- coverage
- cython
- flake8
- python
- pytest-cov
- scipy
+ astropy=3.1.1
+ coverage=4.5.2
+ cython=0.29.2
+ flake8=3.6.0
+ python=3.7.2
+ pytest-cov=2.6.0
+ scipy=1.1.0
