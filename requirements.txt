@@ -2,7 +2,7 @@
  coverage
  cython
  flake8
- pip
+pip==18.1
  python
  pytest-cov
  scipy
