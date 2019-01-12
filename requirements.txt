@@ -5,4 +5,4 @@
  pip
  python
  pytest-cov
- scipy
+scipy==1.2.0
