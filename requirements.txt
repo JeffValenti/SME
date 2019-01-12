@@ -3,5 +3,5 @@
  cython
  flake8
  python
- pytest-cov
+pytest-cov==2.6.1
  scipy
