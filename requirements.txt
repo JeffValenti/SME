@@ -3,6 +3,6 @@
  cython
  flake8
  pip
- python
+python==2.5
  pytest-cov
  scipy
