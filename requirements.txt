@@ -1,6 +1,6 @@
  astropy
  coverage
- cython
+cython==0.29.2
  flake8
  pip
  python
