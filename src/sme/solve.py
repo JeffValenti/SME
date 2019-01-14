@@ -679,8 +679,8 @@ def synthesize_spectrum(
             )
 
         # Divide calculated spectrum by continuum
-        if sme.cscale_flag != "fix":
-            flux /= cont_flux
+        #if sme.cscale_flag != "fix":
+        flux /= cont_flux
 
         # Create a wavelength array if it doesn't exist
         if "wave" not in sme or len(sme.wave[il]) == 0:

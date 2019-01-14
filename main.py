@@ -15,7 +15,7 @@ from sme.vald import ValdFile
 from sme.solve import solve, synthesize_spectrum
 
 if __name__ == "__main__":
-    target = "solcont"
+    target = "sol"
     util.start_logging(f"{target}.log")
 
     # Get input files
@@ -25,7 +25,7 @@ if __name__ == "__main__":
         # in_file = "/home/ansgar/Documents/IDL/SME/wasp21_20d.out"
         # in_file = "./sun_6440_grid.out"
         # in_file = "./UVES.2010-04-02.ech"
-        in_file = "./solcont5500.inp"
+        in_file = "./solarflux_150109.inp"
         # in_file = "./wasp117.npy"
         # in_file = "./wasp117.npy"
         # vald_file = "./4000-6920.lin"
