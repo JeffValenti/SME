@@ -385,9 +385,9 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
         if vflag:
             rv = par[0]
             rv_factor = np.sqrt((1 - rv / c_light) / (1 + rv / c_light))
-            shifted = interpolator(x_obs * rv_factor)
         else:
-            shifted = x_obs
+            rv_factor = 1
+        shifted = interpolator(x_obs * rv_factor)
 
         if cflag:
             coef = par[1:]
