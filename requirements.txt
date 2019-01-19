@@ -3,6 +3,6 @@
 cython==0.29.3
 flake8==3.6.0
  pip
- python >= 3.6
- pytest-cov
+pytest-cov==2.6.1
+python>=3.6
 scipy==1.2.0
