@@ -5,4 +5,4 @@ cython==0.29.3
  pip
  python >= 3.6
  pytest-cov
- scipy
+scipy==1.2.0
