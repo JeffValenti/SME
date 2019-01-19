@@ -16,7 +16,7 @@ branch: master
 # default: empty
 # allowed: "every day", "every week", ..
 # schedule: "every week on thursday"
-schedule: ""
+schedule: "every week on sunday"
 
 # search for requirement files
 # default: True
