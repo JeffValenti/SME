@@ -1369,7 +1369,8 @@ class SME_Struct(Param):
             # Echelle file (from REDUCE)
             ech = echelle.read(filename)
             s = SME_Struct()
-            s.wind = np.cumsum([0, *np.diff(ech.columns, axis=1).ravel()])
+            if hasattr(ech, "columns"):
+                s.wind = np.cumsum([0, *np.diff(ech.columns, axis=1).ravel()])
             s.wave = np.ma.compressed(ech.wave)
             s.spec = np.ma.compressed(ech.spec)
             s.uncs = np.ma.compressed(ech.sig)
