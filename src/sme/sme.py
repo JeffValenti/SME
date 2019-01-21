@@ -60,6 +60,8 @@ class Iliffe_vector:
         if isinstance(index, (list, np.ndarray)):
             values = [self[i] for i in index]
             sizes = [len(v) for v in values]
+            # values has to be 1D
+            values = np.concatenate(values)
             return Iliffe_vector(sizes, values=values)
 
         if isinstance(index, str):
