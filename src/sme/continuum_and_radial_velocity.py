@@ -273,7 +273,7 @@ def determine_radial_velocity(sme, segment, cscale, x_syn, y_syn):
     return rvel
 
 
-def determine_rv_and_cont(sme, segment, x_syn, y_syn):
+def determine_rv_and_cont(sme, segment, x_syn, y_syn, use_whole_spectrum=False):
     """
     Fits both radial velocity and continuum level simultaneously
     by comparing the synthetic spectrum to the observation
@@ -305,7 +305,7 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
         warnings.warn("Missing data for radial velocity/continuum determination")
         return 0, [1]
 
-    if np.all(sme.mask_bad[segment]):
+    if np.all(sme.mask_bad[segment].ravel()):
         warnings.warn(
             "Only bad pixels in this segments, can't determine radial velocity/continuum"
         )
@@ -315,13 +315,16 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     x_obs = sme.wave[segment][mask]
     y_obs = sme.spec[segment][mask]
     u_obs = sme.uncs[segment][mask]
-    x_num = x_obs - sme.wave[segment][0]
+    x_num = x_obs - sme.wave[segment].ravel()[0]
 
     if len(x_obs) <= sme.cscale_degree:
         warnings.warn("Not enough good pixels to determine radial velocity/continuum")
         return 0, [1]
 
-    if sme.cscale_flag in [-3, "none"]:
+    if use_whole_spectrum:
+        cflag = False
+        cscale = [1]
+    elif sme.cscale_flag in [-3, "none"]:
         cflag = False
         cscale = [1]
     elif sme.cscale_flag in [-1, -2, "fix"]:
@@ -346,22 +349,28 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
         else:
             cscale[-1] = np.median(y_obs)
 
-    if sme.vrad_flag in ["none", -2]:
+    # Even when the vrad_flag is set to whole
+    # you still want to fit the rv of the individual segments
+    # just for the continuum fit
+    if sme.vrad_flag == "none":
         rvel = 0
-        vflag = False
-    elif sme.vrad_flag in ["whole", -1]:
+        vflag_fit = False
+        vflag_return = False
+    elif sme.vrad_flag == "whole":
         rvel = sme.vrad[0]
-        vflag = segment == -1
-    elif sme.vrad_flag in ["each", 0]:
+        vflag_fit = True
+        vflag_return = use_whole_spectrum
+    elif sme.vrad_flag == "each":
         rvel = sme.vrad[segment]
-        vflag = True
+        vflag_fit = True
+        vflag_return = True
     else:
         raise ValueError(f"Radial velocity Flag not understood {sme.vrad_flag}")
 
-    if vflag:
+    if vflag_fit:
         # Get a first rough estimate from cross correlation
         # Subtract median (rough continuum estimate) for better correlation
-        y_tmp = np.interp(x_obs, x_syn, y_syn)
+        y_tmp = util.safe_interpolation(x_syn, y_syn, x_obs)
         corr = correlate(
             y_obs - np.median(y_obs), y_tmp - np.median(y_tmp), mode="same"
         )
@@ -382,7 +391,7 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
         # The radial velocity shift is inversed
         # i.e. the wavelength grid of the observation is shifted to match the synthetic spectrum
         # but thats ok, because the shift is symmetric
-        if vflag:
+        if vflag_fit:
             rv = par[0]
             rv_factor = np.sqrt((1 - rv / c_light) / (1 + rv / c_light))
         else:
@@ -400,10 +409,14 @@ def determine_rv_and_cont(sme, segment, x_syn, y_syn):
     x0 = [rvel, *cscale]
     res = least_squares(func, x0=x0, loss="soft_l1")
 
-    if vflag:
+    if vflag_return:
         rvel = res.x[0]
+    else:
+        rvel = None
     if cflag:
         cscale = res.x[1:]
+    else:
+        cscale = None
 
     return rvel, cscale
 
@@ -514,7 +527,7 @@ def cont_fit(sme, segment, x_syn, y_syn, rvel=0):
     return coef
 
 
-def match_rv_continuum(sme, segment, x_syn, y_syn):
+def match_rv_continuum(sme, segments, x_syn, y_syn):
     """
     Match both the continuum and the radial velocity of observed/synthetic spectrum
 
@@ -539,7 +552,20 @@ def match_rv_continuum(sme, segment, x_syn, y_syn):
         new continuum coefficients
     """
 
-    rvel, cscale = determine_rv_and_cont(sme, segment, x_syn, y_syn)
+    rvel = [None for _ in range(sme.nseg)]
+    cscale = [None for _ in range(sme.nseg)]
+
+    for s in segments:
+        rvel[s], cscale[s] = determine_rv_and_cont(sme, s, x_syn[s], y_syn[s])
+
+    if sme.vrad_flag == "whole":
+        wave = np.concatenate([x_syn[s] for s in segments])
+        smod = np.concatenate([y_syn[s] for s in segments])
+        rvel_whole, _ = determine_rv_and_cont(
+            sme, segments, wave, smod, use_whole_spectrum=True
+        )
+        for s in segments:
+            rvel[s] = rvel_whole
 
     # Scale using relative depth (from Nikolai)
     # cscale = cont_fit(sme, segment, x_syn, y_syn, rvel=rvel)

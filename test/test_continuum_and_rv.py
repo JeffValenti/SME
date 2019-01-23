@@ -37,6 +37,12 @@ def test_match_both():
     assert np.allclose(rvel, rv, atol=1)
     assert cscale == [1]
 
+    sme.vrad_flag = "whole"
+    rvel, cscale = determine_rv_and_cont(sme, range(sme.nseg), x_syn, y_syn)
+
+    assert np.allclose(rvel, rv, atol=1)
+    assert cscale == [1]
+
     sme.cscale_flag = "constant"
     rvel, cscale = determine_rv_and_cont(sme, 0, x_syn, y_syn)
 

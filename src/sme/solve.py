@@ -602,15 +602,13 @@ def synthesize_spectrum(
     cscale[:, -1] = 1
     wave = [None for _ in range(n_segments)]
     smod = [[] for _ in range(n_segments)]
+    wmod = [[] for _ in range(n_segments)]
     wind = np.zeros(n_segments + 1, dtype=int)
 
     # If wavelengths are already defined use those as output
     if "wave" in sme:
         wave = [w for w in sme.wave]
         wind = [0, *np.diff(sme.wind)]
-        smod = [np.zeros(len(w)) for w in wave]
-    if "synth" in sme:
-        smod = [s for s in sme.synth]
 
     # Input Model data to C library
     if passLineList:
@@ -631,7 +629,6 @@ def synthesize_spectrum(
     #   Calculate spectral synthesis for each
     #   Interpolate onto geomspaced wavelength grid
     #   Apply instrumental and turbulence broadening
-    #   Determine Continuum / Radial Velocity for each segment
     for il in segments:
         logging.debug("Segment %i", il)
         # Input Wavelength range and Opacity
@@ -681,6 +678,8 @@ def synthesize_spectrum(
         # Divide calculated spectrum by continuum
         if sme.cscale_flag != "fix":
             flux /= cont_flux
+        smod[il] = flux
+        wmod[il] = wgrid
 
         # Create a wavelength array if it doesn't exist
         if "wave" not in sme or len(sme.wave[il]) == 0:
@@ -691,18 +690,17 @@ def synthesize_spectrum(
             wave[il] = np.concatenate(([wbeg], wgrid[itrim], [wend]))
             wind[il + 1] = len(wave[il])
 
-        # Fit continuum and radial velocity
-        cscale[il], vrad[il] = match_rv_continuum(sme, il, wgrid, flux)
-        logging.debug("Radial velocity: %f", vrad[il])
-        logging.debug("Continuum coefficients: %s", str(cscale[il]))
-        # Interpolate spectrum on ouput wavelength grid
+    # Fit continuum and radial velocity
+    # And interpolate the flux onto the wavelength grid
+    cscale, vrad = match_rv_continuum(sme, segments, wmod, smod)
+    logging.debug("Radial velocity: %s", str(vrad))
+    logging.debug("Continuum coefficients: %s", str(cscale))
+
+    for il in segments:
         if vrad[il] is not None:
             rv_factor = np.sqrt((1 + vrad[il] / clight) / (1 - vrad[il] / clight))
-            wgrid *= rv_factor
-
-        # TODO: how to resample/interpolate here? Does it matter?
-        # smod[il] = resamp(x_seg, y_seg, wave[il])
-        smod[il] = safe_interpolation(wgrid, flux, wave[il])
+            wmod[il] *= rv_factor
+        smod[il] = safe_interpolation(wmod[il], smod[il], wave[il])
 
         if cscale[il] is not None and not np.all(cscale[il] == 0):
             x = wave[il] - wave[il][0]
@@ -710,35 +708,24 @@ def synthesize_spectrum(
 
     # Merge all segments
     # if sme already has a wavelength this should be the same
-    wave = [w for w in wave if w is not None]
-    sme.wave = wave = np.concatenate(wave)
     wind = np.cumsum(wind)
     sme.wind = wind
+    sme.wint = wint
 
-    sme.synth = np.concatenate(smod)
+    if "wave" not in sme:
+        npoints = sum([len(wave[s]) for s in segments])
+        sme.wave = np.zeros(npoints)
+    if "synth" not in sme:
+        sme.smod = np.zeros_like(sme.wob)
 
     for s in segments:
+        sme.wave[s] = wave[s]
         sme.synth[s] = smod[s]
-
-    sme.wint = wint
 
     if sme.cscale_flag != "fix":
         sme.cscale = np.stack(cscale)
 
-    if sme.vrad_flag in [-1, "whole"]:
-        # If we want to determine radial velocity on the whole spectrum at once (instead of segments)
-        _, vrad = match_rv_continuum(sme, -1, wave, smod)
-        rv_factor = np.sqrt((1 + vrad / clight) / (1 - vrad / clight))
-        sme.smod = interp1d(
-            wave * rv_factor,
-            sme.smod,
-            kind="cubic",
-            fill_value="constant",
-            bounds_error=False,
-        )(wave)
-
     sme.vrad = np.asarray(vrad)
-
     sme.nlte.flags = dll.GetNLTEflags()
 
     return sme
