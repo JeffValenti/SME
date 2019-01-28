@@ -57,6 +57,8 @@ class SME_DLL:
         self.vturb = None
         #:Atmo: Atmosphere structure in the model
         self.atmo = None
+        #:dict: NLTE subgrids for nlte coefficient interpolation
+        self._nlte_grids = {}
 
     @property
     def ndepth(self):
@@ -462,7 +464,7 @@ class SME_DLL:
         accwi,
         keep_lineop=False,
         long_continuum=True,
-        nwmax=400000,
+        nwmax=400_000,
         wave=None,
     ):
         """
@@ -679,7 +681,7 @@ class SME_DLL:
         """
         nrhox = self.ndepth
 
-        bmat = np.full((2, nrhox), -1., dtype=float)
+        bmat = np.full((2, nrhox), -1.0, dtype=float)
         check_error(
             "GetDepartureCoefficients", bmat, nrhox, line, type=("double", "int", "int")
         )

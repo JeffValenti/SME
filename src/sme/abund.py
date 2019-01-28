@@ -52,6 +52,7 @@ class Abund:
     def __getitem__(self, elems):
         if isinstance(elems, str):
             elems = self._elem_dict[elems]
+            return self._pattern[elems]
         if isinstance(elems, (list, tuple, np.ndarray)):
             elems = [self._elem_dict[el] if isinstance(el, str) else el for el in elems]
 
