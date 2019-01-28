@@ -140,36 +140,53 @@ class DirectAccessFile:
 
 
 class Grid:
+    """NLTE Grid class that handles all NLTE data reading and interpolation    
+    """
+
     def __init__(self, sme, elem):
+        #:str: Element of the NLTE grid
         self.elem = elem
+        #:LineList: Whole LineList that was passed to the C library
         self.linelist = sme.linelist
+        #:array(str): Elemental Species Names for the linelist
         self.species = sme.species
 
         localdir = os.path.dirname(__file__)
+        #:str: complete filename of the NLTE grid data file
         self.fname = os.path.join(localdir, "nlte_grids", sme.nlte.grids[elem])
-        self.depth_name = str.lower(sme.atmo.interp)
-        self.target_depth = sme.atmo[self.depth_name]
+        depth_name = str.lower(sme.atmo.interp)
+        #:array(float): depth points of the atmosphere that was passed to the C library (in log10 scale)
+        self.target_depth = sme.atmo[depth_name]
         self.target_depth = np.log10(self.target_depth)
 
+        #:DirectAccessFile: The NLTE data file
         self.directory = DirectAccessFile(self.fname)
         self._teff = self.directory["teff"]
         self._grav = self.directory["grav"]
         self._feh = self.directory["feh"]
         self._xfe = self.directory["abund"]
         self._keys = self.directory["models"].astype("U")
-        self._depth = self.directory[self.depth_name]
+        self._depth = self.directory[depth_name]
 
         self._grid = None
         self._points = None
 
+        #:list(int): number of points in the grid to cache for each parameter, order: abund, teff, logg, monh
         self.subgrid_size = sme.nlte.subgrid_size
+        #:float: Solar Abundance of the element
         self.solar = Abund.solar()[self.elem]
 
+        #:dict: upper and lower parameters covered by the grid
         self.limits = {}
+        #:array: NLTE data array
         self.bgrid = None
-        self.lineref = None
-        self.lineindices = None
+        #:array: Depth points of the NLTE data
         self.depth = None
+
+        #:array: Indices of the lines in the NLTE data
+        self.linerefs = None
+        #:array: Indices of the lines in the LineList
+        self.lineindices = None
 
     def get(self, abund, teff, logg, monh):
         rabund = abund - self.solar
@@ -182,17 +199,22 @@ class Grid:
         ):
             _ = self.read_grid(rabund, teff, logg, monh)
 
-        return self.interpolate(abund, teff, logg, monh)
+        return self.interpolate(rabund, teff, logg, monh)
 
     def read_grid(self, rabund, teff, logg, monh):
         """ Read the NLTE coefficients from the nlte_grid files for the given element
+        The class will cache subgrid_size points around the target values as well
 
         Parameters
         ----------
-        sme : SME_Struct
-            sme structure with parameters and nlte grid locations
-        elem : str
-            current element name
+        rabund : float
+            relative (to solar) abundance of the element
+        teff : float
+            temperature in Kelvin
+        logg : float
+            surface gravity in log(cgs)
+        monh : float
+            Metallicity in H=12
 
         Returns
         -------
@@ -230,7 +252,7 @@ class Grid:
                 self.bgrid[:, :, i, j, k, l] = self.directory[model]
             else:
                 warnings.warn(
-                    f"Missing Model for element {self.elem}: T={self.teff[t[j]]}, logg={self.grav[g[k]]}, feh={self.feh[f[l]]}, abund={self.xfe[x[i]]:.2f}"
+                    f"Missing Model for element {self.elem}: T={self._teff[t[j]]}, logg={self._grav[g[k]]}, feh={self._feh[f[l]]}, abund={self._xfe[x[i]]:.2f}"
                 )
         mask = np.zeros(self._depth.shape[:-1], bool)
         for i, j, k in itertools.product(f, g, t):
@@ -290,12 +312,6 @@ class Grid:
 
         Parameters
         ----------
-        sme : SME_Struct
-            SME input structure. Communicates the linelist.
-        elem: str
-            atomic element for which departure coefficients are given
-        bgrid : array (nd, nl, nx, nt, ng, nf,)
-            grid of departure coefficients
         conf : array (nl,)
             electronic configuration (for identification), e.g., 2p6.5s
         term : array (nl,)
@@ -390,18 +406,20 @@ class Grid:
         # bgrid, level_labels, linelevels, lineindices
         return self.bgrid, self.linerefs, self.lineindices
 
-    def interpolate(self, abund, teff, logg, monh):
+    def interpolate(self, rabund, teff, logg, monh):
         """
         interpolate nlte coefficients on the model grid
 
         Parameters
         ----------
-        sme : SME_Struct
-            sme structure with parameters and atmosphere
-        elem : str
-            Name of the NLTE element element
-        nlte_grid : dict
-            NLTE parameter grid (usually from read_grid)
+        rabund : float
+            relative (to solar) abundance of the element
+        teff : float
+            temperature in Kelvin
+        logg : float
+            surface gravity in log(cgs)
+        monh : float
+            Metallicity in H=12
 
         Returns
         -------
@@ -414,8 +432,7 @@ class Grid:
 
         # Interpolate on the grid
         # self._points and self._grid are interpolated when reading the data in read_grid
-        abund = abund - self.solar
-        target = (abund, teff, logg, monh)
+        target = (rabund, teff, logg, monh)
         subgrid = interpolate.interpn(
             self._points, self._grid, target, bounds_error=False, fill_value=None
         )
@@ -440,11 +457,11 @@ def nlte(sme, dll, elem):
 
 
 # TODO should this be in sme_synth instead ?
-def update_depcoeffs(sme, dll):
+def update_nlte_coefficients(sme, dll):
     """ pass departure coefficients to C library """
 
     # Only print "Running in NLTE" message on the first run each time
-    self = update_depcoeffs
+    self = update_nlte_coefficients
     if not hasattr(self, "first"):
         setattr(self, "first", True)
 
@@ -469,8 +486,6 @@ def update_depcoeffs(sme, dll):
                 "Line formation will proceed under LTE."
             )
         return sme
-
-    # TODO store results for later reuse
 
     # Reset the departure coefficient every time, just to be sure
     # It would be more efficient to just Update the values, but this doesn't take long

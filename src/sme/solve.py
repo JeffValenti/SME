@@ -22,7 +22,7 @@ from .abund import Abund
 from .atmosphere import interp_atmo_grid, krz_file, AtmosphereError
 from .continuum_and_radial_velocity import match_rv_continuum
 from .integrate_flux import integrate_flux
-from .nlte import update_depcoeffs
+from .nlte import update_nlte_coefficients
 from .util import safe_interpolation
 from .uncertainties import uncertainties
 
@@ -625,7 +625,7 @@ def synthesize_spectrum(
         dll.SetVWscale(sme.gam6)
         dll.SetH2broad(sme.h2broad)
     if passNLTE:
-        update_depcoeffs(sme, dll)
+        update_nlte_coefficients(sme, dll)
 
     # Loop over segments
     #   Input Wavelength range and Opacity
