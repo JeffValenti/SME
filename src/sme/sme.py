@@ -1034,7 +1034,7 @@ class SME_Struct(Param):
 
         return s
 
-    def save(self, filename="sme.npz", verbose=True):
+    def save(self, filename="sme.npz", overwrite=False):
         """
         Save SME data to disk (compressed)
 
@@ -1047,8 +1047,16 @@ class SME_Struct(Param):
             if True will log the event
         """
 
-        if verbose:
-            logging.info("Saving SME structure %s", filename)
+        if not overwrite:
+            orig = filename
+            if orig.endswith(".npz"):
+                orig = orig[:-4]
+            i = 1
+            while os.path.exists(filename):
+                filename = f"{orig}_{i:02}.npz"
+                i += 1
+
+        logging.info("Saving SME structure %s", filename)
         np.savez_compressed(filename, sme=self)
 
 

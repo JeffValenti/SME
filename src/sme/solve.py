@@ -111,7 +111,10 @@ def residuals(
 
     # Also save intermediary results, because we can
     if save:
-        sme2.save(fname, verbose=False)
+        if fname.endswith(".npz"):
+            fname = fname[:-4]
+        fname = f"{fname}_tmp.npz"
+        sme2.save(fname, overwrite=True)
 
     if segments == "all":
         segments = range(sme.nseg)
@@ -165,11 +168,11 @@ def jacobian(param, *args, bounds=None, segments="all", **_):
     )
 
 
-def linelist_errors(wave, spec, linelist):
+def linelist_errors(dll, wave, spec, linelist):
     """ make linelist errors, based on the effective wavelength range
     of each line and the uncertainty value of that line """
     rel_error = linelist.error
-    width = sme_synth.GetLineRange()
+    width = dll.GetLineRange()
 
     sig_syst = np.zeros(wave.size, dtype=float)
 
@@ -708,8 +711,8 @@ def synthesize_spectrum(
 
     # Merge all segments
     # if sme already has a wavelength this should be the same
-    wind = np.cumsum(wind)
-    sme.wind = wind
+
+    sme.wind = wind = np.cumsum(wind)
     sme.wint = wint
 
     if "wave" not in sme:
@@ -723,7 +726,8 @@ def synthesize_spectrum(
         sme.synth[s] = smod[s]
 
     if sme.cscale_flag != "fix":
-        sme.cscale = np.stack(cscale)
+        for s in segments:
+            sme.cscale[s] = cscale[s]
 
     sme.vrad = np.asarray(vrad)
     sme.nlte.flags = dll.GetNLTEflags()

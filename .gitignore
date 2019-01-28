@@ -141,3 +141,6 @@ src/sme/atmospheres/*
 test.py
 *.ech
 *.npy.tar.gz
+mymain.py
+*.tar.gz
+*.npz
