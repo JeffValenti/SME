@@ -166,7 +166,7 @@ class LibSme:
                 self._atomic = Array2D(c_double, nlines, m)
                 self._atomic.data[2][:] = linelist.wlcent
                 self._atomic.data[3][:] = linelist.excit
-                self._atomic.data[4][:] = linelist.gflog
+                self._atomic.data[4][:] = linelist.loggf
                 self._atomic.data[5][:] = linelist.gamrad
                 self._atomic.data[6][:] = linelist.gamqst
                 self._atomic.data[7][:] = linelist.gamvw
@@ -242,7 +242,7 @@ class LibSme:
                 self._atomic = Array2D(c_double, nlines, m)
                 self._atomic.data[2][:] = linelist.wlcent
                 self._atomic.data[3][:] = linelist.excit
-                self._atomic.data[4][:] = linelist.gflog
+                self._atomic.data[4][:] = linelist.loggf
                 self._atomic.data[5][:] = linelist.gamrad
                 self._atomic.data[6][:] = linelist.gamqst
                 self._atomic.data[7][:] = linelist.gamvw

@@ -1,5 +1,5 @@
 from sme.dll import LibSme
-from sme.vald import LineList
+from sme.vald import LineList, ValdShortLine
 from math import log10
 
 
@@ -10,10 +10,18 @@ def test_basic():
     libsme.SetVWscale(2.5)
     libsme.SetH2broad()
 
+    shorts = [
+        "'Ti 1',       6554.2230,   1.4432, 1.0, -1.150, 7.870,-6.070,"
+        " 284.261,  1.070, 0.606, '   9 wl:LGWSC   9 LGWSC   9 gf:LGWSC"
+        "   7 K10   7 K10   7 K10  10 BPM Ti            '",
+        "'MgH 1',      6556.8086,   0.9240, 1.0, -0.867, 7.060, 0.000,"
+        "   0.000, 99.000, 0.021, '  12 KMGH  12 KMGH  12 KMGH"
+        "  12 KMGH  12 KMGH  12 KMGH  12 KMGH (24)MgH       '"
+        ]
+
     linelist = LineList()
-    linelist.add('Fe 1', 5502.9931, 0.9582, -3.047, 7.19, -6.22, 239.249)
-    linelist.add('Cr 2', 5503.5955, 4.1682, -2.117, 8.37, -6.49, 195.248)
-    linelist.add('Mn 1', 5504.0000, 2.0000, -3.000, 8.00, -6.50, 200.247)
+    for short in shorts:
+        linelist.add(ValdShortLine(short))
 
     libsme.InputLineList(linelist)
     outlist = libsme.OutputLineList()
