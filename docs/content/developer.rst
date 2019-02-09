@@ -184,7 +184,7 @@ covered by unit tests. Unit tests should cover 100% of statements.
 
     $ cd SME
     SME$ source activate sme
-    (sme) SME$ pytest -v --cov=sme
+    (sme) SME$ pytest -v --cov=sme --cov-report html
 
 To see which specific statements are not covered, use a web browser
 to view the file :file:`htmlcov/index.html` and then click each
