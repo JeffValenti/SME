@@ -10,7 +10,7 @@ def test_basic():
     libsme.SetVWscale(2.5)
     libsme.SetH2broad()
 
-    shorts = [
+    vald_short_line_strings = [
         "'Ti 1',       6554.2230,   1.4432, 1.0, -1.150, 7.870,-6.070,"
         " 284.261,  1.070, 0.606, '   9 wl:LGWSC   9 LGWSC   9 gf:LGWSC"
         "   7 K10   7 K10   7 K10  10 BPM Ti            '",
@@ -20,8 +20,8 @@ def test_basic():
         ]
 
     linelist = LineList()
-    for short in shorts:
-        linelist.add(ValdShortLine(short))
+    for vsl in vald_short_line_strings:
+        linelist.append(ValdShortLine(vsl))
 
     libsme.InputLineList(linelist)
     outlist = libsme.OutputLineList()
