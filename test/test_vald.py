@@ -11,7 +11,7 @@ gamqst = -6.22
 gamvw = 239.249
 linedata = [species, wlcent, excit, loggf, gamrad, gamqst, gamvw]
 
-shorts = [
+vald_short_line_strings = [
     "'Ti 1',       6554.2230,   1.4432, 1.0, -1.150, 7.870,-6.070,"
     " 284.261,  1.070, 0.606, '   9 wl:LGWSC   9 LGWSC   9 gf:LGWSC"
     "   7 K10   7 K10   7 K10  10 BPM Ti            '",
@@ -28,15 +28,13 @@ shorts = [
 
 
 def test_valdshortline():
-    for short in shorts:
-        vsl = ValdShortLine(short)
-        str = vsl.__str__()
-        print(str)
-        print(short)
-        assert str == short
+    for vslstr in vald_short_line_strings:
+        vsl = ValdShortLine(vslstr)
+        assert vsl.__str__() == vslstr
+        assert vsl.__repr__() == type(vsl).__name__ + f'({vslstr!r})'
 
 
-def test_line_init():
+def test_smeline():
     """Test that property values equal line data passed to __init__().
     """
     line = SmeLine(*linedata)
@@ -48,6 +46,11 @@ def test_line_init():
     assert line.gamrad == gamrad
     assert line.gamqst == gamqst
     assert line.gamvw == gamvw
+    line2 = eval(repr(line))
+    assert line == line2
+    line2.excit += 0.1
+    assert not line == line2
+    assert not line == None
 
 
 def test_linelist_add_and_len():
