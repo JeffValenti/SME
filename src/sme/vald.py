@@ -239,16 +239,12 @@ class LineList:
     def gamvw(self):
         return [line.gamvw for line in self._lines]
 
-    @property
-    def lande_mean(self):
-        return [line.lande_mean for line in self._lines]
-
-    @property
-    def depth(self):
-        return [line.depth for line in self._lines]
-
-    def add(self, line):
-        self._lines.append(line)
+    def append(self, line):
+        valid_types = [SmeLine, ValdShortLine, ValdLongLine]
+        if type(line) in valid_types:
+            self._lines.append(line)
+        else:
+            raise TypeError('Invalid type for LineList')
 
 
 class ValdFile:
@@ -349,10 +345,10 @@ class ValdFile:
         linelist = LineList()
         if self._format == 'short':
             for line in lines:
-                linelist.add(ValdShortLine(line))
+                linelist.append(ValdShortLine(line))
         elif self._format == 'long':
             for chunk in zip_longest(*[iter(lines)]*4):
-                linelist.add(ValdLongLine(chunk))
+                linelist.append(ValdLongLine(chunk))
         else:
             raise FileError(f'{self._filename} has unknown format')
         return linelist
