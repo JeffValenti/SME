@@ -24,19 +24,35 @@ class SmeLine:
     def __str__(self):
         """Return comma separated list of line data.
         """
-        return "{:13s}{:10.4f},{:9.4f},{:7.3f},{:6.3f},{:7.3f},{:8.3f}". \
-            format(
-                "'" + self.species + "',",
-                self.wlcent,
-                self.excit,
-                self.loggf,
-                self.gamrad,
-                self.gamqst,
-                self.gamvw
-                )
+        quote_species_quote_comma = "'" + self.species + "',"
+        return \
+            f"{quote_species_quote_comma:13s}" \
+            f"{self.wlcent:10.4f}," \
+            f"{self.excit:9.4f}," \
+            f"{self.loggf:7.3f}," \
+            f"{self.gamrad:6.3f}," \
+            f"{self.gamqst:6.3f}," \
+            f"{self.gamvw:8.3f}"
 
     def __repr__(self):
-        return "SmeLine({})".format(self.__str__())
+        """Return python string representation of this object.
+        """
+        return f'{self.__class__.__name__}({self.__str__()})'
+
+    def __eq__(self, other):
+        """Return true if both arguments are SmeLine objects with
+        identical lines parameters.
+        """
+        if self.__class__ is other.__class__:
+            return self.species == other.species and \
+                self.wlcent == other.wlcent and \
+                self.excit == other.excit and \
+                self.loggf == other.loggf and \
+                self.gamrad == other.gamrad and \
+                self.gamqst == other.gamqst and \
+                self.gamvw == other.gamvw
+        else:
+            return False
 
 
 class ValdShortLine:
@@ -81,7 +97,9 @@ class ValdShortLine:
                 )
 
     def __repr__(self):
-        return 'ValdShortLine("{}")'.format(self.__str__())
+        """Return python string representation of this object.
+        """
+        return f'{self.__class__.__name__}({self.__str__()!r})'
 
 
 class ValdShortRef:
@@ -114,8 +132,8 @@ class ValdShortRef:
             id = [self.id] * 7
             ref = [self.ref] * 7
         else:
-            id = self.id
-            ref = self.ref
+            id = self.id.copy()
+            ref = self.ref.copy()
         if self.wlgf_labels:
             ref[0] = 'wl:' + ref[0]
             ref[2] = 'gf:' + ref[2]
