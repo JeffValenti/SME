@@ -58,7 +58,7 @@ class SmeLine:
 class ValdShortLine:
     """Data for one atomic or molecular line from a short-format VALD file.
     """
-    def __init__(self, line):
+    def __init__(self, line, wlmedium=None, wlunits=None, exunits=None):
         data, shortref = line.strip().split(", '")
         words = [w.strip() for w in data.split(',')]
         assert len(words) >= 8
@@ -80,21 +80,19 @@ class ValdShortLine:
     def __str__(self):
         """Return line data as they would appear in a VALD line data file.
         """
-        return '{:13s}{:10.4f},{:9.4f},{:4.1f},{:7.3f},{:6.3f},{:6.3f},' \
-            '{:8.3f},{:7.3f},{:6.3f}, {}'. \
-            format(
-                "'" + self.species + "',",
-                self.wlcent,
-                self.excit,
-                self.vmicro,
-                self.loggf,
-                self.gamrad,
-                self.gamqst,
-                self.gamvw,
-                self.lande_mean,
-                self.depth,
-                self.ref
-                )
+        quote_species_quote_comma = "'" + self.species + "',"
+        return \
+            f"{quote_species_quote_comma:13s}" \
+            f"{self.wlcent:10.4f}," \
+            f"{self.excit:9.4f}," \
+            f"{self.vmicro:4.1f}," \
+            f"{self.loggf:7.3f}," \
+            f"{self.gamrad:6.3f}," \
+            f"{self.gamqst:6.3f}," \
+            f"{self.gamvw:8.3f}," \
+            f"{self.lande_mean:7.3f}," \
+            f"{self.depth:6.3f}, " \
+            f"{self.ref}"
 
     def __repr__(self):
         """Return python string representation of this object.
@@ -345,7 +343,8 @@ class ValdFile:
         linelist = LineList()
         if self._format == 'short':
             for line in lines:
-                linelist.append(ValdShortLine(line))
+                linelist.append(ValdShortLine(
+                    line, self.wlmedium, self.wlunits, self.exunits))
         elif self._format == 'long':
             for chunk in zip_longest(*[iter(lines)]*4):
                 linelist.append(ValdLongLine(chunk))
