@@ -1,6 +1,6 @@
 from pathlib import Path
 import pytest
-from config import SmeConfig
+from sme.config import SmeConfig
 
 
 def test_smeconfig():
