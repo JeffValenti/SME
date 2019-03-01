@@ -25,7 +25,7 @@ class Abund:
             each element in any form relative to the number of hydrogen
             in any form plus an offset of 12. For the Sun, the nuclei
             abundance values of H, He, and Li are approximately 12,
-            10.9, and 1.05.
+            10.9, and 1.05. ???
     """
     def __init__(self, monh, pattern, type=None):
         self.monh = monh
