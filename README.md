@@ -1,6 +1,7 @@
 # SME
 [![Build Status](https://travis-ci.org/JeffValenti/SME.svg?branch=master)](https://travis-ci.org/JeffValenti/SME)
 [![Documentation Status](https://readthedocs.org/projects/sme/badge/?version=latest)](https://sme.readthedocs.io/en/latest/?badge=latest)
+[![Updates](https://pyup.io/repos/github/JeffValenti/SME/shield.svg)](https://pyup.io/repos/github/JeffValenti/SME/)
 
 Spectroscopy Made Easy (SME) is a software tool that fits an observed
 spectrum of a star with a model spectrum. Since its initial release in
