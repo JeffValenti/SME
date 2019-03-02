@@ -1,4 +1,7 @@
 # SME
+[![Build Status](https://travis-ci.org/JeffValenti/SME.svg?branch=master)](https://travis-ci.org/JeffValenti/SME)
+[![Documentation Status](https://readthedocs.org/projects/sme/badge/?version=latest)](https://sme.readthedocs.io/en/latest/?badge=latest)
+
 Spectroscopy Made Easy (SME) is a software tool that fits an observed
 spectrum of a star with a model spectrum. Since its initial release in
 [1996](http://adsabs.harvard.edu/abs/1996A%26AS..118..595V), SME has been a
@@ -25,4 +28,3 @@ Developer and user documentation available at
 [readthedocs](https://sme.readthedocs.io/en/latest/index.html).
 Continuous integration build results available at
 [Travis CI](https://travis-ci.org/JeffValenti/SME/builds).
-
