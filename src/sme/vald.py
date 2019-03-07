@@ -21,31 +21,59 @@ class SmeLine:
         case (e.g., 'Co'). Molecule name is a sequence of atom names (e.g.,
         'CO') with multiplicity factors as needed (e.g., 'H2O') Ionization
         state is a number: '1' for neutral, '2' for singly ionized, etc.
-        Examples: 'C 4', 'Co 2', 'CO 1', 'H2O 1'.
-    wlcent : float or string that yields a float (e.g., '6564.6100')
+        *Examples:* ``'C 4'``, ``'Co 2'``, ``'CO 1'``, or ``'H2O 1``'.
+    wlcent : float or str that yields a float
         Wavelength (in Angstroms) of the transition.
-    excit : float or string that yields a float (e.g., '10.1988')
+        *Examples:* ``6564.61`` or ``'6564.6100'``.
+    excit : float or str that yields a float
         Energy (in eV) of the lower state of the transition.
-    loggf : float or string that yields a float (e.g., '0.710')
+        *Examples:* ``10.1988`` or ``'10.1988'``.
+    loggf : float or str that yields a float
         Logarithm of the product of the statistical weight (g) of the lower
         state of the transition times the oscillator strength (f) of the
-        transition.
-    gamrad : float or string that yields a float (e.g., '8.766')
+        transition. *Examples:* ``0.71`` or ``'0.710'``.
+    gamrad : float or str that yields a float
         Logarithm of the radiative damping parameter for the transition.
-    gamqst : float or string that yields a float (e.g., '2')
+        *Examples:* ``8.766`` or ``'8.766'``.
+    gamqst : float or str that yields a float
         For species other than atomic hydrogen, logarithm of the quadratic
-        Stark broading parameter for the transition (e.g., '-6.140'). For
-        atomic hydrogen, principal quantum number (n) of the lower state.
-    gamvw : float or string that yields a float (e.g., '3')
+        Stark broading parameter for the transition. For atomic hydrogen,
+        principal quantum number (n) of the lower state. A value of zero
+        requests use of an approximate Stark broadening formula from
+        Cowley (1971).
+        *Examples:* ``-6.14``, ``'-6.14'``, ``2``, ``'2.000'``, ``0``,
+        or ``'0.000'``.
+    gamvw : float or str that yields a float
         For species other than atomic hydrogen and value less than zero,
         logarithm of the van der Waals collisional broading parameter for
         the transition at 10000 K (e.g., '-7.510'). For species other than
         atomic hydrogen and value greater than 20, broadening cross section
         (sigma in atomic units) at 10 km/s  and velocity exponent (alpha)
         packed into a single parameter int(sigma)+alpha (e.g., '230.192').
-        See http://www.astro.uu.se/%7Ebarklem/howto.html for more info.
+        See Barklem for more info.
         For atomic hydrogen, principal quantum number (n) of the upper state.
         A value of zero requests use of the Unsold approximation (1955).
+        *Examples:* ``-7.510``, ``'-7.510'``, ``230.192``, ``'230.192'``,
+        ``3``, ``'3'``, ``0``, or ``'0.000'``.
+    gamvw : float or str that yields a float
+        Van der Waals damping parameter (line FWHM per perturber in units
+        of rad/s cm**3) at 10000 K for collisions with neutral species.
+        For species other than hydrogen:
+
+        * A value less than zero is the base 10 logarithm of the damping
+          parameter. *Examples:* ``-7.510`` or ``'-7.510'``.
+        * A value of zero indicates that no damping parameter is specified.
+          In such cases, SME uses a modified Unsold (1955) approximation to
+          calculate the damping parameter. *Examples:* ``0`` or ``'0.000'``.
+        * A value greater than 20 is the broadening cross section (sigma in
+          atomic units) at 10 km/s and the velocity exponent (alpha), packed
+          into a single parameter, int(sigma)+alpha. See Barklem (1998) for
+          more information. *Examples:* ``230.192`` or ``'230.192'``.
+
+        For atomic hydrogen:
+
+        * Principal quantum number (n) of the upper state.
+          *Examples:* ``3`` or ``'3'``.
 
     Notes
     -----
@@ -56,9 +84,13 @@ class SmeLine:
 
     References
     ----------
-    http://www.astro.uu.se/valdwiki/select_output
-    http://www.astro.uu.se/%7Ebarklem/howto.html
-    Barklem, Anstee, and O'Mara - 1998PASA...15..336B
+    | VALD3 output formats for Extract Stellar request
+    |   http://www.astro.uu.se/valdwiki/select_output
+    | Barklem et al. (1998)
+    |   https://ui.adsabs.harvard.edu/#abs/2000A&AS..142..467B
+    |   https://www.astro.uu.se/%7Ebarklem/howto.html
+    | Cowley (1971)
+    |   https://ui.adsabs.harvard.edu/#abs/1971Obs....91..139C
 
     Examples
     --------
@@ -81,6 +113,7 @@ class SmeLine:
         -------
         >>> print(line)
         'Co 1',       6565.2100,   2.0420,  3.930, 7.700,-6.140, 270.243
+
         """
         quote_species_quote_comma = "'" + self.species + "',"
         return ' '.join(
@@ -95,11 +128,12 @@ class SmeLine:
     def __repr__(self):
         """Return python string representation of this object.
 
-        Example
-        -------
+        Examples
+        --------
         >>> line = SmeLine('Co 1', 6565.21, 2.042, 3.93, 7.70, -6.14, 270.243)
         >>> repr(line)
         "SmeLine('Co 1', 6565.2100, 2.0420, 3.930, 7.700,-6.140, 270.243)"
+
         """
         return f'{self.__class__.__name__}({self.__str__()})'
 
@@ -111,12 +145,13 @@ class SmeLine:
         other : SmeLine object
             Another spectral line to compare with this spectral line.
 
-        Example
-        -------
+        Examples
+        --------
         >>> line1 = SmeLine('Co 1', 6565.21, 2.042, 3.93, 7.70, -6.14, 270.243)
         >>> line2 = SmeLine('Co 1', 6565.21, 2.042, 3.93, 7.70, -6.14, 270.243)
         >>> line1 == line2, line1.__eq__(line2), line1 is line2
         (True, True, False)
+
         """
         if self.__class__ is other.__class__:
             return self.species == other.species and \

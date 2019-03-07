@@ -1,5 +1,6 @@
-Spectroscopy Made Easy (SME)
-============================
+======================
+Spectroscopy Made Easy
+======================
 
 Spectroscopy Made Easy (SME) is a software tool that fits an observed
 spectrum of a star with a model spectrum. Since its initial release
@@ -27,4 +28,5 @@ with those parameters.
 
    Home <self>
    content/user.rst
+   content/modules.rst
    content/developer.rst
