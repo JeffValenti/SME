@@ -1,5 +1,5 @@
 from scipy.io import readsav
-from abund import Abund
+from .abund import Abund
 
 
 class Param:
