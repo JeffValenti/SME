@@ -6,6 +6,8 @@ dependencies:
   - coverage
   - cython
   - flake8
+  - matplotlib
+  - numpy
   - pip
   - python
   - pytest-cov
