@@ -21,6 +21,13 @@ abund.py
 .. automodule:: sme.abund
    :members:
 
+********
+atmo.py
+********
+
+.. automodule:: sme.atmo
+   :members:
+
 ******
 dll.py
 ******
