@@ -1,92 +1,212 @@
-class OpacityFlags(dict):
-    """Manage opacity flags, which are passed to SME external library.
+from sys import version_info
+
+
+class ContinuousOpacityFlags(dict):
+    """Manage continuous opacity flags needed by the SME external library.
+
+    Subclass of the standard dict class. Initialization populates dict
+    with one item per continuous opacity source. Key identifies the opacity
+    source (e.g., 'H-'). Value indicates whether the SME external library
+    should include the continuous opacity source (True or False).
+
+    Use standard dictionary syntax to get a flag value (e.g., cof['H-'])
+    or to set a flag (e.g., cof['H-'] = False). Attempting to set a flag
+    raises ValueError if the key is not a valid continuous opacity source
+    (e.g., 'H++') or the value is not boolean (e.g., 1).
+
+    Overrides __str__() so that print lists keys (opacity sources) with
+    value True followed by keys with value False. The cof.smelib property
+    returns flag values as integers (0 or 1) for use with the SME external
+    library.
+
+    Example
+    -------
+    >>> from sme.atmo import ContinuousOpacityFlags
+    >>> cof = ContinuousOpacityFlags()
+    >>> print(cof.smelib)
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    >>> cof['hot'] = False
+    >>> print(cof)
+    True: H H2+ H- HRay He He+ He- HeRay cool luke e- H2Ray | False: hot
     """
 
-    def __init__(self, values='defaults'):
+    def __init__(self):
+        """Create continuous opacity flags object with default values.
+        Key order in _defaults must match order expected by SME library.
         """
-        Parameters
-        ---------
-        values : str or dictionary-like object or list-like object
+        self._defaults = {
+            'H': True, 'H2+': True, 'H-': True, 'HRay': True, 'He': True,
+            'He+': True, 'He-': True, 'HeRay': True, 'cool': True,
+            'luke': True, 'hot': True, 'e-': True, 'H2Ray': True}
+        self.defaults()
+
+    def __setitem__(self, key, value):
+        """Set value of a continuous opacity flag. Raise ValueError exception
+        if continuous opacity key is not valid or if the value is not boolean.
         """
-        self._int_to_bool = (False, True)
-        self._order = (
-            'H', 'H2+', 'H-', 'HRay', 'He', 'He+', 'He-',
-            'HeRay', 'cool', 'luke', 'hot', 'e-', 'H2Ray')
-        if values == 'defaults':
-            self.defaults()
-        else:
-            if values.keys:
-                self.from_dict(values)
-            else:
-                self.from_list(values)
+        if key not in self._defaults:
+            raise ValueError(
+                f'Invalid continuous opacity key: {key}\n' +
+                'Valid keys: ' + ' '.join(self._defaults))
+        if not isinstance(value, bool):
+            raise ValueError(
+                f'Invalid continuous opacity flag value: {value}\n' +
+                'Valid values: True False')
+        super().__setitem__(key, value)
+
+    def __str__(self):
+        """Return string that summarizes continuous opacity flag values.
+        """
+        return(' '.join([
+            'True:', *[k for k, v in self.items() if v is True], '|',
+            'False:', *[k for k, v in self.items() if v is False]]))
 
     def defaults(self):
-        """Set every opacity flag to the default value, which is True.
-        By default, all sources of opacity are used.
+        """Set each continuous opacity flag to its default value.
         """
-        for key in self._order:
-            self[key] = True
+        for key in self._defaults:
+            self[key] = self._defaults[key]
 
-    def from_dict(self, values):
-        """Set one or more opacity flags based on input dictionary-like object.
-        Keys of input dictionary-like object must be valid opacity flag names.
-        Values in input dictionary must be a boolean (True or False).
+    @property
+    def smelib(self):
+        """Get opacity flag values as list of integers (0 for False,
+        1 for True) in the order expected by the SME external library.
+        Python 3.7 or later required because code assumes dict is ordered.
         """
-        assert values.keys
-        for key, value in values.items():
-            assert key in self._order
-            assert type(value) is bool
-            self[key] = value
-
-    def from_list_of_ints(self, values):
-        """Set the value of the
-        """
-        assert len(values) <= len(self._order)
-        for i, value in enumerate(values):
-            assert type(value) is int
-            try:
-                self[self._order[i]] = self._int_to_bool[value]
-            except IndexError:
-                raise(
-                    f'integer values for opacity flags must be 0 or 1\n'
-                    f'value for {self._order[i]} opacity flag was {value}')
-
-    def summary(self):
-        """Return short string listing separately True and False opacity flags.
-        """
-        out = [
-            'True:', *[k for k, v in self.items() if v is True],
-            ', False:', *[k for k, v in self.items() if v is False]]
-        return(' '.join(out))
+        assert version_info[0:2] >= (3, 7)
+        return(list(map(lambda x: 1 if x is True else 0, self.values())))
 
 
 class SmeAtmo:
     """Manage atmosphere attributes used by the SME external library.
 
-    Attributes
+    Parameters
     ----------
-    geometry : str
-        Geometry of the model atmosphere. Use 'rhox' for a plane-parallel
-        geometry on a mass column scale. Use 'tau' for a plane-parallel
-        geometry on a continuum optical depth scale. Use 'sph' for a
-        spherical geometry on a height scale. Case insensitive.
-
     radius : float
         Stellar radius (in cm) base of atmosphere grid. Mandatory for
         spherical geometry. Not allowed for plane-parallel geometry.
 
     opacity_flags : dictionary
+        Text
 
-    External Library Notes
-    ----------------------
+    Notes
+    -----
     Data in this class yield arguments required by the InputModel() external
     function in the SME external library. Those arguments are:
 
-    arg[0] : Number of depths in the atmosphere
-    arg[1] : Reserved for future use (currently read into TEFF, but not used)
-    arg[2] : Reserved for future use (currently read into GRAV, but not used)
-    arg[3] : Wavelength for reference continuous opacities (used if MOTYPE=0)
-    arg[4] : Type of  model atmosphere ('TAU', 'RHOX', or 'SPH')
+    ====== ================================================================
+    arg[0] Number of depths in the atmosphere
+    arg[1] Reserved for future use (currently read into TEFF, but not used)
+    arg[2] Reserved for future use (currently read into GRAV, but not used)
+    arg[3] Wavelength for reference continuous opacities (used if MOTYPE=0)
+    arg[4] Type of  model atmosphere ('TAU', 'RHOX', or 'SPH')
+    ====== ================================================================
     """
-    def __init__(self):
-        print('placeholder')
+    def __init__(self, modeltype, scale, wavelength=None, radius=None):
+        self._modeltypes = ['rhox', 'tau', 'sph']
+        self.set_scale(modeltype, scale, wavelength=wavelength, radius=radius)
+
+    def __str__(self):
+        """Return string that summarizes atmosphere.
+        """
+        return(
+            f'modeltype: {self.modeltype}, ' +
+            f'wavelength: {self.wavelength}, ' +
+            f'radius: {self.radius}' +
+            f'nlayer: {self.nlayer}')
+
+    @property
+    def modeltype(self):
+        """Combination of radiative transfer geometry (plane parallel or
+        spherical) and depth scale type (mass column, continuum optical
+        depth, or height). The SME external library can handle the
+        following model types:
+
+        ====== ============== ======================= =======
+        Value  Geometry       Depth scale type        Units
+        ====== ============== ======================= =======
+        'rhox' plane-parallel mass column             g/cm**2
+        'tau'  plane-parallel continuum optical depth
+        'sph'  spherical      height                  cm
+        ====== ============== ======================= =======
+
+        This read only property is set when an atmosphere is loaded.
+        """
+        return(self._modeltype)
+
+    @property
+    def wavelength(self):
+        """Wavelength (in Angstrom) of continuum optical depth scale.
+        Set for modeltype 'tau', otherwise None. This read only property
+        is set when an atmosphere is loaded.
+        """
+        return(self._wavelength)
+
+    @property
+    def radius(self):
+        """Radius (in cm) of deepest point in an atmosphere grid. Set
+        for modeltype 'sph', otherwise None. This read only property is
+        set when an atmosphere is loaded.
+        """
+        return(self._radius)
+
+    @property
+    def scale(self):
+        """Physical scale for each layer in the atmosphere. See `modeltype`
+        for description of scale types (mass column, continuum optical depth,
+        or height). This read only property is set when an atmosphere is
+        loaded.
+        """
+        return(self._scale)
+
+    @property
+    def nlayer(self):
+        """Number of layers (depths or heights) in the model atmosphere.
+        This read only property is set when an atmosphere is loaded.
+        """
+        return(self._nlayer)
+
+    def set_scale(self, modeltype, scale, wavelength=None, radius=None):
+        """Set model type and atmosphere scale. Input modeltype is case
+        insensitive, but will be forced to lowercase for subsequent use.
+        For modeltype 'tau', specify wavelength of the continuum optical
+        depth scale. For modeltype 'sph', specify stellar radius (in cm)
+        of deepest point in the atmosphere grid.
+
+        Setting a new scale updates the number oflayers and invalidates
+        existing values of temperature, electron number density, total
+        number density, and mass density at each layer in the atmosphere.
+
+        Raise ValueError exception if modeltype is not valid.
+        Raise AttributeError exception if wavelength and/or radius
+        are missing when expected or specifed when not expected.
+        """
+        if modeltype.lower() not in self._modeltypes:
+            raise ValueError(
+                f'Invalid modeltype: {modeltype}\n' +
+                'Valid modeltypes: ' + ' '.join(self._modeltypes))
+        self._modeltype = modeltype.lower()
+        self._radius = None
+        self._wavelength = None
+        if self.modeltype == 'rhox':
+            if wavelength is not None or radius is not None:
+                raise AttributeError(
+                    "For modeltype 'rhox' do not specify wavelength or radius")
+        if self.modeltype == 'tau':
+            if wavelength is None or radius is not None:
+                raise AttributeError(
+                    "For modeltype 'tau' specify wavelength but not radius")
+            else:
+                self._wavelength = float(wavelength)
+        if self.modeltype == 'sph':
+            if wavelength is not None or radius is None:
+                raise AttributeError(
+                    "For modeltype 'sph' specify radius but not wavelength")
+            else:
+                self._radius = float(radius)
+        self._scale = scale
+        self._nlayer = len(self.scale)
+        self._temperature = None
+        self._elecnumbdens = None
+        self._atomnumbdens = None
+        self._massdensity = None
