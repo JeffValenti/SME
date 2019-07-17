@@ -3,7 +3,7 @@ from collections import OrderedDict
 
 
 class Abund:
-    """Manage elemental abundance data and methods.
+    """Manage elemental abundances via metallicity and an abundance pattern.
 
     Attributes
     ----------
@@ -88,15 +88,20 @@ class Abund:
 
     def __str__(self):
         a = list(self.get_pattern('H=12').values())
-        a = a[0:2] + [ab+self._monh for ab in a[2:]]
-        out = ' [M/H]={:.3f} applied to abundance pattern. ' \
-            'Values below are abundances.\n'.format(self._monh)
+        for i in range(2, len(a)-1):
+            if a[i]:
+                a[i] += self._monh
+        out = f'Abundances obtained by applying [M/H]={self._monh:.3f}' \
+            ' to the abundance pattern.\n'
         for i in range(9):
             for j in range(11):
-                out += '  {:<5s}'.format(self._elem[11*i+j])
+                out += f'  {self._elem[11*i+j]:<5s}'
             out += '\n'
             for j in range(11):
-                out += '{:7.3f}'.format(a[11*i+j])
+                if a[11*i+j]:
+                    out += f'{a[11*i+j]:7.3f}'
+                else:
+                    out += '  None '
             if i < 8:
                 out += '\n'
         return out
@@ -328,3 +333,5 @@ class Abund:
                     astr += '{:7.3f}'.format(a[11*i+j])
                 print(estr)
                 print(astr)
+
+    apply_monh = lambda monh, abund: abund + monh if abund else abund
