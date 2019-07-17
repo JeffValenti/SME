@@ -210,3 +210,101 @@ class SmeAtmo:
         self._elecnumbdens = None
         self._atomnumbdens = None
         self._massdensity = None
+
+
+class Atlas9AtmoFile:
+    """Contents of an ATLAS9 atmosphere file.
+    """
+    def __init__(self, filename):
+        self._filename = filename
+        self.read(filename)
+
+    def __str__(self):
+        if 'ON' in self.conv:
+            convstr = f'{self.conv.strip().lower()}, L/H={self.mixlen}'
+        else:
+            convstr = f'{self.conv.strip().lower()}'
+        if 'ON' in self.turb:
+            turbstr = f'{self.turb.strip().lower()}, param={self.turbparam}'
+        else:
+            turbstr = f'{self.turb.strip().lower()}'
+        return(
+            f"file='{self.filename}'\n"
+            f"teff={self.teff}, logg={self.logg}, ifop={self.ifop[1::2]}\n"
+            f"title='{self.title.strip()}'\n"
+            f"convection={convstr}, turbulence={turbstr}")
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @property
+    def teff(self):
+        return self._teff
+
+    @property
+    def logg(self):
+        return self._logg
+
+    @property
+    def title(self):
+        return self._title
+
+    @property
+    def ifop(self):
+        return self._ifop
+
+    @property
+    def conv(self):
+        return self._conv
+
+    @property
+    def mixlen(self):
+        return self._mixlen
+
+    @property
+    def turb(self):
+        return self._turb
+
+    @property
+    def turbparam(self):
+        return self._turbparam
+
+    def read(self, filename):
+        """Read data from an ATLAS9 atmosphere file.
+        """
+        with open(filename, 'r') as file:
+            lines = file.read().splitlines()
+        self.parse_header(*lines[0:4])
+
+    def parse_header(self, line0, line1, line2, line3):
+        """Parse four header lines from an ATLAS9 atmosphere file.
+        Print detailed diagnostics if expected text is not found.
+        """
+        expected = [
+            'TEFF ', '  GRAVITY', 'TITLE ', ' OPACITY IFOP',
+            ' CONVECTION ', ' TURBULENCE']
+        actual = [
+            line0[0:5], line0[12:21], line1[0:6], line2[0:13],
+            line3[0:12], line3[21:32]]
+        if expected != actual:
+            fmt = lambda e, m, a: f"  {e:15} {m:2} {a:15}"
+            quote = lambda s: "'" + s + "'"
+            print(fmt('Expected Text', '', 'Actual Text'))
+            print(fmt('---------------', '??', '---------------'))
+            for e, a in zip(expected, actual):
+                if e == a:
+                    print(fmt(quote(e), '==', quote(a)))
+                else:
+                    print(fmt(quote(e), '!=', quote(a)))
+            raise ValueError(
+                f'{self._filename} does not have expected text')
+        self._teff = float(line0[5:12])
+        self._logg = float(line0[21:29])
+        self._title = line1[6:]
+        self._ifop = line2[13:53]
+        self._conv = line3[12:16]
+        self._mixlen = float(line3[16:22])
+        self._turb = line3[32:36]
+        chop = lambda s, w: [float(s[w*i:w*(i+1)]) for i in range(len(s)//w)]
+        self._turbparam = chop(line3[36:60], 6)
