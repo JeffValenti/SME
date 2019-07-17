@@ -1,6 +1,5 @@
 import pytest
 from sme.abund import Abund
-from collections import OrderedDict
 
 
 pattern_names = ['Asplund2009', 'Grevesse2007', 'Empty']
@@ -40,7 +39,7 @@ def test_call_returns_abund_in_odict():
     abbreviations as the keys and abundances as the values.
     """
     abund = Abund(0, pattern_names[0])
-    assert isinstance(abund(), OrderedDict)
+    assert isinstance(abund(), dict)
     assert tuple(abund().keys()) == abund.elem
 
 
@@ -119,8 +118,8 @@ def test_totype_fromtype():
         # Same elements in the same order for full dictionary.
         assert copy.keys() == orig.keys()
         # Same elements have abundance defined (!= None).
-        o = OrderedDict((k, v) for k, v in orig.items() if v)
-        c = OrderedDict((k, v) for k, v in copy.items() if v)
+        o = dict((k, v) for k, v in orig.items() if v)
+        c = dict((k, v) for k, v in copy.items() if v)
         assert c.keys() == o.keys()
         # Logarithmic abundances differ by less than 1e-10.
         assert all([abs(o[k]-c[k]) < 1e-10 for k in o])

@@ -1,5 +1,4 @@
 import math
-from collections import OrderedDict
 
 
 class Abund:
@@ -48,7 +47,7 @@ class Abund:
         Apply current [M/H] value to the current abundance pattern.
         Transform the resulting abundances to the requested abundance type.
         """
-        abund = OrderedDict(
+        abund = dict(
             (el, ab+self._monh if ab is not None else ab)
             for el, ab in self._pattern.items()
             )
@@ -240,9 +239,9 @@ class Abund:
 
     def set_pattern_by_name(self, pattern_name):
         if pattern_name.lower() == 'asplund2009':
-            self._pattern = OrderedDict(zip(self._elem, self._asplund2009))
+            self._pattern = dict(zip(self._elem, self._asplund2009))
         elif pattern_name.lower() == 'grevesse2007':
-            self._pattern = OrderedDict(zip(self._elem, self._grevesse2007))
+            self._pattern = dict(zip(self._elem, self._grevesse2007))
         elif pattern_name.lower() == 'empty':
             self._pattern = self.empty_pattern()
         else:
@@ -301,7 +300,7 @@ class Abund:
     def empty_pattern(self):
         """Return an abundance pattern with value None for all elements.
         """
-        return OrderedDict.fromkeys(self._elem)
+        return dict.fromkeys(self._elem)
 
     def print(self):
         if self._pattern is None:
