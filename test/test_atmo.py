@@ -1,5 +1,6 @@
 import pytest
-from sme.atmo import ContinuousOpacityFlags, SmeAtmo
+from pathlib import Path
+from sme.atmo import Atlas9AtmoFile, ContinuousOpacityFlags, SmeAtmo
 
 
 def test_continuousopacityflags():
@@ -41,3 +42,10 @@ def test_smeatmo():
         atmo = SmeAtmo('sph', scale)
     with pytest.raises(AttributeError, match='but not wavelength'):
         atmo = SmeAtmo('sph', scale, wavelength=5000)
+
+def test_atlas9atmofile():
+    """Code coverage tests for Atlas9AtmoFile() class and methods.
+    """
+    testdir = Path(__file__).parent
+    a9file = Atlas9AtmoFile(testdir / 'atmo_atlas9_castelli.dat')
+    assert 'turbulence' in a9file.__str__()

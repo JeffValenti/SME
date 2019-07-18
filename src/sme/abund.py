@@ -1,9 +1,8 @@
 import math
-from collections import OrderedDict
 
 
 class Abund:
-    """Manage elemental abundance data and methods.
+    """Manage elemental abundances via metallicity and an abundance pattern.
 
     Attributes
     ----------
@@ -48,7 +47,7 @@ class Abund:
         Apply current [M/H] value to the current abundance pattern.
         Transform the resulting abundances to the requested abundance type.
         """
-        abund = OrderedDict(
+        abund = dict(
             (el, ab+self._monh if ab is not None else ab)
             for el, ab in self._pattern.items()
             )
@@ -88,15 +87,20 @@ class Abund:
 
     def __str__(self):
         a = list(self.get_pattern('H=12').values())
-        a = a[0:2] + [ab+self._monh for ab in a[2:]]
-        out = ' [M/H]={:.3f} applied to abundance pattern. ' \
-            'Values below are abundances.\n'.format(self._monh)
+        for i in range(2, len(a)-1):
+            if a[i]:
+                a[i] += self._monh
+        out = f'Abundances obtained by applying [M/H]={self._monh:.3f}' \
+            ' to the abundance pattern.\n'
         for i in range(9):
             for j in range(11):
-                out += '  {:<5s}'.format(self._elem[11*i+j])
+                out += f'  {self._elem[11*i+j]:<5s}'
             out += '\n'
             for j in range(11):
-                out += '{:7.3f}'.format(a[11*i+j])
+                if a[11*i+j]:
+                    out += f'{a[11*i+j]:7.3f}'
+                else:
+                    out += '  None '
             if i < 8:
                 out += '\n'
         return out
@@ -235,9 +239,9 @@ class Abund:
 
     def set_pattern_by_name(self, pattern_name):
         if pattern_name.lower() == 'asplund2009':
-            self._pattern = OrderedDict(zip(self._elem, self._asplund2009))
+            self._pattern = dict(zip(self._elem, self._asplund2009))
         elif pattern_name.lower() == 'grevesse2007':
-            self._pattern = OrderedDict(zip(self._elem, self._grevesse2007))
+            self._pattern = dict(zip(self._elem, self._grevesse2007))
         elif pattern_name.lower() == 'empty':
             self._pattern = self.empty_pattern()
         else:
@@ -296,7 +300,7 @@ class Abund:
     def empty_pattern(self):
         """Return an abundance pattern with value None for all elements.
         """
-        return OrderedDict.fromkeys(self._elem)
+        return dict.fromkeys(self._elem)
 
     def print(self):
         if self._pattern is None:
@@ -328,3 +332,116 @@ class Abund:
                     astr += '{:7.3f}'.format(a[11*i+j])
                 print(estr)
                 print(astr)
+
+    apply_monh = lambda monh, abund: abund + monh if abund else abund
+
+
+class AbundPattern(dict):
+    """A pattern of abundances that must be scaled by a metallicity.
+
+    Subclass of the standard dict class. Initialization populates dict
+    with one item per element. Key identifies the element (e.g., 'Fe').
+    Values contain a pattern of abundances on the H=12 scale, which must
+    be scaled by metallicity to obtain abundances.
+
+    Use standard dictionary syntax to get a pattern value (e.g., ap['Fe'])
+    or to set a pattern value (e.g., ap['Fe'] = 7.5). Attempting to set
+    a pattern value raises ValueError if the key is not a valid element
+    (e.g., 'CN') or the value is not None and cannot by converted into
+    a float.
+
+    Overrides __str__() so that print lists keys (elements) and pattern
+    values in tabular format.
+
+    Example
+    -------
+    >>> from sme.abund import AbundPattern
+    >>> ap = AbundPattern('Asplund2009')
+    >>> print(ap)
+    >>> ap['Fe'] = 7.5
+    >>> print(ap['Fe'])
+    """
+
+    _elem = (
+        'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+        'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
+        'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+        'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr',
+        'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn',
+        'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd',
+        'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
+        'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
+        'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th',
+        'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es'
+        )
+
+    """Asplund, Grevesse, Sauval, Scott (2009,  Annual Review of Astronomy
+    and Astrophysics, 47, 481)
+    """
+    _asplund2009 = (
+        12.00, 10.93, 1.05, 1.38, 2.70, 8.43, 7.83, 8.69, 4.56, 7.93,
+        6.24, 7.60, 6.45, 7.51, 5.41, 7.12, 5.50, 6.40, 5.03, 6.34,
+        3.15, 4.95, 3.93, 5.64, 5.43, 7.50, 4.99, 6.22, 4.19, 4.56,
+        3.04, 3.65, 2.30, 3.34, 2.54, 3.25, 2.52, 2.87, 2.21, 2.58,
+        1.46, 1.88, None, 1.75, 0.91, 1.57, 0.94, 1.71, 0.80, 2.04,
+        1.01, 2.18, 1.55, 2.24, 1.08, 2.18, 1.10, 1.58, 0.72, 1.42,
+        None, 0.96, 0.52, 1.07, 0.30, 1.10, 0.48, 0.92, 0.10, 0.84,
+        0.10, 0.85, -0.12, 0.85, 0.26, 1.40, 1.38, 1.62, 0.92, 1.17,
+        0.90, 1.75, 0.65, None, None, None, None, None, None, 0.02,
+        None, -0.54, None, None, None, None, None, None, None
+        )
+
+    """Grevesse, Asplund, Sauval (2007, Space Science Review, 130, 105)
+    """
+    _grevesse2007 = (
+        12.00, 10.93, 1.05, 1.38, 2.70, 8.39, 7.78, 8.66, 4.56, 7.84,
+        6.17, 7.53, 6.37, 7.51, 5.36, 7.14, 5.50, 6.18, 5.08, 6.31,
+        3.17, 4.90, 4.00, 5.64, 5.39, 7.45, 4.92, 6.23, 4.21, 4.60,
+        2.88, 3.58, 2.29, 3.33, 2.56, 3.25, 2.60, 2.92, 2.21, 2.58,
+        1.42, 1.92, None, 1.84, 1.12, 1.66, 0.94, 1.77, 1.60, 2.00,
+        1.00, 2.19, 1.51, 2.24, 1.07, 2.17, 1.13, 1.70, 0.58, 1.45,
+        None, 1.00, 0.52, 1.11, 0.28, 1.14, 0.51, 0.93, 0.00, 1.08,
+        0.06, 0.88, -0.17, 1.11, 0.23, 1.25, 1.38, 1.64, 1.01, 1.13,
+        0.90, 2.00, 0.65, None, None, None, None, None, None, 0.06,
+        None, -0.52, None, None, None, None, None, None, None
+        )
+
+    def __init__(self, pattern):
+        """Create an abundance pattern object with the specified pattern.
+        """
+        if isinstance(pattern, str):
+            self.set_pattern_by_name(pattern)
+        else:
+            self.set_pattern_by_value(pattern, type)
+
+    def __setitem__(self, key, value):
+        """Set pattern abundance for the specfied element. Raise ValueError
+        exception if key is not a valid element.
+        """
+        if key not in self._elem:
+            raise ValueError(f'Invalid element key: {key}')
+        if value is None:
+            super().__setitem__(key, value)
+        else:
+            super().__setitem__(key, float(value))
+
+    def update(self, keyval):
+        """Override update() method in the list superclass. Local method is
+        purposely less powerful because we don't want to change the ordered
+        list of keys. Call local __setitem__() to check that key is valid.
+        """
+        for key, value in keyval.items():
+            self.__setitem__(key, value)
+
+    def set_pattern_by_name(self, pattern_name):
+        if pattern_name.lower() == 'asplund2009':
+            super().update(zip(self._elem, self._asplund2009))
+        elif pattern_name.lower() == 'grevesse2007':
+            super().update(zip(self._elem, self._grevesse2007))
+        elif pattern_name.lower() == 'empty':
+            super().update(zip(self._elem, [None]*len(self._elem)))
+        else:
+            raise ValueError(
+                f'Invalid abundance pattern name {pattern_name}\n'
+                f'Valid names: Asplund2009, Grevesse2007, empty')
+
