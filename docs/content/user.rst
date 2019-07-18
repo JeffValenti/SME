@@ -47,57 +47,60 @@ Specifying an Abundance Pattern
 
 SME provides two abundance patterns by case-insensitive name.
 Use :code:`'Asplund2009'` for the solar abundance pattern from Asplund, Grevesse,
-Sauval, Scott (2009,  Annual Review of Astronomy and Astrophysics, 47, 481):
+Sauval, Scott (2009, Annual Review of Astronomy and Astrophysics, 47, 481),
+as in the example above.
 
 .. code-block:: python
 
-    >>> print(Abund(0, 'Asplund2009'))
-    Abundances obtained by applying [M/H]=0.000 to the abundance pattern.
-      H      He     Li     Be     B      C      N      O      F      Ne     Na   
-     12.000 10.930  1.050  1.380  2.700  8.430  7.830  8.690  4.560  7.930  6.240
-      Mg     Al     Si     P      S      Cl     Ar     K      Ca     Sc     Ti   
-      7.600  6.450  7.510  5.410  7.120  5.500  6.400  5.030  6.340  3.150  4.950
-      V      Cr     Mn     Fe     Co     Ni     Cu     Zn     Ga     Ge     As   
-      3.930  5.640  5.430  7.500  4.990  6.220  4.190  4.560  3.040  3.650  2.300
-      Se     Br     Kr     Rb     Sr     Y      Zr     Nb     Mo     Tc     Ru   
-      3.340  2.540  3.250  2.520  2.870  2.210  2.580  1.460  1.880  None   1.750
-      Rh     Pd     Ag     Cd     In     Sn     Sb     Te     I      Xe     Cs   
-      0.910  1.570  0.940  1.710  0.800  2.040  1.010  2.180  1.550  2.240  1.080
-      Ba     La     Ce     Pr     Nd     Pm     Sm     Eu     Gd     Tb     Dy   
-      2.180  1.100  1.580  0.720  1.420  None   0.960  0.520  1.070  0.300  1.100
-      Ho     Er     Tm     Yb     Lu     Hf     Ta     W      Re     Os     Ir   
-      0.480  0.920  0.100  0.840  0.100  0.850 -0.120  0.850  0.260  1.400  1.380
-      Pt     Au     Hg     Tl     Pb     Bi     Po     At     Rn     Fr     Ra   
-      1.620  0.920  1.170  0.900  1.750  0.650  None   None   None   None   None 
-      Ac     Th     Pa     U      Np     Pu     Am     Cm     Bk     Cf     Es   
-      None   0.020  None  -0.540  None   None   None   None   None   None   None 
+    >>> a.pattern
+    {'H' : 12.0, 'He': 10.93, 'Li': 1.05 , 'Be': 1.38, 'B' : 2.7 ,
+     'C' : 8.43, 'N' : 7.83 , 'O' : 8.69 , 'F' : 4.56, 'Ne': 7.93,
+     'Na': 6.24, 'Mg': 7.6  , 'Al': 6.45 , 'Si': 7.51, 'P' : 5.41,
+     'S' : 7.12, 'Cl': 5.5  , 'Ar': 6.4  , 'K' : 5.03, 'Ca': 6.34,
+     'Sc': 3.15, 'Ti': 4.95 , 'V' : 3.93 , 'Cr': 5.64, 'Mn': 5.43,
+     'Fe': 7.5 , 'Co': 4.99 , 'Ni': 6.22 , 'Cu': 4.19, 'Zn': 4.56,
+     'Ga': 3.04, 'Ge': 3.65 , 'As': 2.3  , 'Se': 3.34, 'Br': 2.54,
+     'Kr': 3.25, 'Rb': 2.52 , 'Sr': 2.87 , 'Y' : 2.21, 'Zr': 2.58,
+     'Nb': 1.46, 'Mo': 1.88 , 'Tc': None , 'Ru': 1.75, 'Rh': 0.91,
+     'Pd': 1.57, 'Ag': 0.94 , 'Cd': 1.71 , 'In': 0.8 , 'Sn': 2.04,
+     'Sb': 1.01, 'Te': 2.18 , 'I' : 1.55 , 'Xe': 2.24, 'Cs': 1.08,
+     'Ba': 2.18, 'La': 1.1  , 'Ce': 1.58 , 'Pr': 0.72, 'Nd': 1.42,
+     'Pm': None, 'Sm': 0.96 , 'Eu': 0.52 , 'Gd': 1.07, 'Tb': 0.3 ,
+     'Dy': 1.1 , 'Ho': 0.48 , 'Er': 0.92 , 'Tm': 0.1 , 'Yb': 0.84,
+     'Lu': 0.1 , 'Hf': 0.85 , 'Ta': -0.12, 'W' : 0.85, 'Re': 0.26,
+     'Os': 1.4 , 'Ir': 1.38 , 'Pt': 1.62 , 'Au': 0.92, 'Hg': 1.17,
+     'Tl': 0.9 , 'Pb': 1.75 , 'Bi': 0.65 , 'Po': None, 'At': None,
+     'Rn': None, 'Fr': None , 'Ra': None , 'Ac': None, 'Th': 0.02,
+     'Pa': None, 'U' : -0.54, 'Np': None , 'Pu': None, 'Am': None,
+     'Cm': None, 'Bk': None , 'Cf': None , 'Es': None}
 
 Use :code:`'Grevesse2007'` for the solar abundance pattern from Grevesse,
 Asplund, Sauval (2007, Space Science Review, 130, 105):
 
 .. code-block:: python
 
-    >>> print(Abund(0, 'Grevesse2007'))
-    Abundances obtained by applying [M/H]=0.000 to the abundance pattern.
-      H      He     Li     Be     B      C      N      O      F      Ne     Na   
-     12.000 10.930  1.050  1.380  2.700  8.390  7.780  8.660  4.560  7.840  6.170
-      Mg     Al     Si     P      S      Cl     Ar     K      Ca     Sc     Ti   
-      7.530  6.370  7.510  5.360  7.140  5.500  6.180  5.080  6.310  3.170  4.900
-      V      Cr     Mn     Fe     Co     Ni     Cu     Zn     Ga     Ge     As   
-      4.000  5.640  5.390  7.450  4.920  6.230  4.210  4.600  2.880  3.580  2.290
-      Se     Br     Kr     Rb     Sr     Y      Zr     Nb     Mo     Tc     Ru   
-      3.330  2.560  3.250  2.600  2.920  2.210  2.580  1.420  1.920  None   1.840
-      Rh     Pd     Ag     Cd     In     Sn     Sb     Te     I      Xe     Cs   
-      1.120  1.660  0.940  1.770  1.600  2.000  1.000  2.190  1.510  2.240  1.070
-      Ba     La     Ce     Pr     Nd     Pm     Sm     Eu     Gd     Tb     Dy   
-      2.170  1.130  1.700  0.580  1.450  None   1.000  0.520  1.110  0.280  1.140
-      Ho     Er     Tm     Yb     Lu     Hf     Ta     W      Re     Os     Ir   
-      0.510  0.930  None   1.080  0.060  0.880 -0.170  1.110  0.230  1.250  1.380
-      Pt     Au     Hg     Tl     Pb     Bi     Po     At     Rn     Fr     Ra   
-      1.640  1.010  1.130  0.900  2.000  0.650  None   None   None   None   None 
-      Ac     Th     Pa     U      Np     Pu     Am     Cm     Bk     Cf     Es   
-      None   0.060  None  -0.520  None   None   None   None   None   None   None 
-
+    >>> a = Abund(0, 'Grevesse2007'))
+    >>> a.pattern
+    {'H' : 12.0, 'He': 10.93, 'Li': 1.05 , 'Be': 1.38, 'B' : 2.7 ,
+     'C' : 8.39, 'N' : 7.78 , 'O' : 8.66 , 'F' : 4.56, 'Ne': 7.84,
+     'Na': 6.17, 'Mg': 7.53 , 'Al': 6.37 , 'Si': 7.51, 'P' : 5.36,
+     'S' : 7.14, 'Cl': 5.5  , 'Ar': 6.18 , 'K' : 5.08, 'Ca': 6.31,
+     'Sc': 3.17, 'Ti': 4.9  , 'V' : 4.0  , 'Cr': 5.64, 'Mn': 5.39,
+     'Fe': 7.45, 'Co': 4.92 , 'Ni': 6.23 , 'Cu': 4.21, 'Zn': 4.6 ,
+     'Ga': 2.88, 'Ge': 3.58 , 'As': 2.29 , 'Se': 3.33, 'Br': 2.56,
+     'Kr': 3.25, 'Rb': 2.6  , 'Sr': 2.92 , 'Y' : 2.21, 'Zr': 2.58,
+     'Nb': 1.42, 'Mo': 1.92 , 'Tc': None , 'Ru': 1.84, 'Rh': 1.12,
+     'Pd': 1.66, 'Ag': 0.94 , 'Cd': 1.77 , 'In': 1.6 , 'Sn': 2.0 ,
+     'Sb': 1.0 , 'Te': 2.19 , 'I' : 1.51 , 'Xe': 2.24, 'Cs': 1.07,
+     'Ba': 2.17, 'La': 1.13 , 'Ce': 1.7  , 'Pr': 0.58, 'Nd': 1.45,
+     'Pm': None, 'Sm': 1.0  , 'Eu': 0.52 , 'Gd': 1.11, 'Tb': 0.28,
+     'Dy': 1.14, 'Ho': 0.51 , 'Er': 0.93 , 'Tm': 0.0 , 'Yb': 1.08,
+     'Lu': 0.06, 'Hf': 0.88 , 'Ta': -0.17, 'W' : 1.11, 'Re': 0.23,
+     'Os': 1.25, 'Ir': 1.38 , 'Pt': 1.64 , 'Au': 1.01, 'Hg': 1.13,
+     'Tl': 0.9 , 'Pb': 2.0  , 'Bi': 0.65 , 'Po': None, 'At': None,
+     'Rn': None, 'Fr': None , 'Ra': None , 'Ac': None, 'Th': 0.06,
+     'Pa': None, 'U' : -0.52, 'Np': None , 'Pu': None, 'Am': None,
+     'Cm': None, 'Bk': None , 'Cf': None , 'Es': None}
 
 
 **************************
