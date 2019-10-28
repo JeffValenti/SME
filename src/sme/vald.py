@@ -304,6 +304,8 @@ class ValdLongLine:
 class LineList:
     """Line data for a list of atomic and molecular lines.
     """
+    _valid_line_types = (SmeLine, ValdShortLine, ValdLongLine)
+
     def __init__(self):
         self._lines = []
 
@@ -312,6 +314,18 @@ class LineList:
 
     def __getitem__(self, key):
         return self._lines[key]
+
+    def __setitem__(self, key, line):
+        if type(line) in self._valid_line_types:
+            self._lines[key] = line
+        else:
+            self._raise_invalid_line_type(line)
+
+    def _raise_invalid_line_type(self, line):
+        raise TypeError(
+            f'line in LineList has invalid type: {type(line).__name__}\n'
+            f'  Valid line types: ' + \
+            ' '.join([type.__name__ for type in self._valid_line_types]))
 
     def __str__(self):
         out = []
@@ -348,11 +362,12 @@ class LineList:
         return [line.gamvw for line in self._lines]
 
     def append(self, line):
-        valid_types = [SmeLine, ValdShortLine, ValdLongLine]
-        if type(line) in valid_types:
+        if type(line) in self._valid_line_types:
             self._lines.append(line)
         else:
-            raise TypeError('Invalid type for LineList')
+            raise TypeError(
+                f'LineList element has invalid type: {type(line)}\n'
+                f'Valid types: ' + ' '.join(self._valid_line_types))
 
 
 class ValdFile:

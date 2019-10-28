@@ -1,7 +1,20 @@
 from ctypes import CDLL, POINTER, Structure, pointer, byref, \
-        c_short, c_int, c_double, c_char_p
+        c_short, c_ushort, c_int, c_double, c_char_p
 from pathlib import Path
 from platform import system, machine, architecture
+
+
+class Array1D:
+    class Type:
+        def __init__(self, ctype, n):
+            self.type = ctype * n
+
+    def __init__(self, ctype, n):
+        self.n = n
+        datatype = self.Type(ctype, self.n).type
+        self.type = POINTER(datatype)
+        self.data = datatype()
+        self.pointer = pointer(self.data)
 
 
 class Array2D:
@@ -25,14 +38,14 @@ class Array2D:
 class IdlString(Structure):
     _fields_ = [
         ('len', c_int),
-        ('type', c_short),
+        ('type', c_ushort),
         ('bytes', c_char_p)
         ]
 
     def __init__(self, bytes):
         self.len = c_int(len(bytes))
-        self.type = c_short(0)
-        self.bytes = bytes
+        self.type = c_ushort(0)
+        self.bytes = c_char_p(bytes)
 
 
 class IdlStringArray:
@@ -99,10 +112,14 @@ class LibSme:
         return dir.joinpath(file)
 
     def SMELibraryVersion(self):
+        """Return version number reported by SME library code.
+        """
         self.lib.SMELibraryVersion.restype = c_char_p
         return self.lib.SMELibraryVersion().decode('utf-8')
 
     def InputWaveRange(self, wfirst, wlast):
+        """Pass wavelength range for spectrum synthesis to library code.
+        """
         libfunc = self.lib.InputWaveRange
 
         class Args(Structure):
@@ -129,6 +146,8 @@ class LibSme:
         self._wlast = wlast
 
     def SetVWscale(self, vw_scale):
+        """Pass van der Waals broadening enhancement factor to library code.
+        """
         libfunc = self.lib.SetVWscale
         argv = pointer(c_double(vw_scale))
         libfunc.argtypes = [c_int, POINTER(POINTER(c_double))]
@@ -139,16 +158,22 @@ class LibSme:
         self._vw_scale = vw_scale
 
     def SetH2broad(self):
+        """Enable collisional broadening by molecular hydrogen in library code.
+        """
         self.lib.SetH2broad.restype = c_char_p
         assert self.lib.SetH2broad().decode('utf-8') == ''
         self._H2broad = True
 
     def ClearH2broad(self):
+        """Disable collisional broadening by molecular hydrogen in library code.
+        """
         self.lib.ClearH2broad.restype = c_char_p
         assert self.lib.ClearH2broad().decode('utf-8') == ''
         self._H2broad = False
 
     def InputLineList(self, linelist):
+        """Pass atomic and molecular line data to library code.
+        """
         libfunc = self.lib.InputLineList
         nlines = len(linelist)
         m = 8
@@ -223,9 +248,15 @@ class LibSme:
             raise ValueError(error)
         return argv._atomic.data
 
-    def UpdateLineList(self, linelist):
+    def UpdateLineList(self, newlinedata, index):
+        """Pass new line data to library code for lines specified by index.
+        """
         libfunc = self.lib.UpdateLineList
-        nlines = len(linelist)
+        nlines = len(newlinedata)
+        if len(index) != nlines:
+            raise ValueError(
+                f'number of line updates ({nlines}) '
+                f'and indexes ({len(index)}) disagree')
         m = 8
 
         class Args(Structure):
@@ -236,21 +267,24 @@ class LibSme:
                 ('index', POINTER(c_int * nlines))
                 ]
 
-            def __init__(self, linelist):
+            def __init__(self, newlinedata, index):
                 self._nlines = c_int(nlines)
-                self._species = IdlStringArray(linelist.species)
+                self._species = IdlStringArray(newlinedata.species)
                 self._atomic = Array2D(c_double, nlines, m)
-                self._atomic.data[2][:] = linelist.wlcent
-                self._atomic.data[3][:] = linelist.excit
-                self._atomic.data[4][:] = linelist.loggf
-                self._atomic.data[5][:] = linelist.gamrad
-                self._atomic.data[6][:] = linelist.gamqst
-                self._atomic.data[7][:] = linelist.gamvw
+                self._atomic.data[2][:] = newlinedata.wlcent
+                self._atomic.data[3][:] = newlinedata.excit
+                self._atomic.data[4][:] = newlinedata.loggf
+                self._atomic.data[5][:] = newlinedata.gamrad
+                self._atomic.data[6][:] = newlinedata.gamqst
+                self._atomic.data[7][:] = newlinedata.gamvw
+                self._index = Array1D(c_int, nlines)
+                self._index.data[:] = index
                 self.nlines = pointer(self._nlines)
                 self.species = pointer(self._species.data)
                 self.atomic = pointer(self._atomic.data)
+                self.index = pointer(self._index.data)
 
-        argv = Args(linelist)
+        argv = Args(newlinedata, index)
         argc = len(argv._fields_)
         libfunc.argtypes = [c_int, *[POINTER(f[1]) for f in argv._fields_]]
         libfunc.restype = c_char_p
@@ -258,8 +292,10 @@ class LibSme:
             argc,
             byref(argv.nlines),
             byref(argv.species),
-            byref(argv.atomic)
+            byref(argv.atomic),
+            byref(argv.index)
             ).decode('utf-8')
         if error != '':
-            raise ValueError(error)
-        self._linelist = linelist
+            raise RuntimeError(error)
+        for i, line in enumerate(newlinedata):
+            self._linelist[index[i]] = line
