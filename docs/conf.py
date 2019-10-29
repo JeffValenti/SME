@@ -43,6 +43,7 @@ release = ''
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
+    'sphinx.ext.imgmath',
 ]
 
 # Napoleon settings
@@ -55,7 +56,7 @@ napoleon_use_admonition_for_notes = False
 napoleon_use_admonition_for_references = False
 napoleon_use_ivar = False
 napoleon_use_param = True
-napoleon_use_rtype = True
+napoleon_use_rtype = False
 napoleon_use_keyword = True
 napoleon_custom_sections = None
 
