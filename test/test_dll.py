@@ -73,7 +73,7 @@ def test_dll():
     outlist = libsme.OutputLineList()
     assert_outputlinelist_matches_input(outlist, libsme.linelist)
 
-# Create new line data for some lines.
+# Create new line data for one line.
     index = [1]
     newlinedata = LineList()
     for i in index:
@@ -82,10 +82,23 @@ def test_dll():
         newlinedata.append(vsl)
 
 # Fail to update line data
-    with raises(ValueError, match=r'number of line updates .* disagree'):
+    with raises(ValueError, match=r'mismatch: .* lines, .* indexes'):
         libsme.UpdateLineList(newlinedata, [0, 1])
     with raises(RuntimeError, match=r'Attempt to replace .* another line'):
         libsme.UpdateLineList(newlinedata, [0])
+
+# Update line data
+    libsme.UpdateLineList(newlinedata, index)
+    outlist = libsme.OutputLineList()
+    assert_outputlinelist_matches_input(outlist, libsme.linelist)
+
+# Create new line data for multiple lines.
+    index = [0]
+    newlinedata = LineList()
+    for i in index:
+        vsl = libsme.linelist[i]
+        vsl.loggf += 0.01
+        newlinedata.append(vsl)
 
 # Update line data
     libsme.UpdateLineList(newlinedata, index)
