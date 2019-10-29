@@ -29,7 +29,7 @@ before using it.
 
 .. code-block:: bash
 
-    $ source activate sme
+    $ conda activate sme
     (sme) $
 
 To stop using the *sme* environment in a terminal window, close the
@@ -37,7 +37,7 @@ window or explicitly deactivate the current environment.
 
 .. code-block:: bash
 
-    (sme) $ source deactivate
+    (sme) $ conda deactivate
     $
 
 Create environment
@@ -46,9 +46,7 @@ Create environment
 To create an environment for SME development:
 
 1. Use :command:`bash` shell because it is fully compatible with
-:command:`conda`. Do not use :command:`tcsh` shell because it has
-a built-in :command:`source` command that masks a :command:`conda`
-executable with the same name.
+:command:`conda`.
 
 .. _Install Miniconda or Anaconda:
    https://conda.io/docs/user-guide/install/
@@ -99,7 +97,7 @@ local repository.
 
 .. code-block:: bash
 
-    SME$ source activate sme
+    SME$ conda activate sme
     (sme) SME$ pip install --editable .
 
 
@@ -111,7 +109,7 @@ enviroment a new user or Travis CI would create.
 
 .. code-block:: bash
 
-    $ source activate sme
+    $ conda activate sme
     (sme) $ conda update
 
 Recreate environment
@@ -123,7 +121,7 @@ First remove the existing *sme* environment.
 
 .. code-block:: bash
 
-    (sme) $ source deactivate
+    (sme) $ conda deactivate
     $ conda env remove --name sme
 
 Then recreate the *sme* environment, starting with the
@@ -140,7 +138,7 @@ installed additional packages, but SME should still work.
 
 .. code-block:: bash
 
-    $ source activate sme
+    $ conda activate sme
     (sme) $ conda install <package>
 
 If an additional package is not available via a conda channel, use
@@ -150,7 +148,7 @@ a :command:`conda` environment.
 
 .. code-block:: bash
 
-    $ source activate sme
+    $ conda activate sme
     (sme) $ pip install <package>
 
 Additional packages will be available in the local *sme* environment,
@@ -183,7 +181,7 @@ covered by unit tests. Unit tests should cover 100% of statements.
 .. code-block:: bash
 
     $ cd SME
-    SME$ source activate sme
+    SME$ conda activate sme
     (sme) SME$ pytest -v --cov=sme --cov-report html
 
 To see which specific statements are not covered, use a web browser
@@ -273,7 +271,7 @@ HTML documentation and `latexpdf` to build PDF documentation.
 .. code-block:: bash
 
     $ cd SME/docs
-    SME$ source activate sme
+    SME$ conda activate sme
     (sme) SME$ make html
     (sme) SME$ make latexpdf
 

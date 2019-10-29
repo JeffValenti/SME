@@ -36,6 +36,13 @@ dll.py
    :members:
 
 *******
+util.py
+*******
+
+.. automodule:: sme.util
+   :members:
+
+*******
 vald.py
 *******
 
