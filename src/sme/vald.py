@@ -321,17 +321,17 @@ class LineList:
         else:
             self._raise_invalid_line_type(line)
 
-    def _raise_invalid_line_type(self, line):
-        raise TypeError(
-            f'line in LineList has invalid type: {type(line).__name__}\n'
-            f'  Valid line types: ' + \
-            ' '.join([type.__name__ for type in self._valid_line_types]))
-
     def __str__(self):
         out = []
         for line in self._lines:
             out.append(line.__str__())
         return '\n'.join(out)
+
+    def _raise_invalid_line_type(self, line):
+        raise TypeError(
+            f'line in LineList has invalid type: {type(line).__name__}\n'
+            f'  Valid line types: ' + \
+            ' '.join([type.__name__ for type in self._valid_line_types]))
 
     @property
     def species(self):
@@ -365,10 +365,7 @@ class LineList:
         if type(line) in self._valid_line_types:
             self._lines.append(line)
         else:
-            raise TypeError(
-                f'LineList element has invalid type: {type(line)}\n'
-                f'Valid types: ' + ' '.join(self._valid_line_types))
-
+            self._raise_invalid_line_type(line)
 
 class ValdFile:
     """Contents of a VALD3 line data file.
