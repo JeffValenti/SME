@@ -255,6 +255,7 @@ class LibSme:
         nlines = len(newlinedata)
         if len(index) != nlines:
             raise ValueError(f'mismatch: {nlines} lines, {len(index)} indexes')
+
         m = 8
 
         class Args(Structure):
