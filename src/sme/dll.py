@@ -254,9 +254,8 @@ class LibSme:
         libfunc = self.lib.UpdateLineList
         nlines = len(newlinedata)
         if len(index) != nlines:
-            raise ValueError(
-                f'number of line updates ({nlines}) '
-                f'and indexes ({len(index)}) disagree')
+            raise ValueError(f'mismatch: {nlines} lines, {len(index)} indexes')
+
         m = 8
 
         class Args(Structure):

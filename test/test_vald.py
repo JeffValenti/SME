@@ -24,6 +24,7 @@ vald_short_line_strings = [
 def test_smeline():
     """Test code paths and cases in vald.SmeLine().
     """
+    line = SmeLine('H 1', '6564.61', '10.20', '0.71', '8.766', '2', '3')
     for vslstr in vald_short_line_strings:
         # Pass various VALD short line (vsl) strings to __init__().
         vsl = ValdShortLine(vslstr)
@@ -105,5 +106,12 @@ def test_linelist():
 def test_valdfile():
     """Test code paths and cases in vald.ValdFile().
     """
-    testdir = Path(__file__).parent
-    vf = ValdFile(testdir / 'testcase1.lin')
+    datadir = Path(__file__).parent / 'data'
+    jobnum_pairs = [[45169, 45170], [45174, 45175]]
+    for jobnum1, jobnum2 in jobnum_pairs:
+        valdfile1 = datadir / f'vald.{jobnum1:06}'
+        vf1 = ValdFile(valdfile1)
+        valdfile2 = datadir / f'vald.{jobnum2:06}'
+        vf2 = ValdFile(valdfile2)
+        assert vf1.nlines == vf2.nlines
+#       assert vf1.wlrange == vf2.wlrange
