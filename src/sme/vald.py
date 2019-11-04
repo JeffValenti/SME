@@ -1,7 +1,9 @@
+from bisect import bisect
 from re import findall
 from collections import OrderedDict
 from itertools import zip_longest
 from sme.abund import Abund
+from sme.util import change_waveunit, vacuum_angstroms
 
 
 class FileError(Exception):
@@ -376,9 +378,11 @@ class LineList:
 class ValdFile:
     """Contents of a VALD3 line data file.
     """
-    def __init__(self, filename):
+    def __init__(self, filename, standard=True):
         self._filename = filename
         self.read(filename)
+        if standard:
+            self.standardize()
 
     @property
     def filename(self):
@@ -512,3 +516,105 @@ class ValdFile:
             if 'References:' not in line:
                 references[id.strip()] = ref.strip()
         return references
+
+    def standardize(self):
+        '''Convert wavelengths to vacuum Angstroms and energies to eV.
+
+        If input wavelength units are inverse centimeters, reverse the
+        wavelength range and reverse the order of lines in the linelist.
+
+        If the converted wavelengths overlap the range 2000 to 
+        '''
+        # Reverse order of lines if units are cm^-1
+        nline = len(self.linelist)
+        if self.wlunits.lower() in ['cm^-1', '1/cm']:
+            self._wavelo, self._wavehi = self._wavehi, self._wavelo
+            for i in range(nline // 2):
+                self._linelist[i], self._linelist[nline-i-1] = \
+                    self.linelist[nline-i-1], self.linelist[i]
+
+        # Convert wavelengths of line centers to Angstroms
+        wlcent = self.linelist.wlcent
+        if self.wlunits.upper() != 'A':
+            wlcent = change_waveunit(wlcent, self.wlunits, 'A')
+
+        # Convert air wavelengths to vacuum wavelengths
+        if self.wlmedium.lower() == 'air':
+            iair = self._first_air_wavelength(wlcent)
+            if iair < len(wlcent):
+                wlcent[iair:] = vacuum_angstroms(wlcent[iair:], 'A', 'air')
+
+        # Update wavelengths in line list, if not already vacuum Angstroms
+        if self.wlunits != 'A' or self.wlmedium != 'vac':
+            self._wavelo, self._wavehi = vacuum_angstroms(
+                [self._wavelo, self._wavehi], self.wlunits, self.wlmedium)
+            for line, wlcent in zip(self.linelist, wlcent):
+                line.wlcent = wlcent
+            self._wlmedium = 'vac'
+            self._wlunits = 'A'
+
+    def _first_air_wavelength(self, wave):
+        '''Return index of first air wavelength in input list.
+
+        By convention, air wavelengths are actually vacuum wavelengths for
+        vacuum wavelengths below 2000 Angstroms. However, using the VALD3
+        :any:`vaccum_to_air` formula, a vacuum wavelength of 2000 Angstroms
+        corresponds to an air wavelength of 1999.3520267833612 Angstroms.
+        Thus, 'air' wavelengths between 1999.3520 and 2000 Angstroms can
+        either be vacuum wavelengths in that range or vacuum wavelengths
+        in the range 2000 to 2000.6480857571032 Angstroms that have been
+        converted to air. Context may help distinguish these two cases.
+        A VALD3 line list in air may have vacuum wavelengths that increase
+        up to the 2000 Angstrom threshold and then jump backwards once to
+        shorter wavelengths between 1999.352 and 2000 Angstroms. In this
+        case, the backwards jump indicates the transition from vacuum
+        wavelengths to air wavelengths in the line list. If there are lines
+        in the 1999.352 to 2000 Angstrom interval, but no jump backwards
+        to shorter wavelengths, then it is not possible to infer from the
+        wavelengths alone whether the medium for these lines is air or
+        vacuum. This routine assumes such lines are vacuum wavelengths,
+        but that assumption could be wrong. Request vacuum wavelengths
+        from VALD to avoid this issue.
+
+        If all wavelengths are greater than 2000 Angstroms, return
+        iair = 0, so that wave[iair:] returns all elements in wave.
+        Example: wave = [2001, 2002] returns 0
+
+        If all wavelengths are less than or equal to 1999.352 Angstroms,
+        return iair = len(wave), so that wave[iair:] is an empty list.
+        Example: wave = [1998, 1999] returns 2
+
+        If there is a backwards jump between 1999.352 and 2000 Angstroms,
+        return iair corresponding to the element immediately after the
+        backwards jump, so that wave[iair:] returns the non-decreasing
+        sequence of wavelengths after the backwards jump.
+        Example: wave = [1999.6, 1999.5] returns 1
+
+        Otherwise return iair corresponding to the first wavelength
+        greater than 2000 Angstroms, so that wave[iair:] returns all
+        wavelengths greater than 2000 Angstroms or an empty list if there
+        are not elements greater than 2000 Angstroms.
+        Example: wave = [1999.5, 1999.6] returns 2
+        Example: wave = [1999, 2000, 2001] returns 2
+        '''
+        nwave = len(wave)
+        wlo, whi = 1999.352026783362, 2000
+        ilo, ihi = [bisect(wave, w) for w in (wlo, whi)]
+
+        # All wavelengths > 2000 Angstroms. All are air.
+        if ihi == 0:
+            return(0)
+
+        # All wavelengths <= 1999.352 Angstroms. All are vacuum.
+        if ilo == nwave:
+            return(nwave)
+
+        # Air begins at backwards jump between 1999.352 and 2000 Angstroms.
+        if ihi - ilo > 1:
+            jump = [i for i in range(ilo+1, ihi) if wave[i] < wave[i-1]]
+            assert len(jump) < 2
+            if jump:
+                return(jump[0])
+
+        # Air begin at first wavelength > 2000 Angstroms.
+        return(ihi)
