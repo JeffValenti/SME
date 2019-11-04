@@ -106,6 +106,7 @@ def test_linelist():
 def test_valdfile():
     """Test code paths and cases in vald.ValdFile().
     """
+    maxdiff = lambda xlist, ylist: max(abs(x-y) for x, y in zip(xlist, ylist))
     datadir = Path(__file__).parent / 'data'
     jobnum_pairs = [[45169, 45170], [45174, 45175]]
     for jobnum1, jobnum2 in jobnum_pairs:
@@ -114,4 +115,32 @@ def test_valdfile():
         valdfile2 = datadir / f'vald.{jobnum2:06}'
         vf2 = ValdFile(valdfile2)
         assert vf1.nlines == vf2.nlines
-#       assert vf1.wlrange == vf2.wlrange
+        assert maxdiff(vf1.wlrange, vf2.wlrange) < 1e-2
+        assert maxdiff(vf1.linelist.wlcent, vf2.linelist.wlcent) < 1e-4
+
+    # Test _first_air_wavelength() method:
+    # All wavelengths > 2000 Angstroms. All are air.
+    assert(vf1._first_air_wavelength([2001]) == 0)
+    assert(vf1._first_air_wavelength([2001, 2002]) == 0)
+
+    # All wavelengths <= 1999.352 Angstroms. All are vacuum.
+    assert(vf1._first_air_wavelength([1999]) == 1)
+    assert(vf1._first_air_wavelength([1998, 1999]) == 2)
+
+    # Air begins at backwards jump between 1999.352 and 2000 Angstroms.
+    assert(vf1._first_air_wavelength([1999.6, 1999.5]) == 1)
+    assert(vf1._first_air_wavelength([1999.6, 1999.5, 2000]) == 1)
+    assert(vf1._first_air_wavelength([1999.6, 1999.5, 2001]) == 1)
+    assert(vf1._first_air_wavelength([1999, 1999.6, 1999.5]) == 2)
+    assert(vf1._first_air_wavelength([1999, 1999.6, 1999.5, 2000]) == 2)
+    assert(vf1._first_air_wavelength([1999, 1999.6, 1999.5, 2001]) == 2)
+
+    # Air begins at first wavelength > 2000 Angstroms.
+    assert(vf1._first_air_wavelength([1999.5, 1999.6]) == 2)
+    assert(vf1._first_air_wavelength([1999.5, 1999.6, 2000]) == 3)
+    assert(vf1._first_air_wavelength([1999.5, 1999.6, 2001]) == 2)
+    assert(vf1._first_air_wavelength([1999, 1999.5, 1999.6]) == 3)
+    assert(vf1._first_air_wavelength([1999, 1999.5, 1999.6, 2000]) == 4)
+    assert(vf1._first_air_wavelength([1999, 1999.5, 1999.6, 2001]) == 3)
+    assert(vf1._first_air_wavelength([1999, 2001]) == 1)
+    assert(vf1._first_air_wavelength([1999, 2000, 2001]) == 2)
