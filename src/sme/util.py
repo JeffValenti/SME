@@ -41,7 +41,7 @@ def change_waveunit(wave, oldunits, newunits):
     +-----------------+---------------------+
     | :kbd:`'micron'` | micrometers         |
     +-----------------+---------------------+
-    | :kbd:`'cm-1'`   | inverse centimeters |
+    | :kbd:`'cm^-1'`  | inverse centimeters |
     +-----------------+---------------------+
     | :kbd:`'1/cm'`   | inverse centimeters |
     +-----------------+---------------------+
@@ -51,7 +51,7 @@ def change_waveunit(wave, oldunits, newunits):
     >>> from sme.util import change_waveunit
     >>> change_waveunit(5000, 'A', 'nm')
     500.0
-    >>> change_waveunit([10000, 20000], 'cm-1', 'a')
+    >>> change_waveunit([10000, 20000], 'cm^-1', 'a')
     [10000.0, 5000.0]
     """
     oldlow = oldunits.lower()
@@ -60,7 +60,7 @@ def change_waveunit(wave, oldunits, newunits):
         return wave
     factor = {
         'a': 1.0, 'nm': 10.0, 'um': 1e4, 'micron': 1e4,
-        'cm-1': 1e8, '1/cm': 1e8}
+        'cm^-1': 1e8, '1/cm': 1e8}
     try:
         old_to_A = factor[oldlow]
         A_to_new = factor[newlow]
@@ -69,12 +69,12 @@ def change_waveunit(wave, oldunits, newunits):
             f"invalid waveunit specified: old='{oldunits}', new='{newunits}'\n"
             f"Valid waveunits: '" + "', '".join(factor.keys()) + "'")
     old_new = old_to_A / A_to_new
-    if oldlow in ['cm-1', '1/cm']:
+    if oldlow in ['cm^-1', '1/cm']:
         try:
             return [old_new / w for w in wave]
         except TypeError:
             return old_new / wave
-    elif newlow in ['cm-1', '1/cm']:
+    elif newlow in ['cm^-1', '1/cm']:
         try:
             return [1.0 / old_new / w for w in wave]
         except TypeError:
@@ -112,7 +112,7 @@ def air_to_vacuum(wair, units):
         Input wavelength(s) in air.
 
     units : str
-        Units of input wavelength(s), e.g. 'A', 'nm', 'cm-1'.
+        Units of input wavelength(s), e.g. 'A', 'nm', 'cm^-1'.
         See :any:`change_waveunit` for list of allowed wavelength units.
 
     Returns
@@ -130,15 +130,16 @@ def air_to_vacuum(wair, units):
     >>> air_to_vacuum(1999, 'A')
     1999
     """
+    wlimit = 1999.3520267833621
     wair_a = change_waveunit(wair, units, 'A')
     try:
         sgen = (1e4 / w for w in wair_a)
         ngen = (1 + 0.00008336624212083 + 0.02408926869968 / \
             (130.1065924522 - s*s) + 0.0001599740894897 / \
             (38.92568793293 - s*s) for s in sgen)
-        wvac_a = [w * n if w > 2000 else w for w, n in zip(wair_a, ngen)]
+        wvac_a = [w * n if w > wlimit else w for w, n in zip(wair_a, ngen)]
     except TypeError:
-        if wair_a > 2000:
+        if wair_a > wlimit:
             s = 1e4 / wair_a
             n = 1 + 0.00008336624212083 + 0.02408926869968 / \
                 (130.1065924522 - s*s) + 0.0001599740894897 / \
@@ -175,7 +176,7 @@ def vacuum_to_air(wvac, units):
         Input wavelength(s) in vacuum.
 
     units : str
-        Units of input wavelength(s), e.g. 'A', 'nm', 'cm-1'.
+        Units of input wavelength(s), e.g. 'A', 'nm', 'cm^-1'.
         See :any:`change_waveunit` for list of allowed wavelength units.
 
     Returns
@@ -267,10 +268,9 @@ def vacuum_angstroms(wave, units, medium):
     [5001.39484863807, 5011.397506813088]
     """
     wave_a = change_waveunit(wave, units, 'A')
-    medlow = medium.lower()
-    if medlow in ['vac', 'vacuum', None]:
+    if medium.lower() in ['vac', 'vacuum', None]:
         wvac_a = copy(wave_a)
-    elif medlow == 'air':
+    elif medium.lower() == 'air':
         wvac_a = air_to_vacuum(wave_a, 'A')
     else:
         raise ValueError(

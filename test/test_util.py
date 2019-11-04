@@ -14,7 +14,7 @@ def test_change_waveunit():
         'nm': 500,
         'um': 0.5,
         'micron': 0.5,
-        'cm-1': 20000,
+        'cm^-1': 20000,
         '1/cm': 20000}
     for unit in cases:
         wave = cases[unit]
@@ -65,7 +65,7 @@ def test_vacuum_angstroms():
     """Test code paths and cases in util.vacuum_angstroms().
     """
     win  = [5000, 20000, 500]
-    uin  = ['A' , 'cm-1', 'nm']
+    uin  = ['A' , 'cm^-1', 'nm']
     for w, u in zip(win, uin):
         assert vacuum_angstroms(w, u, 'vac') == 5000
         assert vacuum_angstroms(w, u, 'air') == 5001.39484863807
