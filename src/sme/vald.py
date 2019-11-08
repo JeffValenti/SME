@@ -3,7 +3,7 @@ from re import findall
 from collections import OrderedDict
 from itertools import zip_longest
 from sme.abund import Abund
-from sme.util import change_waveunit, vacuum_angstroms
+from sme.util import change_waveunit, change_energyunit, vacuum_angstroms
 
 
 class FileError(Exception):
@@ -518,12 +518,14 @@ class ValdFile:
         return references
 
     def standardize(self):
-        '''Convert wavelengths to vacuum Angstroms and energies to eV.
+        '''Convert linelist wavelengths to vacuum Angstroms and energies to eV.
 
         If input wavelength units are inverse centimeters, reverse the
         wavelength range and reverse the order of lines in the linelist.
 
-        If the converted wavelengths overlap the range 2000 to 
+        If any input wavelengths are bluer than 2000 Angstroms, search
+        for the first air wavelength, which can be slightly below 2000
+        Angstroms (see docstring for `util._first_air_wavelength`).
         '''
         # Reverse order of lines if units are cm^-1
         nline = len(self.linelist)
@@ -548,10 +550,18 @@ class ValdFile:
         if self.wlunits != 'A' or self.wlmedium != 'vac':
             self._wavelo, self._wavehi = vacuum_angstroms(
                 [self._wavelo, self._wavehi], self.wlunits, self.wlmedium)
-            for line, wlcent in zip(self.linelist, wlcent):
-                line.wlcent = wlcent
+            for line, w in zip(self.linelist, wlcent):
+                line.wlcent = w
             self._wlmedium = 'vac'
             self._wlunits = 'A'
+
+        # Convert energies to eV and update line list, if not already eV
+        excit = self.linelist.excit
+        if self.exunits.lower() != 'eV':
+            excit = change_energyunit(excit, self.exunits, 'eV')
+            for line, e in zip(self.linelist, excit):
+                line.excit = e
+            self._exunit = 'eV'
 
     def _first_air_wavelength(self, wave):
         '''Return index of first air wavelength in input list.

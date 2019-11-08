@@ -9,7 +9,7 @@ def change_waveunit(wave, oldunits, newunits):
         Input wavelength(s) in units specified by `oldunits`.
 
     oldunits : str
-        Input units for `wave`. Allowed values are descibed in the table
+        Input units for `wave`. Allowed values are described in the table
         below. Values are case insensitive.
 
     newunits : str
@@ -31,7 +31,7 @@ def change_waveunit(wave, oldunits, newunits):
     The following table defines allowed values for `newunits` and `oldunits`.
 
     +-----------------+---------------------+
-    | Units           | Description         |
+    | Unit            | Description         |
     +=================+=====================+
     | :kbd:`'A'`      | Angstroms           |
     +-----------------+---------------------+
@@ -66,8 +66,8 @@ def change_waveunit(wave, oldunits, newunits):
         A_to_new = factor[newlow]
     except KeyError as e:
         raise ValueError(
-            f"invalid waveunit specified: old='{oldunits}', new='{newunits}'\n"
-            f"Valid waveunits: '" + "', '".join(factor.keys()) + "'")
+            f"invalid wavelength unit: old='{oldunits}', new='{newunits}'\n"
+            f"Valid wavelength units: '" + "', '".join(factor.keys()) + "'")
     old_new = old_to_A / A_to_new
     if oldlow in ['cm^-1', '1/cm']:
         try:
@@ -84,6 +84,78 @@ def change_waveunit(wave, oldunits, newunits):
             return [old_new * w for w in wave]
         except TypeError:
             return old_new * wave
+
+def change_energyunit(energy, oldunits, newunits):
+    """Return energies converted to new energy units.
+
+    Parameters
+    ----------
+    energy : float or list of floats
+        Input energy or energies in units specified by `oldunits`.
+
+    oldunits : str
+        Input units for `energy`. Allowed values are described
+         in the table below. Values are case insensitive.
+
+    newunits : str
+        Units for returned energy or energies. Allowed values are
+        described in the table below. Values are case insensitive.
+
+    Returns
+    -------
+    float or list of floats
+        Output energy or energies in units specified by `newunits`.
+
+    Raises
+    ------
+    ValueError
+        If either `oldunits` or `newunits` is not a recognized energy
+        unit, as described in the table below.
+
+
+    The following table defines allowed values for `newunits` and `oldunits`.
+
+    +-----------------+---------------------+
+    | Unit            | Description         |
+    +=================+=====================+
+    | :kbd:`'eV'`     | electron volts      |
+    +-----------------+---------------------+
+    | :kbd:`'erg'`    | erg                 |
+    +-----------------+---------------------+
+    | :kbd:`'J'`      | Joule               |
+    +-----------------+---------------------+
+    | :kbd:`'cm^-1'`  | inverse centimeters |
+    +-----------------+---------------------+
+    | :kbd:`'1/cm'`   | inverse centimeters |
+    +-----------------+---------------------+
+
+    Examples
+    --------
+    >>> from sme.util import change_energyunit
+    >>> change_energyunit(2.0, 'eV', 'cm^-1')
+    16131.087874
+    >>> change_energyunit([5000, 20000], 'cm^-1', 'eV')
+    [0.6199209921928418, 2.479683968771367]
+    """
+    oldlow = oldunits.lower()
+    newlow = newunits.lower()
+    if newlow == oldlow:
+        return energy
+    factor = {
+        'ev': 1.0, 'erg': 1.602176634e-12, 'j': 1.602176634e-19,
+        'cm^-1': 8065.543937, '1/cm': 8065.543937}
+    try:
+        old_to_eV = 1 / factor[oldlow]
+        eV_to_new = factor[newlow]
+    except KeyError as e:
+        raise ValueError(
+            f"invalid energy unit: old='{oldunits}', new='{newunits}'\n"
+            f"Valid energy units: '" + "', '".join(factor.keys()) + "'")
+    old_new = old_to_eV * eV_to_new
+    try:
+        return [old_new * e for e in energy]
+    except TypeError:
+        return old_new * energy
 
 def air_to_vacuum(wair, units):
     """Convert wavelengths in air to wavelengths in vacuum.
@@ -274,6 +346,6 @@ def vacuum_angstroms(wave, units, medium):
         wvac_a = air_to_vacuum(wave_a, 'A')
     else:
         raise ValueError(
-            f"invalid medium specified: '{medium}'\n"
+            f"invalid medium: '{medium}'\n"
             f"Valid media: 'air', 'vac', 'vacuum', or None")
     return(wvac_a)

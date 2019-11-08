@@ -1,6 +1,7 @@
 from pytest import raises
 from sme.util import (
-    change_waveunit, air_to_vacuum, vacuum_to_air, vacuum_angstroms)
+    change_waveunit, change_energyunit,
+    air_to_vacuum, vacuum_to_air, vacuum_angstroms)
 
 
 def test_change_waveunit():
@@ -24,10 +25,35 @@ def test_change_waveunit():
         assert change_waveunit(wave, unit, 'A') == 5000
         assert change_waveunit(wave, unit.upper(), 'A') == 5000
         assert change_waveunit([wave, wave], unit, 'A') == [5000, 5000]
-    with raises(ValueError, match='invalid waveunit specified'):
+    with raises(ValueError, match='invalid wavelength unit'):
         change_waveunit(5000, 'A', 'erg')
-    with raises(ValueError, match='invalid waveunit specified'):
+    with raises(ValueError, match='invalid wavelength unit'):
         change_waveunit(5000, 'erg', 'A')
+
+def test_change_energyunit():
+    """Test code paths and cases in util.change_energyunit().
+    Test conversion from/to eV to/from all units listed in `cases`.
+    Test units specified in uppercase and lowercase.
+    Test scalar energy and list of energies.
+    """
+    cases = {
+        'ev': 1,
+        'erg': 1.602176634e-12,
+        'j': 1.602176634e-19,
+        'cm^-1': 8065.543937,
+        '1/cm': 8065.543937}
+    for unit in cases:
+        energy = cases[unit]
+        assert change_energyunit(1, 'eV', unit) == energy
+        assert change_energyunit(1, 'eV', unit.upper()) == energy
+        assert change_energyunit([1], 'eV', unit) == [energy]
+        assert change_energyunit(energy, unit, 'eV') == 1
+        assert change_energyunit(energy, unit.upper(), 'eV') == 1
+        assert change_energyunit([energy, energy], unit, 'eV') == [1, 1]
+    with raises(ValueError, match='invalid energy unit'):
+        change_energyunit(5000, 'eV', 'A')
+    with raises(ValueError, match='invalid energy unit'):
+        change_energyunit(5000, 'A', 'eV')
 
 def test_air_to_vacuum():
     """Test code paths and cases in util.air_to_vacuum().
@@ -69,8 +95,8 @@ def test_vacuum_angstroms():
     for w, u in zip(win, uin):
         assert vacuum_angstroms(w, u, 'vac') == 5000
         assert vacuum_angstroms(w, u, 'air') == 5001.39484863807
-    with raises(ValueError, match='invalid waveunit specified'):
+    with raises(ValueError, match='invalid wavelength unit'):
         vacuum_angstroms(5000, 'erg', 'vac')
-    with raises(ValueError, match='invalid medium specified'):
+    with raises(ValueError, match='invalid medium'):
         vacuum_angstroms(5000, 'A', 'water')
 
