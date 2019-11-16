@@ -4,70 +4,14 @@ from pathlib import Path
 from platform import system, machine, architecture
 
 
-class Array1D:
-    class Type:
-        def __init__(self, ctype, n):
-            self.type = ctype * n
-
-    def __init__(self, ctype, n):
-        self.n = n
-        datatype = self.Type(ctype, self.n).type
-        self.type = POINTER(datatype)
-        self.data = datatype()
-        self.pointer = pointer(self.data)
-
-
-class Array2D:
-    class Type:
-        """
-        Memory order has n varying rapidly, m varying slowly.
-        Use slow index first, rapid index second, e.g., obj[jm][in].
-        """
-        def __init__(self, ctype, n, m):
-            self.type = ctype * n * m
-
-    def __init__(self, ctype, n, m):
-        self.n = n
-        self.m = m
-        datatype = self.Type(ctype, self.n, self.m).type
-        self.type = POINTER(datatype)
-        self.data = datatype()
-        self.pointer = pointer(self.data)
-
-
-class IdlString(Structure):
-    _fields_ = [
-        ('len', c_int),
-        ('type', c_ushort),
-        ('bytes', c_char_p)
-        ]
-
-    def __init__(self, bytes):
-        self.len = c_int(len(bytes))
-        self.type = c_ushort(0)
-        self.bytes = c_char_p(bytes)
-
-
-class IdlStringArray:
-    class Type:
-        def __init__(self, n):
-            self.type = IdlString * n
-
-    def __init__(self, strlist):
-        self.n = len(strlist)
-        datatype = self.Type(self.n).type
-        self.data = datatype()
-        self.data[:] = [IdlString(s.encode('utf-8')) for s in strlist]
-        self.type = POINTER(datatype)
-        self.pointer = pointer(self.data)
-
-
 class LibSme:
+    """Access SME external library code.
+    """
     def __init__(self, file=None):
         if file:
             self._file = file
         else:
-            self._file = self.libfile()
+            self._file = self.default_libfile()
         self.lib = CDLL(str(self._file))
         self._wfirst = None
         self._wlast = None
@@ -77,6 +21,8 @@ class LibSme:
 
     @property
     def file(self):
+        """Absolute path to SME library file for the current platform.
+        """
         return self._file
 
     @property
@@ -99,8 +45,8 @@ class LibSme:
     def linelist(self):
         return self._linelist
 
-    def libfile(self):
-        """Return absolute path to SME library file for the current platform.
+    def default_libfile(self):
+        """Return default absolute path to SME library file.
         """
         dir = Path(__file__).parent.joinpath('dll')
         file = '.'.join([
@@ -181,13 +127,13 @@ class LibSme:
         class Args(Structure):
             _fields_ = [
                 ('nlines', POINTER(c_int)),
-                ('species', POINTER(IdlString * nlines)),
+                ('species', POINTER(_IdlString * nlines)),
                 ('atomic', POINTER(c_double * nlines * m))
                 ]
 
             def __init__(self, linelist):
                 self._nlines = c_int(nlines)
-                self._species = IdlStringArray(linelist.species)
+                self._species = _IdlStringArray(linelist.species)
                 self._atomic = Array2D(c_double, nlines, m)
                 self._atomic.data[2][:] = linelist.wlcent
                 self._atomic.data[3][:] = linelist.excit
@@ -255,20 +201,19 @@ class LibSme:
         nlines = len(newlinedata)
         if len(index) != nlines:
             raise ValueError(f'mismatch: {nlines} lines, {len(index)} indexes')
-
         m = 8
 
         class Args(Structure):
             _fields_ = [
-                ('nlines', POINTER(c_int)),
-                ('species', POINTER(IdlString * nlines)),
+                ('nlines', POINTER(c_short)),
+                ('species', POINTER(_IdlString * nlines)),
                 ('atomic', POINTER(c_double * nlines * m)),
-                ('index', POINTER(c_int * nlines))
+                ('index', POINTER(c_short * nlines))
                 ]
 
             def __init__(self, newlinedata, index):
-                self._nlines = c_int(nlines)
-                self._species = IdlStringArray(newlinedata.species)
+                self._nlines = c_short(nlines)
+                self._species = _IdlStringArray(newlinedata.species)
                 self._atomic = Array2D(c_double, nlines, m)
                 self._atomic.data[2][:] = newlinedata.wlcent
                 self._atomic.data[3][:] = newlinedata.excit
@@ -276,7 +221,7 @@ class LibSme:
                 self._atomic.data[5][:] = newlinedata.gamrad
                 self._atomic.data[6][:] = newlinedata.gamqst
                 self._atomic.data[7][:] = newlinedata.gamvw
-                self._index = Array1D(c_int, nlines)
+                self._index = Array1D(c_short, nlines)
                 self._index.data[:] = index
                 self.nlines = pointer(self._nlines)
                 self.species = pointer(self._species.data)
@@ -298,3 +243,69 @@ class LibSme:
             raise RuntimeError(error)
         for i, line in enumerate(newlinedata):
             self._linelist[index[i]] = line
+
+
+class Array1D:
+    class Type:
+        def __init__(self, ctype, n):
+            self.type = ctype * n
+
+    def __init__(self, ctype, n):
+        self.n = n
+        datatype = self.Type(ctype, self.n).type
+        self.type = POINTER(datatype)
+        self.data = datatype()
+        self.pointer = pointer(self.data)
+
+
+class Array2D:
+    class Type:
+        """
+        Memory order has n varying rapidly, m varying slowly.
+        Use slow index first, rapid index second, e.g., obj[jm][in].
+        """
+        def __init__(self, ctype, n, m):
+            self.type = ctype * n * m
+
+    def __init__(self, ctype, n, m):
+        self.n = n
+        self.m = m
+        datatype = self.Type(ctype, self.n, self.m).type
+        self.type = POINTER(datatype)
+        self.data = datatype()
+        self.pointer = pointer(self.data)
+
+
+class _IdlString(Structure):
+    def __init__(self, bytes):
+        self.len = c_int(len(bytes))
+        self.type = c_ushort(0)
+        self.bytes = c_char_p(bytes)
+
+    def __len__(self):
+        return(self.len)
+
+    def __str__(self):
+        return(self.bytes.decode('utf-8'))
+
+    _fields_ = [
+        ('len', c_int),
+        ('type', c_ushort),
+        ('bytes', c_char_p)
+        ]
+
+class _IdlStringArray:
+    class Type:
+        def __init__(self, n):
+            self.type = _IdlString * n
+
+    def __init__(self, strlist):
+        self.n = len(strlist)
+        datatype = self.Type(self.n).type
+        self.data = datatype()
+        self.data[:] = [_IdlString(s.encode('utf-8')) for s in strlist]
+        self.type = POINTER(datatype)
+        self.pointer = pointer(self.data)
+
+    def __len__(self):
+        return(self.n)
