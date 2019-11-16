@@ -197,7 +197,6 @@ class LibSme:
     def UpdateLineList(self, newlinedata, index):
         """Pass new line data to library code for lines specified by index.
         """
-        print(f'DLL_ULL: {newlinedata.species}')
         libfunc = self.lib.UpdateLineList
         nlines = len(newlinedata)
         if len(index) != nlines:
@@ -233,8 +232,6 @@ class LibSme:
         argc = len(argv._fields_)
         libfunc.argtypes = [c_int, *[POINTER(f[1]) for f in argv._fields_]]
         libfunc.restype = c_char_p
-        for x in argv.species.contents:
-            print(x)
         error = libfunc(
             argc,
             byref(argv.nlines),
