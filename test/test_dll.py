@@ -59,7 +59,7 @@ def test_dll():
     for vslstr in vald_short_line_strings:
         linelist.append(ValdShortLine(vslstr))
 
-# Fail to pass line data
+# Fail to pass line data.
     out_of_order_list = LineList()
     out_of_order_list.append(linelist[1])
     out_of_order_list.append(linelist[0])
@@ -69,11 +69,11 @@ def test_dll():
 # Pass line data.
     libsme.InputLineList(linelist)
 
-# Read line data.
+# Read line data and check that output matches input.
     outlist = libsme.OutputLineList()
     assert_outputlinelist_matches_input(outlist, libsme.linelist)
 
-# Create new line data for one line.
+# Create new data for one line.
     index = [1]
     newlinedata = LineList()
     for i in index:
@@ -81,19 +81,19 @@ def test_dll():
         vsl.wlcent += 0.01
         newlinedata.append(vsl)
 
-# Fail to update line data
+# Fail to update data for one line.
     with raises(ValueError, match=r'mismatch: .* lines, .* indexes'):
         libsme.UpdateLineList(newlinedata, [0, 1])
     with raises(RuntimeError, match=r'Attempt to replace .* another line'):
         libsme.UpdateLineList(newlinedata, [0])
-
-# Update line data
+ 
+# Update data for one line.
     libsme.UpdateLineList(newlinedata, index)
     outlist = libsme.OutputLineList()
     assert_outputlinelist_matches_input(outlist, libsme.linelist)
 
-# Create new line data for multiple lines.
-    index = [0]
+# Create new data for multiple lines.
+    index = [1, 0]
     newlinedata = LineList()
     for i in index:
         vsl = libsme.linelist[i]
