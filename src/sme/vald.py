@@ -6,7 +6,7 @@ from sme.abund import Abund
 from sme.util import change_waveunit, change_energyunit, vacuum_angstroms
 
 
-class FileError(Exception):
+class ValdFileError(Exception):
     """Raise when attempt to read a VALD line data file fails.
     """
 
@@ -220,7 +220,7 @@ class ValdShortRef:
             words = shortref.split()
             assert len(words) == 15
         except AssertionError:
-            raise FileError(f'expected 15 words in VALD line ref: {lineref}')
+            raise ValdFileError(f'expected 15 words in VALD line ref: {shortref}')
         id = [int(w) for w in words[:13:2]]
         ref = words[1::2]
         self.species = words[14]
@@ -322,12 +322,6 @@ class LineList:
             self._lines[key] = line
         else:
             self._raise_invalid_line_type(line)
-
-    def _raise_invalid_line_type(self, line):
-        raise TypeError(
-            f'line in LineList has invalid type: {type(line).__name__}\n'
-            f'  Valid line types: ' + \
-            ' '.join([type.__name__ for type in self._valid_line_types]))
 
     def __str__(self):
         out = []
@@ -437,37 +431,67 @@ class ValdFile:
         return self._version
 
     def read(self, filename):
-        """Read line data file from the VALD extract stellar service.
+        """Read and parse file from the VALD extract stellar service.
         """
-        with open(filename, 'r') as file:
-            lines = file.readlines()
-        ibeg, iend = 0, 3
-        self.parse_header(lines[0:3])
-        chunksize = 1 if self._format == 'short' else 4
-        ibeg, iend = iend, iend+chunksize*self.nlines
-        self._linelist = self.parse_linedata(lines[ibeg:iend])
-        self._valdatmo = self.parse_valdatmo(lines[iend])
-        ibeg, iend = iend+1, iend+19
-        self._abund = self.parse_abund(lines[ibeg:iend])
-        self._isotopes = self.parse_isotopes(lines[iend])
-        self._references = self.parse_references(lines[iend+1:])
+        def section(fobj, name, nline=None):
+            """Read specified number of lines from VALD file or to end of file.
+            """
+            if nline:
+                # Require the specified number of lines.
+                lines = []
+                for iline in range(nline):
+                    line = fobj.readline()
+                    if line:
+                        lines.append(line)
+                    else:
+                        raise ValdFileError(
+                            f'incomplete {name} section: {self._filename}')
+            else:
+                # Require at least 2 lines. Read to end of file.
+                lines = fobj.readlines()
+                if len(lines) < 2:
+                    raise ValdFileError(
+                        f'incomplete {name} section: {self._filename}')
+            return(lines)
+
+        with open(filename, 'r') as fobj:
+            self.parse_header(
+                section(fobj, 'header', nline=3))
+            if self._format == 'short':
+                chunksize = 1
+            else:
+                chunksize = 4
+            self._linelist = self.parse_linedata(
+                section(fobj, 'line data', chunksize*self.nlines))
+            self._valdatmo = self.parse_valdatmo(
+                section(fobj, 'atmosphere name', 1))
+            self._abund = self.parse_abund(
+                section(fobj, 'abundance', 18))
+            self._isotopes = self.parse_isotopes(
+                section(fobj, 'isotope flag', 1))
+            self._references = self.parse_references(
+                section(fobj, 'references'))
 
     def parse_header(self, lines):
         """Parse header lines from a VALD line data file.
         Presence of wavelength medium ('_air' or '_vac') implies VALD3.
         """
-        words = [w.strip() for w in lines[0].split(',')]
-        if len(words) < 5 or words[5] != 'Wavelength region':
-            raise FileError(f'{self._filename} is not a VALD line data file')
-        self._wavelo = float(words[0])
-        self._wavehi = float(words[1])
-        self._nlines = int(words[2])
-        self._nprocessed = int(words[3])
-        self._vmicro = float(words[4])
-        self._wlmedium = lines[2].partition('WL_')[2].partition('(')[0]
-        self._version = 2 if self._wlmedium == '' else 3
-        self._format = 'long' if 'J lo' in lines[2] else 'short'
-        self._wlunits, self._exunits = findall(r'\(([^)]+)', lines[2])[0:2]
+        try:
+            words = [w.strip() for w in lines[0].split(',')]
+            assert words[5] == 'Wavelength region'
+            self._wavelo = float(words[0])
+            self._wavehi = float(words[1])
+            self._nlines = int(words[2])
+            self._nprocessed = int(words[3])
+            self._vmicro = float(words[4])
+            self._wlmedium = lines[2].partition('WL_')[2].partition('(')[0]
+            assert self.wlmedium in ['air', 'vac']
+            self._version = 2 if self._wlmedium == '' else 3
+            self._format = 'long' if 'J lo' in lines[2] else 'short'
+            self._wlunits, self._exunits = findall(r'\(([^)]+)', lines[2])[0:2]
+            assert self.wlunits in ['A', 'nm', 'cm^-1']
+        except (AssertionError, ValueError, IndexError):
+            raise ValdFileError(f'error parsing header: {self._filename}')
 
     def parse_linedata(self, lines):
         """Parse line data from a VALD line data file.
@@ -481,15 +505,15 @@ class ValdFile:
             for chunk in zip_longest(*[iter(lines)]*4):
                 linelist.append(ValdLongLine(chunk))
         else:
-            raise FileError(f'{self._filename} has unknown format')
+            raise ValdFileError(f'unknown line data format: {self._filename}')
         return linelist
 
-    def parse_valdatmo(self, line):
+    def parse_valdatmo(self, lines):
         """Parse VALD model atmosphere line from a VALD line data file.
         """
-        lstr = line.strip()
+        lstr = lines[0].strip()
         if lstr[0] != "'" or lstr[-2:] != "',":
-            raise FileError(f'error parsing model atmosphere: {lstr}')
+            raise ValdFileError(f'error parsing atmosphere name: {lstr}')
         return lstr[1:-2]
 
     def parse_abund(self, lines):
@@ -498,7 +522,7 @@ class ValdFile:
         abstr = ''.join([''.join(line.split()) for line in lines])
         words = [w[1:-1] for w in abstr.split(',')]
         if len(words) != 100 or words[99] != 'END':
-            raise FileError(f'error parsing abundances: {abstr}')
+            raise ValdFileError(f'error parsing abundances: {abstr}')
         pattern = [w.split(':') for w in words[:-1]]
         pattern = OrderedDict([(el, float(ab)) for el, ab in pattern])
         monh = 0.0

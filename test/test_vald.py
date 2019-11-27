@@ -1,5 +1,8 @@
 from pathlib import Path
-from sme.vald import SmeLine, LineList, ValdFile, ValdShortLine
+from pytest import raises
+
+from sme.vald import (
+    ValdFileError, SmeLine, LineList, ValdFile, ValdShortLine, ValdShortRef)
 
 
 # Strings containing line data from a short-format VALD extract stellar file.
@@ -61,7 +64,25 @@ def test_valdshortline():
         assert isinstance(vsl, ValdShortLine)
         assert vsl.__str__() == vslstr
         assert vsl.__repr__() == type(vsl).__name__ + f'({vslstr!r})'
-        data, shortref = vslstr.strip().split(", '")
+
+
+def test_valdshortref():
+    """Test code paths and cases in vald.ValdShortRef().
+    """
+    for vslstr in vald_short_line_strings:
+        vsr = ValdShortLine(vslstr).ref
+        datastr, refstr = vslstr.strip().split(", '")
+        refs = refstr.split()[1::2]
+        assert isinstance(vsr, ValdShortRef)
+        assert refs[0] in [vsr.wlcent, 'wl:' + vsr.wlcent]
+        assert refs[1] == vsr.excit
+        assert refs[2] in [vsr.loggf, 'gf:' + vsr.loggf]
+        assert refs[3] == vsr.gamrad
+        assert refs[4] == vsr.gamqst
+        assert refs[5] == vsr.gamvw
+        assert refs[6] == vsr.lande_mean
+    with raises(ValdFileError, match='expected 15 words'):
+        vsr = ValdShortLine(datastr + ", 'invalid reference string'")
 
 
 def test_linelist():
@@ -91,6 +112,9 @@ def test_linelist():
     # __len__() returns number of appended lines.
     assert len(linelist) == len(vald_short_line_strings)
 
+    # Exercise __str__() to make sure it returns a value.
+    assert type(str(linelist)) is str
+
     # Properties return lists of values equal to the input values.
     assert isinstance(linelist.species, list)
     assert len(linelist.species) == len(vald_short_line_strings)
@@ -102,21 +126,33 @@ def test_linelist():
     assert linelist.gamqst == [line.gamqst for line in inputs]
     assert linelist.gamvw == [line.gamvw for line in inputs]
 
+    # Exceptions
+    with raises(TypeError, match='line in LineList has invalid type'):
+        linelist[0] = 'invalid type'
+    with raises(TypeError, match='line in LineList has invalid type'):
+        linelist.append('invalid type')
+
 
 def test_valdfile():
     """Test code paths and cases in vald.ValdFile().
     """
-    maxdiff = lambda xlist, ylist: max(abs(x-y) for x, y in zip(xlist, ylist))
-    datadir = Path(__file__).parent / 'data'
+    datadir = Path(__file__).parent / 'vald'
     jobnum_pairs = [[45169, 45170], [45174, 45175]]
     for jobnum1, jobnum2 in jobnum_pairs:
-        valdfile1 = datadir / f'vald.{jobnum1:06}'
+        valdfile1 = datadir / f'{jobnum1:06}.vald'
         vf1 = ValdFile(valdfile1)
-        valdfile2 = datadir / f'vald.{jobnum2:06}'
+        assert vf1.filename == valdfile1
+        assert vf1.version == 3
+        valdfile2 = datadir / f'{jobnum2:06}.vald'
         vf2 = ValdFile(valdfile2)
         assert vf1.nlines == vf2.nlines
-        assert maxdiff(vf1.wlrange, vf2.wlrange) < 1e-2
-        assert maxdiff(vf1.linelist.wlcent, vf2.linelist.wlcent) < 1e-4
+        assert vf1.nprocessed == vf2.nprocessed
+        assert _maxdiff(vf1.wlrange, vf2.wlrange) < 1e-2
+        assert _maxdiff(vf1.linelist.wlcent, vf2.linelist.wlcent) < 1e-4
+        assert vf1.valdatmo == vf2.valdatmo
+        assert vf1.abund.pattern == vf2.abund.pattern
+        assert vf1.isotopes == vf2.isotopes
+        assert vf1.references == vf2.references
 
     # Test _first_air_wavelength() method:
     # All wavelengths > 2000 Angstroms. All are air.
@@ -144,3 +180,38 @@ def test_valdfile():
     assert(vf1._first_air_wavelength([1999, 1999.5, 1999.6, 2001]) == 3)
     assert(vf1._first_air_wavelength([1999, 2001]) == 1)
     assert(vf1._first_air_wavelength([1999, 2000, 2001]) == 2)
+
+
+def test_valdfile_exceptions():
+    """Handle exceptions raised by ValdFile().
+    """
+    datadir = Path(__file__).parent / 'vald'
+    vf = ValdFile(datadir / 'complete_file.vald')
+    with raises(ValdFileError, match='incomplete header'):
+        ValdFile(datadir / 'incomplete_header.vald')
+    with raises(ValdFileError, match='incomplete line data'):
+        ValdFile(datadir / 'incomplete_linedata.vald')
+    with raises(ValdFileError, match='incomplete atmosphere name'):
+        ValdFile(datadir / 'incomplete_atmoname.vald')
+    with raises(ValdFileError, match='incomplete abundance'):
+        ValdFile(datadir / 'incomplete_abund.vald')
+    with raises(ValdFileError, match='incomplete isotope flag'):
+        ValdFile(datadir / 'incomplete_isotope.vald')
+    with raises(ValdFileError, match='incomplete references'):
+        ValdFile(datadir / 'incomplete_refs.vald')
+    for problem in ('labels', 'values', 'nvalue', 'wlmedium', 'wlunits'):
+        with raises(ValdFileError, match='error parsing header'):
+            ValdFile(datadir / f'bad_header_{problem}.vald')
+    with raises(ValdFileError, match='error parsing atmosphere name'):
+        ValdFile(datadir / 'bad_atmoname.vald')
+    with raises(ValdFileError, match='error parsing abundances'):
+        ValdFile(datadir / 'bad_abund.vald')
+    vf._format = 'invalid'
+    with raises(ValdFileError, match='unknown line data format'):
+        vf.parse_linedata('')
+
+
+def _maxdiff(xlist, ylist):
+    """Maximum of absolute value of difference between values in two lists.
+    """
+    return(max(abs(x-y) for x, y in zip(xlist, ylist)))

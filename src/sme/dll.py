@@ -1,5 +1,6 @@
-from ctypes import CDLL, POINTER, Structure, pointer, byref, \
-        c_short, c_ushort, c_int, c_double, c_char_p
+from ctypes import (
+        CDLL, POINTER, Structure, pointer, byref,
+        c_short, c_ushort, c_int, c_double, c_char_p)
 from pathlib import Path
 from platform import system, machine, architecture
 
@@ -15,8 +16,8 @@ class LibSme:
         self.lib = CDLL(str(self._file))
         self._wfirst = None
         self._wlast = None
-        self._vw_scale = None
-        self._H2broad = None
+        self._vwscale = None
+        self._h2broad = None
         self._linelist = None
 
     @property
@@ -34,12 +35,12 @@ class LibSme:
         return self._wlast
 
     @property
-    def vw_scale(self):
-        return self._vw_scale
+    def vwscale(self):
+        return self._vwscale
 
     @property
-    def H2broad(self):
-        return self._H2broad
+    def h2broad(self):
+        return self._h2broad
 
     @property
     def linelist(self):
@@ -91,31 +92,31 @@ class LibSme:
         self._wfirst = wfirst
         self._wlast = wlast
 
-    def SetVWscale(self, vw_scale):
+    def SetVWscale(self, vwscale):
         """Pass van der Waals broadening enhancement factor to library code.
         """
         libfunc = self.lib.SetVWscale
-        argv = pointer(c_double(vw_scale))
+        argv = pointer(c_double(vwscale))
         libfunc.argtypes = [c_int, POINTER(POINTER(c_double))]
         libfunc.restype = c_char_p
         error = libfunc(1, byref(argv)).decode('utf-8')
         if error != '':
             raise ValueError(error)
-        self._vw_scale = vw_scale
+        self._vwscale = vwscale
 
     def SetH2broad(self):
         """Enable collisional broadening by molecular hydrogen in library code.
         """
         self.lib.SetH2broad.restype = c_char_p
         assert self.lib.SetH2broad().decode('utf-8') == ''
-        self._H2broad = True
+        self._h2broad = True
 
     def ClearH2broad(self):
         """Disable collisional broadening by molecular hydrogen in library code.
         """
         self.lib.ClearH2broad.restype = c_char_p
         assert self.lib.ClearH2broad().decode('utf-8') == ''
-        self._H2broad = False
+        self._h2broad = False
 
     def InputLineList(self, linelist):
         """Pass atomic and molecular line data to library code.
@@ -282,12 +283,6 @@ class _IdlString(Structure):
         self.type = c_ushort(0)
         self.bytes = c_char_p(bytes)
 
-    def __len__(self):
-        return(self.len)
-
-    def __str__(self):
-        return(self.bytes.decode('utf-8'))
-
     _fields_ = [
         ('len', c_int),
         ('type', c_ushort),
@@ -306,6 +301,3 @@ class _IdlStringArray:
         self.data[:] = [_IdlString(s.encode('utf-8')) for s in strlist]
         self.type = POINTER(datatype)
         self.pointer = pointer(self.data)
-
-    def __len__(self):
-        return(self.n)

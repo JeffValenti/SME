@@ -1,4 +1,5 @@
 from pytest import raises
+
 from sme.util import (
     change_waveunit, change_energyunit,
     air_to_vacuum, vacuum_to_air, vacuum_angstroms)
