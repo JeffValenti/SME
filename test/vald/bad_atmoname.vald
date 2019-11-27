@@ -1,0 +1,5 @@
+ 656.01900, 656.51900, 1, 553, 0.0, Wavelength region, lines selected, lines processed, Vmicro
+                                                        Damping parameters   Lande  Central
+Spec Ion     WL_air(nm)       Ex(cm^-1) Vmic  log gf*  Rad.  Stark    Waals  factor  depth   Reference
+'CN 1',       656.02253,      5170.0320, 0.0, -1.870, 6.170, 0.000,   0.000, 99.000, 0.003, '   1 wl:KCN   1 KCN   1 gf:KCN   1 KCN   1 KCN   1 KCN   1 KCN (12)C(14)N    '
+castelli_ap00k2_T05750G45.krz,
