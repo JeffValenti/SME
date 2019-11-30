@@ -1,5 +1,12 @@
 from sys import version_info
 
+from sme.util import FileError, filesection
+
+
+class AtmoFileError(Exception):
+    """Raise when attempt to read an atmosphere file fails.
+    """
+
 
 class ContinuousOpacityFlags(dict):
     """Manage continuous opacity flags needed by the SME external library.
@@ -212,7 +219,7 @@ class SmeAtmo:
         self._massdensity = None
 
 
-class Atlas9AtmoFile:
+class AtmoFileAtlas9:
     """Contents of an ATLAS9 atmosphere file.
     """
     def __init__(self, filename):
@@ -273,38 +280,37 @@ class Atlas9AtmoFile:
     def read(self, filename):
         """Read data from an ATLAS9 atmosphere file.
         """
-        with open(filename, 'r') as file:
-            lines = file.read().splitlines()
-        self.parse_header(*lines[0:4])
+        try:
+            with open(filename, 'r') as fobj:
+                self.parse_header(
+                    *filesection(fobj, 'header', nline=4))
+        except FileError as e:
+            raise AtmoFileError(e)
 
     def parse_header(self, line0, line1, line2, line3):
         """Parse four header lines from an ATLAS9 atmosphere file.
-        Print detailed diagnostics if expected text is not found.
         """
-        expected = [
-            'TEFF ', '  GRAVITY', 'TITLE ', ' OPACITY IFOP',
-            ' CONVECTION ', ' TURBULENCE']
-        actual = [
-            line0[0:5], line0[12:21], line1[0:6], line2[0:13],
-            line3[0:12], line3[21:32]]
-        if expected != actual:
-            fmt = lambda e, m, a: f"  {e:15} {m:2} {a:15}"
-            quote = lambda s: "'" + s + "'"
-            print(fmt('Expected Text', '', 'Actual Text'))
-            print(fmt('---------------', '??', '---------------'))
-            for e, a in zip(expected, actual):
-                if e == a:
-                    print(fmt(quote(e), '==', quote(a)))
-                else:
-                    print(fmt(quote(e), '!=', quote(a)))
-            raise ValueError(
-                f'{self._filename} does not have expected text')
-        self._teff = float(line0[5:12])
-        self._logg = float(line0[21:29])
-        self._title = line1[6:]
-        self._ifop = line2[13:53]
-        self._conv = line3[12:16]
-        self._mixlen = float(line3[16:22])
-        self._turb = line3[32:36]
-        chop = lambda s, w: [float(s[w*i:w*(i+1)]) for i in range(len(s)//w)]
-        self._turbparam = chop(line3[36:60], 6)
+        try:
+            expected = [
+                'TEFF ', '  GRAVITY', 'TITLE ', ' OPACITY IFOP',
+                ' CONVECTION ', ' TURBULENCE']
+            actual = [
+                line0[0:5], line0[12:21], line1[0:6], line2[0:13],
+                line3[0:12], line3[21:32]]
+            if expected != actual:
+                diag = '\n   Expected_Label    Actual_Label'
+                for e, a in zip(expected, actual):
+                    operator = '==' if e == a else '!='
+                    diag += f'\n  {e!r:>15} {operator} {a!r:15}'
+                raise ValueError(
+                    f'error parsing header: {self._filename}' + diag)
+            self._teff = float(line0[5:12])
+            self._logg = float(line0[21:29])
+            self._title = line1[6:]
+            self._ifop = line2[13:53]
+            self._conv = line3[12:16]
+            self._mixlen = float(line3[16:22])
+            self._turb = line3[32:36]
+            self._turbparam = [float(line3[i:i+6]) for i in range(36, 60, 6)]
+        except (AssertionError, ValueError):
+            raise AtmoFileError(f'error parsing header: {self._filename}')
