@@ -2,8 +2,11 @@ from bisect import bisect
 from re import findall
 from collections import OrderedDict
 from itertools import zip_longest
+
 from sme.abund import Abund
-from sme.util import change_waveunit, change_energyunit, vacuum_angstroms
+from sme.util import (
+    change_waveunit, change_energyunit, vacuum_angstroms,
+    FileError, filesection)
 
 
 class ValdFileError(Exception):
@@ -433,44 +436,26 @@ class ValdFile:
     def read(self, filename):
         """Read and parse file from the VALD extract stellar service.
         """
-        def section(fobj, name, nline=None):
-            """Read specified number of lines from VALD file or to end of file.
-            """
-            if nline:
-                # Require the specified number of lines.
-                lines = []
-                for iline in range(nline):
-                    line = fobj.readline()
-                    if line:
-                        lines.append(line)
-                    else:
-                        raise ValdFileError(
-                            f'incomplete {name} section: {self._filename}')
-            else:
-                # Require at least 2 lines. Read to end of file.
-                lines = fobj.readlines()
-                if len(lines) < 2:
-                    raise ValdFileError(
-                        f'incomplete {name} section: {self._filename}')
-            return(lines)
-
-        with open(filename, 'r') as fobj:
-            self.parse_header(
-                section(fobj, 'header', nline=3))
-            if self._format == 'short':
-                chunksize = 1
-            else:
-                chunksize = 4
-            self._linelist = self.parse_linedata(
-                section(fobj, 'line data', chunksize*self.nlines))
-            self._valdatmo = self.parse_valdatmo(
-                section(fobj, 'atmosphere name', 1))
-            self._abund = self.parse_abund(
-                section(fobj, 'abundance', 18))
-            self._isotopes = self.parse_isotopes(
-                section(fobj, 'isotope flag', 1))
-            self._references = self.parse_references(
-                section(fobj, 'references'))
+        try:
+            with open(filename, 'r') as fobj:
+                self.parse_header(
+                    filesection(fobj, 'header', nline=3))
+                if self._format == 'short':
+                    chunksize = 1
+                else:
+                    chunksize = 4
+                self._linelist = self.parse_linedata(
+                    filesection(fobj, 'line data', chunksize*self.nlines))
+                self._valdatmo = self.parse_valdatmo(
+                    filesection(fobj, 'atmosphere name', 1))
+                self._abund = self.parse_abund(
+                    filesection(fobj, 'abundance', 18))
+                self._isotopes = self.parse_isotopes(
+                    filesection(fobj, 'isotope flag', 1))
+                self._references = self.parse_references(
+                    filesection(fobj, 'references', -2))
+        except FileError as e:
+            raise ValdFileError(e)
 
     def parse_header(self, lines):
         """Parse header lines from a VALD line data file.
