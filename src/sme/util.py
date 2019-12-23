@@ -181,7 +181,7 @@ def air_to_vacuum(wair, units):
               + {0.0001599740894897 \over 38.92568793293 - s^2}
 
         \lambda_{vac} &= n \lambda_{air}
-     
+
     In this formula, :math:`n` is the index of refraction in air. Convert air
     wavelengths from Angstroms back to the original units before output.
     Do not convert vacuum wavelengths less than 2000 Angstroms.
@@ -214,9 +214,9 @@ def air_to_vacuum(wair, units):
     wair_a = change_waveunit(wair, units, 'A')
     try:
         sgen = (1e4 / w for w in wair_a)
-        ngen = (1 + 0.00008336624212083 + 0.02408926869968 / \
-            (130.1065924522 - s*s) + 0.0001599740894897 / \
-            (38.92568793293 - s*s) for s in sgen)
+        ngen = (1 + 0.00008336624212083 + 0.02408926869968 /
+                (130.1065924522 - s*s) + 0.0001599740894897 /
+                (38.92568793293 - s*s) for s in sgen)
         wvac_a = [w * n if w > wlimit else w for w, n in zip(wair_a, ngen)]
     except TypeError:
         if wair_a > wlimit:
@@ -229,7 +229,7 @@ def air_to_vacuum(wair, units):
             wvac_a = wair_a
     wair = change_waveunit(wvac_a, 'A', units)
     return(wair)
-    
+
 
 def vacuum_to_air(wvac, units):
     """Convert wavelengths in vacuum to wavelengths in air.
@@ -246,7 +246,7 @@ def vacuum_to_air(wvac, units):
               + {0.00015998 \over 38.9 - s^2}
 
         \lambda_{air} &= {\lambda_{vac} \over n}
-     
+
     In this formula, :math:`n` is the index of refraction in air. Convert air
     wavelengths from Angstroms back to the original units before output.
     Do not convert vacuum wavelengths less than 2000 Angstroms.
@@ -278,8 +278,8 @@ def vacuum_to_air(wvac, units):
     wvac_a = change_waveunit(wvac, units, 'A')
     try:
         sgen = (1e4 / w for w in wvac_a)
-        ngen = (1 + 0.0000834254 + 0.02406147 / (130 - s*s) + \
-            0.00015998 / (38.9 - s*s) for s in sgen)
+        ngen = (1 + 0.0000834254 + 0.02406147 / (130 - s*s) +
+                0.00015998 / (38.9 - s*s) for s in sgen)
         wair_a = [w / n if w > 2000 else w for w, n in zip(wvac_a, ngen)]
     except TypeError:
         if wvac_a > 2000:
@@ -373,7 +373,7 @@ def filesection(fobj, name, nline=0):
     fobj : file object
         File-like object that has `file` property supports readline()
         and readlines() methods.
- 
+
     name : str
         Short string identifying section type. Used in error message.
 
