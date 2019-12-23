@@ -48,17 +48,58 @@ def test_smeatmo():
 def test_atmofileatlas9():
     """Code coverage tests for Atlas9AtmoFile() class and methods.
     """
-    datadir = Path(__file__).parent / 'atmo'
-    a9file = AtmoFileAtlas9(datadir / 'ap00t5750g45k2odfnew.dat')
-    assert 'turbulence' in str(a9file)
+    datadir = Path(__file__).parent / 'atmo' / 'atlas9'
+    a9atmo = AtmoFileAtlas9(datadir / 'ap00t5750g45k2odfnew.dat')
+    assert 'turbulence' in str(a9atmo)
+    assert 'Abundances' in str(a9atmo.abund)
+    assert len(a9atmo.atmo['T']) == a9atmo.ndepth
+    a9atmo = AtmoFileAtlas9(datadir / 'conv_off_turb_on.atlas9')
+    assert 'turbulence' in str(a9atmo)
 
 def test_atmofileatlas9_exceptions():
     """Handle exceptions raised by AtmoFileAtlas9().
     """
-    datadir = Path(__file__).parent / 'atmo'
+    datadir = Path(__file__).parent / 'atmo' / 'atlas9'
     af = AtmoFileAtlas9(datadir / 'complete_file.atlas9')
+    # header section
     with raises(AtmoFileError, match='incomplete header'):
         AtmoFileAtlas9(datadir / 'incomplete_header.atlas9')
     with raises(AtmoFileError, match='error parsing header'):
-        AtmoFileAtlas9(datadir / 'bad_header_labels.atlas9')
-
+        AtmoFileAtlas9(datadir / 'bad_header_label.atlas9')
+    with raises(AtmoFileError, match='error parsing header'):
+        AtmoFileAtlas9(datadir / 'bad_header_value.atlas9')
+    # abund section
+    with raises(AtmoFileError, match='incomplete abund'):
+        AtmoFileAtlas9(datadir / 'incomplete_abund.atlas9')
+    with raises(AtmoFileError, match='error parsing abund'):
+        AtmoFileAtlas9(datadir / 'bad_abund_label.atlas9')
+    with raises(AtmoFileError, match='error parsing abund'):
+        AtmoFileAtlas9(datadir / 'bad_abund_value.atlas9')
+    # ndepth section
+    with raises(AtmoFileError, match='incomplete ndepth'):
+        AtmoFileAtlas9(datadir / 'incomplete_ndepth.atlas9')
+    with raises(AtmoFileError, match='error parsing ndepth'):
+        AtmoFileAtlas9(datadir / 'bad_ndepth_label.atlas9')
+    with raises(AtmoFileError, match='error parsing ndepth'):
+        AtmoFileAtlas9(datadir / 'bad_ndepth_value.atlas9')
+    # atmo section
+    with raises(AtmoFileError, match='incomplete atmo'):
+        AtmoFileAtlas9(datadir / 'incomplete_atmo.atlas9')
+    with raises(AtmoFileError, match='error parsing atmo'):
+        AtmoFileAtlas9(datadir / 'bad_atmo_label.atlas9')
+    with raises(AtmoFileError, match='error parsing atmo'):
+        AtmoFileAtlas9(datadir / 'bad_atmo_value.atlas9')
+    # pradk section
+    with raises(AtmoFileError, match='incomplete pradk'):
+        AtmoFileAtlas9(datadir / 'incomplete_pradk.atlas9')
+    with raises(AtmoFileError, match='error parsing pradk'):
+        AtmoFileAtlas9(datadir / 'bad_pradk_label.atlas9')
+    with raises(AtmoFileError, match='error parsing pradk'):
+        AtmoFileAtlas9(datadir / 'bad_pradk_value.atlas9')
+    # niter section
+    with raises(AtmoFileError, match='incomplete niter'):
+        AtmoFileAtlas9(datadir / 'incomplete_niter.atlas9')
+    with raises(AtmoFileError, match='error parsing niter'):
+        AtmoFileAtlas9(datadir / 'bad_niter_label.atlas9')
+    with raises(AtmoFileError, match='error parsing niter'):
+        AtmoFileAtlas9(datadir / 'bad_niter_value.atlas9')
