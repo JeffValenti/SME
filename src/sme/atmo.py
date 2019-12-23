@@ -1,4 +1,13 @@
+from math import log10
 from sys import version_info
+
+from sme.abund import Abund
+from sme.util import FileError, filesection
+
+
+class AtmoFileError(Exception):
+    """Raise when attempt to read an atmosphere file fails.
+    """
 
 
 class ContinuousOpacityFlags(dict):
@@ -57,9 +66,9 @@ class ContinuousOpacityFlags(dict):
     def __str__(self):
         """Return string that summarizes continuous opacity flag values.
         """
-        return(' '.join([
+        return ' '.join([
             'True:', *[k for k, v in self.items() if v is True], '|',
-            'False:', *[k for k, v in self.items() if v is False]]))
+            'False:', *[k for k, v in self.items() if v is False]])
 
     def defaults(self):
         """Set each continuous opacity flag to its default value.
@@ -74,7 +83,7 @@ class ContinuousOpacityFlags(dict):
         Python 3.7 or later required because code assumes dict is ordered.
         """
         assert version_info[0:2] >= (3, 7)
-        return(list(map(lambda x: 1 if x is True else 0, self.values())))
+        return list(map(lambda x: 1 if x is True else 0, self.values()))
 
 
 class SmeAtmo:
@@ -109,7 +118,7 @@ class SmeAtmo:
     def __str__(self):
         """Return string that summarizes atmosphere.
         """
-        return(
+        return (
             f'modeltype: {self.modeltype}, ' +
             f'wavelength: {self.wavelength}, ' +
             f'radius: {self.radius}' +
@@ -132,7 +141,7 @@ class SmeAtmo:
 
         This read only property is set when an atmosphere is loaded.
         """
-        return(self._modeltype)
+        return self._modeltype
 
     @property
     def wavelength(self):
@@ -140,7 +149,7 @@ class SmeAtmo:
         Set for modeltype 'tau', otherwise None. This read only property
         is set when an atmosphere is loaded.
         """
-        return(self._wavelength)
+        return self._wavelength
 
     @property
     def radius(self):
@@ -148,7 +157,7 @@ class SmeAtmo:
         for modeltype 'sph', otherwise None. This read only property is
         set when an atmosphere is loaded.
         """
-        return(self._radius)
+        return self._radius
 
     @property
     def scale(self):
@@ -157,14 +166,14 @@ class SmeAtmo:
         or height). This read only property is set when an atmosphere is
         loaded.
         """
-        return(self._scale)
+        return self._scale
 
     @property
     def nlayer(self):
         """Number of layers (depths or heights) in the model atmosphere.
         This read only property is set when an atmosphere is loaded.
         """
-        return(self._nlayer)
+        return self._nlayer
 
     def set_scale(self, modeltype, scale, wavelength=None, radius=None):
         """Set model type and atmosphere scale. Input modeltype is case
@@ -212,99 +221,209 @@ class SmeAtmo:
         self._massdensity = None
 
 
-class Atlas9AtmoFile:
+class AtmoFileAtlas9:
     """Contents of an ATLAS9 atmosphere file.
+
+    Parameters
+    ----------
+    path : path-like object
+        Path to an ATLAS9 atmosphere file
     """
-    def __init__(self, filename):
-        self._filename = filename
-        self.read(filename)
+    def __init__(self, path):
+        self._path = path
+        self._read(path)
 
     def __str__(self):
-        if 'ON' in self.conv:
-            convstr = f'{self.conv.strip().lower()}, L/H={self.mixlen}'
+        p = self.param
+        if 'ON' in p['conv']:
+            convstr = f"{p['conv'].strip().lower()}, L/H={p['mixlen']}"
         else:
-            convstr = f'{self.conv.strip().lower()}'
-        if 'ON' in self.turb:
-            turbstr = f'{self.turb.strip().lower()}, param={self.turbparam}'
+            convstr = f"{p['conv'].strip().lower()}"
+        if 'ON' in p['turb']:
+            turbstr = f"{p['turb'].strip().lower()}, param={p['turbparam']}"
         else:
-            turbstr = f'{self.turb.strip().lower()}'
-        return(
-            f"file='{self.filename}'\n"
-            f"teff={self.teff}, logg={self.logg}, ifop={self.ifop[1::2]}\n"
-            f"title='{self.title.strip()}'\n"
-            f"convection={convstr}, turbulence={turbstr}")
+            turbstr = f"{p['turb'].strip().lower()}"
+        return (
+            f"file='{self.path}'\n"
+            f"teff={self.teff}, logg={self.logg}, ifop={p['ifop'][1::2]}\n"
+            f"title='{p['title'].strip()}'\n"
+            f"convection={convstr}, turbulence={turbstr}\n"
+            f"ndepth={self.ndepth}, niter={p['niter']}, pradk={p['pradk']}")
 
     @property
-    def filename(self):
-        return self._filename
+    def path(self):
+        """Path to the ATLAS9 atmosphere file used to initialize object.
+        """
+        return self._path
+
+    @property
+    def param(self):
+        """Dictionary of parameters read from the ATLAS9 atmosphere file.
+        """
+        return self._param
 
     @property
     def teff(self):
-        return self._teff
+        """Effective temperature for the ATLAS9 atmosphere.
+        """
+        return self.param['teff']
 
     @property
     def logg(self):
-        return self._logg
+        """Logarithm of surface gravity for the ATLAS9 atmosphere.
+        """
+        return self.param['logg']
 
     @property
-    def title(self):
-        return self._title
+    def abund(self):
+        """Abundance pattern and metallicity for the ATLAS9 atmosphere.
+        """
+        return self._abund
 
     @property
-    def ifop(self):
-        return self._ifop
+    def ndepth(self):
+        """Number of layers in the ATLAS9 atmosphere.
+        """
+        return self._ndepth
 
     @property
-    def conv(self):
-        return self._conv
+    def atmo(self):
+        """Dictionary that contains depth-dependent atmosphere data.
 
-    @property
-    def mixlen(self):
-        return self._mixlen
+        Keys come from the ATLAS9 atmosphere file. Nominal keys:
 
-    @property
-    def turb(self):
-        return self._turb
+        ======== ========= ==============================
+        Key      Units     Description
+        ======== ========= ==============================
+        RHOX     g/cm**2   Mass column density
+        T        K         Kinetic temperature
+        P        erg/cm**3 Total gas pressure
+        XNE      1/cm**3   Electron number fraction
+        ABROSS   cm**2/g   Rosseland mean mass extinction
+        ACCRAD   cm/s**2   Radiative acceleration
+        VTURB    cm/s      Microturbulence velocity
+        FLXCNV             Convective flux
+        VCONV    cm/s      Velocity of convective cells
+        VELSND   cm/s      Local sound speed
+        ======== ========= ==============================
+        """
+        return self._atmo
 
-    @property
-    def turbparam(self):
-        return self._turbparam
-
-    def read(self, filename):
+    def _read(self, path):
         """Read data from an ATLAS9 atmosphere file.
         """
-        with open(filename, 'r') as file:
-            lines = file.read().splitlines()
-        self.parse_header(*lines[0:4])
+        try:
+            with open(path, 'r') as fobj:
+                self._param = self._parse_header(
+                    filesection(fobj, 'header', nline=4))
+                self._abund = self._parse_abund(
+                    filesection(fobj, 'abundance', nline=18))
+                self._ndepth = self._parse_ndepth(
+                    filesection(fobj, 'ndepth', nline=1))
+                self._atmo = self._parse_atmo(
+                    filesection(fobj, 'atmo', nline=self._ndepth))
+                self._param['pradk'] = self._parse_pradk(
+                    filesection(fobj, 'pradk', nline=1))
+                self._param['niter'] = self._parse_niter(
+                    filesection(fobj, 'niter', nline=1))
+        except FileError as e:
+            raise AtmoFileError(e)
 
-    def parse_header(self, line0, line1, line2, line3):
-        """Parse four header lines from an ATLAS9 atmosphere file.
-        Print detailed diagnostics if expected text is not found.
+    def _parse_header(self, lines):
+        """Parse header from an ATLAS9 atmosphere file.
         """
-        expected = [
-            'TEFF ', '  GRAVITY', 'TITLE ', ' OPACITY IFOP',
-            ' CONVECTION ', ' TURBULENCE']
-        actual = [
-            line0[0:5], line0[12:21], line1[0:6], line2[0:13],
-            line3[0:12], line3[21:32]]
-        if expected != actual:
-            fmt = lambda e, m, a: f"  {e:15} {m:2} {a:15}"
-            quote = lambda s: "'" + s + "'"
-            print(fmt('Expected Text', '', 'Actual Text'))
-            print(fmt('---------------', '??', '---------------'))
-            for e, a in zip(expected, actual):
-                if e == a:
-                    print(fmt(quote(e), '==', quote(a)))
-                else:
-                    print(fmt(quote(e), '!=', quote(a)))
-            raise ValueError(
-                f'{self._filename} does not have expected text')
-        self._teff = float(line0[5:12])
-        self._logg = float(line0[21:29])
-        self._title = line1[6:]
-        self._ifop = line2[13:53]
-        self._conv = line3[12:16]
-        self._mixlen = float(line3[16:22])
-        self._turb = line3[32:36]
-        chop = lambda s, w: [float(s[w*i:w*(i+1)]) for i in range(len(s)//w)]
-        self._turbparam = chop(line3[36:60], 6)
+        try:
+            expected = [
+                'TEFF ', '  GRAVITY', 'TITLE ', ' OPACITY IFOP',
+                ' CONVECTION ', ' TURBULENCE']
+            actual = [
+                lines[0][:5], lines[0][12:21], lines[1][:6],
+                lines[2][:13], lines[3][:12], lines[3][21:32]]
+            if expected != actual:
+                diag = '\n   Expected_Label    Actual_Label'
+                for e, a in zip(expected, actual):
+                    operator = '==' if e == a else '!='
+                    diag += f'\n  {e!r:>15} {operator} {a!r:15}'
+                raise ValueError(
+                    f'error parsing header: {self._path}' + diag)
+            param = {}
+            param['teff'] = float(lines[0][5:12])
+            param['logg'] = float(lines[0][21:29])
+            param['title'] = lines[1][6:]
+            param['ifop'] = lines[2][13:53]
+            param['conv'] = lines[3][12:16]
+            param['mixlen'] = float(lines[3][16:22])
+            param['turb'] = lines[3][32:36]
+            param['turbparam'] = [
+                float(lines[3][i:i+6]) for i in range(36, 60, 6)]
+            return param
+        except (AssertionError, ValueError):
+            raise AtmoFileError(f'error parsing header: {self._path}')
+
+    def _parse_abund(self, lines):
+        """Parse abundances from an ATLAS9 atmosphere file.
+
+        Check 'ABUNDANCE SCALE' label. Parse abundance scale factor.
+        Join remaining text into string. Split on 'ABUNDANCE CHANGE' label.
+        Split again on white space. Even index words are atomic number.
+        Odd index words are abundances relative to total number of nuclei.
+        Leave H abundances linear. Convert H3 abundance to log10.
+        Leave all other abundances log10.
+        """
+        try:
+            assert lines[0][0:16] == 'ABUNDANCE SCALE '
+            monh = log10(float(lines[0][16:25]))
+            abstr = lines[0][25:] + ''.join(lines[1:])
+            words = ''.join(abstr.split('ABUNDANCE CHANGE')).split()
+            assert [int(s) for s in words[0::2]] == list(range(1, 100))
+            abund = [float(s) for s in words[1::2]]
+            abund[1] = log10(abund[1])
+            pattern = {el: ab for el, ab in zip(Abund._elem, abund)}
+            return Abund(monh, pattern, type='sme')
+        except (AssertionError, ValueError):
+            raise AtmoFileError(f'error parsing abund: {self._path}')
+
+    def _parse_ndepth(self, lines):
+        """Parse header for atmosphere section of an ATLAS9 atmosphere file.
+        """
+        try:
+            assert lines[0][0:10] == 'READ DECK6'
+            self._keys = [c.strip() for c in lines[0][13:].split(',')]
+            return int(lines[0][10:13])
+        except (AssertionError, ValueError):
+            raise AtmoFileError(f'error parsing ndepth: {self._path}')
+
+    def _parse_atmo(self, lines):
+        """Parse atmosphere section of an ATLAS9 atmosphere file.
+
+        Check that number of values per input line matches number of keys.
+        """
+        try:
+            nkey = len(self._keys)
+            layers = []
+            for line in lines:
+                layer = [float(s) for s in line.split()]
+                assert len(layer) == nkey
+                layers.append(layer)
+            values = map(list, zip(*layers))
+            return dict(zip(self._keys, values))
+        except (AssertionError, ValueError):
+            raise AtmoFileError(f'error parsing atmo: {self._path}')
+
+    def _parse_pradk(self, lines):
+        """Parse radiation pressure section of an ATLAS9 atmosphere file.
+        """
+        try:
+            assert lines[0][0:5] == 'PRADK'
+            return float(lines[0][5:])
+        except (AssertionError, ValueError):
+            raise AtmoFileError(f'error parsing pradk: {self._path}')
+
+    def _parse_niter(self, lines):
+        """Parse number of iterations section of an ATLAS9 atmosphere file.
+        """
+        try:
+            assert lines[0][25:35] == 'ITERATION '
+            return int(lines[0][35:38])
+        except (AssertionError, ValueError):
+            raise AtmoFileError(f'error parsing niter: {self._path}')

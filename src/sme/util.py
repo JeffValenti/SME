@@ -1,5 +1,11 @@
 from copy import copy
 
+
+class FileError(Exception):
+    """Raise when error occurs reading data from a file.
+    """
+
+
 def change_waveunit(wave, oldunits, newunits):
     """Return wavelengths converted to new wavelength units.
 
@@ -85,6 +91,7 @@ def change_waveunit(wave, oldunits, newunits):
         except TypeError:
             return old_new * wave
 
+
 def change_energyunit(energy, oldunits, newunits):
     """Return energies converted to new energy units.
 
@@ -157,6 +164,7 @@ def change_energyunit(energy, oldunits, newunits):
     except TypeError:
         return old_new * energy
 
+
 def air_to_vacuum(wair, units):
     """Convert wavelengths in air to wavelengths in vacuum.
 
@@ -173,7 +181,7 @@ def air_to_vacuum(wair, units):
               + {0.0001599740894897 \over 38.92568793293 - s^2}
 
         \lambda_{vac} &= n \lambda_{air}
-     
+
     In this formula, :math:`n` is the index of refraction in air. Convert air
     wavelengths from Angstroms back to the original units before output.
     Do not convert vacuum wavelengths less than 2000 Angstroms.
@@ -206,9 +214,9 @@ def air_to_vacuum(wair, units):
     wair_a = change_waveunit(wair, units, 'A')
     try:
         sgen = (1e4 / w for w in wair_a)
-        ngen = (1 + 0.00008336624212083 + 0.02408926869968 / \
-            (130.1065924522 - s*s) + 0.0001599740894897 / \
-            (38.92568793293 - s*s) for s in sgen)
+        ngen = (1 + 0.00008336624212083 + 0.02408926869968 /
+                (130.1065924522 - s*s) + 0.0001599740894897 /
+                (38.92568793293 - s*s) for s in sgen)
         wvac_a = [w * n if w > wlimit else w for w, n in zip(wair_a, ngen)]
     except TypeError:
         if wair_a > wlimit:
@@ -221,7 +229,8 @@ def air_to_vacuum(wair, units):
             wvac_a = wair_a
     wair = change_waveunit(wvac_a, 'A', units)
     return(wair)
-    
+
+
 def vacuum_to_air(wvac, units):
     """Convert wavelengths in vacuum to wavelengths in air.
 
@@ -237,7 +246,7 @@ def vacuum_to_air(wvac, units):
               + {0.00015998 \over 38.9 - s^2}
 
         \lambda_{air} &= {\lambda_{vac} \over n}
-     
+
     In this formula, :math:`n` is the index of refraction in air. Convert air
     wavelengths from Angstroms back to the original units before output.
     Do not convert vacuum wavelengths less than 2000 Angstroms.
@@ -269,8 +278,8 @@ def vacuum_to_air(wvac, units):
     wvac_a = change_waveunit(wvac, units, 'A')
     try:
         sgen = (1e4 / w for w in wvac_a)
-        ngen = (1 + 0.0000834254 + 0.02406147 / (130 - s*s) + \
-            0.00015998 / (38.9 - s*s) for s in sgen)
+        ngen = (1 + 0.0000834254 + 0.02406147 / (130 - s*s) +
+                0.00015998 / (38.9 - s*s) for s in sgen)
         wair_a = [w / n if w > 2000 else w for w, n in zip(wvac_a, ngen)]
     except TypeError:
         if wvac_a > 2000:
@@ -282,6 +291,7 @@ def vacuum_to_air(wvac, units):
             wair_a = wvac_a
     wair = change_waveunit(wair_a, 'A', units)
     return(wair)
+
 
 def vacuum_angstroms(wave, units, medium):
     """Convert wavelength(s) from input units and medium to vacuum angstroms.
@@ -349,3 +359,51 @@ def vacuum_angstroms(wave, units, medium):
             f"invalid medium: '{medium}'\n"
             f"Valid media: 'air', 'vac', 'vacuum', or None")
     return(wvac_a)
+
+
+def filesection(fobj, name, nline=0):
+    """Read specified number of lines from file or read to end of file.
+
+    Upon entry, read/write pointer may point anywhere in the file.
+    Upon exit, read/write pointer will be just beyond last character read.
+    Return values do not contain line terminators (e.g., '\n').
+
+    Parameters
+    ----------
+    fobj : file object
+        File-like object that has `file` property supports readline()
+        and readlines() methods.
+
+    name : str
+        Short string identifying section type. Used in error message.
+
+    nline : int
+        If positive, read exactly `nline` lines.
+        If zero, read all remaining lines in the file.
+        If negative, read all remaining lines, require at least `-nline` lines.
+
+    Returns
+    -------
+    list of str
+        Lines read from file with line terminator (e.g., '\n') removed.
+
+    Raises
+    ------
+    FileError
+        If reading the file object did not yield the required number of lines.
+    """
+    if nline > 0:
+        # Require the specified number of lines.
+        lines = []
+        for iline in range(nline):
+            line = fobj.readline()
+            if line:
+                lines.append(line.rstrip('\n'))
+            else:
+                raise FileError(f'incomplete {name} section: {fobj.name}')
+    else:
+        # Read to end of file. Require at least (-nline) lines.
+        lines = fobj.read().splitlines()
+        if len(lines) < -nline:
+            raise FileError(f'incomplete {name} section: {fobj.name}')
+    return(lines)
