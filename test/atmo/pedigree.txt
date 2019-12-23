@@ -1,4 +1,0 @@
-Filename:     ap00t5750g45k2odfnew.dat
-DownloadDate: 2019-Nov-27
-DownloadUrl:  http://www.oact.inaf.it/castelli/castelli/grids/gridp00k2odfnew/ap00t5750g45k2odfnew.dat
-Paper:        https://ui.adsabs.harvard.edu/abs/2003IAUS..210P.A20C

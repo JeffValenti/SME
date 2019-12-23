@@ -1,0 +1,22 @@
+Filename:     ap00t5750g45k2odfnew.dat
+DownloadDate: 2019-Nov-27
+DownloadUrl:  http://www.oact.inaf.it/castelli/castelli/grids/gridp00k2odfnew/ap00t5750g45k2odfnew.dat
+Paper:        https://ui.adsabs.harvard.edu/abs/2003IAUS..210P.A20C
+
+conv_off_turb_on.atlas9 is a copy of ap00t5750g45k2odfnew.dat with the value
+of CONVECTION changed from ON to OFF and the value of TURBULENCE changed
+from OFF to ON. Needed for complete code coverage.
+
+complete_file.atlas9 is an exact copy of ap00t5750g45k2odfnew.dat
+
+incomplete_<section>.atlas9 are truncated copies of complete_file.atlas9,
+with the truncation occuring in the specified section. Sections are:
+'header', 'abund', 'ndepth', 'atmo', 'pradk', and 'niter'.
+
+bad_<section>_label.atlas9 are copies of complete_file.atlas9 with an invalid
+label in the specified section. Subsequent sections are truncated because
+an exception should be raised before they are read. Sections are listed above.
+
+bad_<section>_label.atlas9 are copies of complete_file.atlas9 with an invalid
+value in the specified section. Subsequent sections are truncated because
+an exception shoulds be raised before they are read. Sections are listed above.
