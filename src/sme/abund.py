@@ -217,7 +217,7 @@ class Abund:
         )
 
     @property
-    def elem(self):
+    def elements(self):
         """Return the standard abbreviation for each element.
         Use property so user will not redefine elements.
         """
