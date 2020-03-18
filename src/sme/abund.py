@@ -111,6 +111,8 @@ class Abund:
         the input type to the 'H=12' type. Valid abundance pattern types
         are 'sme', 'n/nTot', 'n/nH', and 'H=12'.
         """
+        if fromtype is None:
+            raise ValueError(f'invalid abundance pattern type: {fromtype}')
         patt = pattern.copy()
         type = fromtype.lower()
         if type == 'h=12':
@@ -130,9 +132,8 @@ class Abund:
             abund = [12+math.log10(ab) for ab in abund]
         else:
             raise ValueError(
-                "got abundance type '{}',".format(type) +
-                " should be 'H=12', 'n/nH', 'n/nTot', or 'sme'"
-                )
+                f"invalid abundance type: {type}\n" +
+                "Allowed abundance types: 'H=12', 'n/nH', 'n/nTot', 'sme'")
         for iel, el in enumerate(elem):
             patt[el] = abund[iel]
         return patt
