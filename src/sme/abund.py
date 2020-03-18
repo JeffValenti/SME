@@ -10,16 +10,14 @@ class Abund:
         Metallicity, [M/H], which is the logarithmic offset that will be
         added to logarithmic abundances specified in pattern, for all
         elements except hydrogen.
-    type : {'sme', 'n/nTot', 'n/nH', 'H=12'}
+    type : {'H=12', 'n/nTot', 'n/nH', 'sme'}
         Valid abundance pattern types are:
 
-        * 'sme' - For hydrogen, the abundance value is the fraction of all
-          nuclei that are hydrogen, including all ionization states
-          and treating molecules as constituent atoms. For the other
-          elements, the abundance values are log10 of the fraction of
-          nuclei of each element in any form relative to the total for
-          all elements in any form. For the Sun, the abundance values
-          of H, He, and Li are approximately 0.92, -1.11, and -11.0.
+        * 'H=12' - Abundance values are log10 of the fraction of nuclei of
+          each element in any form relative to the number of hydrogen
+          in any form plus an offset of 12. For the Sun, the nuclei
+          abundance values of H, He, and Li are approximately 12,
+          10.9, and 1.05.
         * 'n/nTot' - Abundance values are log10 of the fraction of nuclei
           of each element in any form relative to the total for all
           elements in any form. For the Sun, the abundance values of
@@ -29,11 +27,19 @@ class Abund:
           hydrogen nuclei in any form. For the Sun, the abundance
           values of H, He, and Li are approximately 1, 0.085, and
           1.12e-11.
-        * 'H=12' - Abundance values are log10 of the fraction of nuclei of
-          each element in any form relative to the number of hydrogen
-          in any form plus an offset of 12. For the Sun, the nuclei
-          abundance values of H, He, and Li are approximately 12,
-          10.9, and 1.05.
+        * 'sme' - For hydrogen, the abundance value is the fraction of all
+          nuclei that are hydrogen, including all ionization states
+          and treating molecules as constituent atoms. For the other
+          elements, the abundance values are log10 of the fraction of
+          nuclei of each element in any form relative to the total for
+          all elements in any form. For the Sun, the abundance values
+          of H, He, and Li are approximately 0.92, -1.11, and -11.0.
+
+    Returns
+    -------
+    dict
+        Keys are element names. Values are abundances computed by adding
+        [M/H] to abundance pattern.
     """
     def __init__(self, monh, pattern, type=None):
         self.monh = monh
@@ -90,8 +96,8 @@ class Abund:
         for i in range(2, len(a)-1):
             if a[i]:
                 a[i] += self._monh
-        out = f'Abundances obtained by applying [M/H]={self._monh:.3f}' \
-            ' to the abundance pattern.\n'
+        out = 'Abundances obtained by applying [M/H]=' \
+            f'{self.monh:.3f} to the abundance pattern.\n'
         for i in range(9):
             for j in range(11):
                 out += f'  {self._elem[11*i+j]:<5s}'
@@ -303,36 +309,50 @@ class Abund:
         """
         return dict.fromkeys(self._elem)
 
-    def print(self):
-        if self._pattern is None:
-            if self._monh is None:
-                print('[M/H] is not set. Abundance pattern is not set.')
-            else:
-                print(
-                    '[M/H]={:.3f}. Abundance pattern is not set'.
-                    format(self._monh)
-                    )
-        else:
-            if self._monh is None:
-                print(
-                    '[M/H] is not set. Values below are the abundance pattern.'
-                    )
-                a = self.get_pattern('H=12')
-            else:
-                print(
-                    '[M/H]={:.3f} applied to abundance pattern. '
-                    'Values below are abundances.'.format(self._monh)
-                    )
-                a = self.get_pattern('H=12')
-                a = a[0:2] + [ab+self._monh for ab in a[2:]]
-            for i in range(9):
-                estr = ''
-                astr = ''
-                for j in range(11):
-                    estr += '  {:<5s}'.format(self._elem[11*i+j])
-                    astr += '{:7.3f}'.format(a[11*i+j])
-                print(estr)
-                print(astr)
+    def compare(self, refabund):
+        a = list(self.get_pattern('H=12').values())
+        for i in range(2, len(a)-1):
+            if a[i]:
+                a[i] += self._monh
+        r = list(refabund.get_pattern('H=12').values())
+        for i in range(2, len(r)-1):
+            if r[i]:
+                r[i] += refabund._monh
+        out = f'A: Abundances: [M/H]={self.monh:.3f}' \
+            ' applied to the abundance pattern.\n' \
+            f'R: Reference abundances: [M/H]={refabund.monh:.3f}' \
+            ' applied to reference abundance pattern.\n' \
+            'D: Differences: Abundances minus Reference abundances (A-R).\n'
+        for i in range(9):
+            out += '  '
+            for j in range(11):
+                out += f'  {self._elem[11*i+j]:<5s}'
+            out += '\nA:'
+            for j in range(11):
+                if a[11*i+j]:
+                    out += f'{a[11*i+j]:7.3f}'
+                else:
+                    out += '  None '
+            out += '\nR:'
+            for j in range(11):
+                if r[11*i+j]:
+                    out += f'{r[11*i+j]:7.3f}'
+                else:
+                    out += '  None '
+            out += '\nD:'
+            for j in range(11):
+                if a[11*i+j] and r[11*i+j]:
+                    if abs(a[11*i+j] - r[11*i+j]) > 1e-3:
+                        out += f'{a[11*i+j] - r[11*i+j]:7.3f}'
+                    else:
+                        out += '       '
+                elif a[11*i+j] is None and r[11*i+j] is None:
+                    out += '       '
+                else:
+                    out += '  ^^^^ '
+            if i < 8:
+                out += '\n'
+        print(out)
 
     apply_monh = lambda monh, abund: abund + monh if abund else abund
 

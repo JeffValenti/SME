@@ -40,7 +40,7 @@ def test_call_returns_abund_in_odict():
     """
     abund = Abund(0, pattern_names[0])
     assert isinstance(abund(), dict)
-    assert tuple(abund().keys()) == abund.elem
+    assert tuple(abund().keys()) == abund.elements
 
 
 def test_getitem_returns_abund_values():
