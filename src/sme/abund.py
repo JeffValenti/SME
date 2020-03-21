@@ -61,6 +61,28 @@ class Abund:
             abund[el] = self._pattern[el]
         return self.totype(abund, type)
 
+    def __eq__(self, other):
+        """Test whether specified abundances equal abundances in this object.
+
+        Parameters
+        ----------
+        other - sme.abund.Abund object
+            Other abundances to compare to the abundances in this object
+
+        Returns
+        -------
+        boolean
+            True if abundances are defined for the same elements and
+            are equal to within 0.0001 dex in the H=12 representation.
+        """
+        if not isinstance(other, Abund):
+            return False
+        s = ((k, v) for k, v in self().items() if v is not None)
+        o = ((k, v) for k, v in other().items() if v is not None)
+        if [k for k in s] != [k for k in o]:
+            return False
+        return all([abs(s[k]-o[k]) < 1e-4 for k in s])
+
     def __getitem__(self, elems):
         abund = self.__call__()
         if isinstance(elems, str):
@@ -91,8 +113,8 @@ class Abund:
             "instead set monh and pattern separately"
             )
 
-    def __str__(self):
-        a = list(self.get_pattern('H=12').values())
+    def __str__(self, type='H=12'):
+        a = list(self.get_pattern(type).values())
         for i in range(2, len(a)-1):
             if a[i]:
                 a[i] += self._monh
@@ -445,6 +467,24 @@ class AbundPattern(dict):
             super().__setitem__(key, value)
         else:
             super().__setitem__(key, float(value))
+
+    def __str__(self):
+        """Comment.
+        """
+        keys = self.keys()
+        values = self.values()
+        for i in range(9):
+            for j in range(11):
+                out += f'  {keys[11*i+j]:<5s}'
+            out += '\n'
+            for j in range(11):
+                if a[11*i+j]:
+                    out += f'{values[11*i+j]:7.3f}'
+                else:
+                    out += '  None '
+            if i < 8:
+                out += '\n'
+        return out
 
     def update(self, keyval):
         """Override update() method in the list superclass. Local method is
