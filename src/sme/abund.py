@@ -220,14 +220,10 @@ class Abund(Sequence):
             if value is None:
                 abund[key] = value
             else:
-                try:
-                    if key in ('H', 'He'):
-                        abund[key] = float(value)
-                    else:
-                        abund[key] = float(value) + self.monh
-                except ValueError:
-                    raise AbundError(
-                        'cannot convert abundance value to a float')
+                if key in ('H', 'He'):
+                    abund[key] = float(value)
+                else:
+                    abund[key] = float(value) + self.monh
         return abund
 
     @property
