@@ -223,7 +223,8 @@ class ValdShortRef:
             words = shortref.split()
             assert len(words) == 15
         except AssertionError:
-            raise ValdFileError(f'expected 15 words in VALD line ref: {shortref}')
+            raise ValdFileError(
+                f'expected 15 words in VALD line ref: {shortref}')
         id = [int(w) for w in words[:13:2]]
         ref = words[1::2]
         self.species = words[14]
@@ -335,7 +336,7 @@ class LineList:
     def _raise_invalid_line_type(self, line):
         raise TypeError(
             f'line in LineList has invalid type: {type(line).__name__}\n'
-            f'  Valid line types: ' + \
+            f'  Valid line types: ' +
             ' '.join([type.__name__ for type in self._valid_line_types]))
 
     @property
@@ -371,6 +372,7 @@ class LineList:
             self._lines.append(line)
         else:
             self._raise_invalid_line_type(line)
+
 
 class ValdFile:
     """Contents of a VALD3 line data file.
@@ -508,10 +510,10 @@ class ValdFile:
         words = [w[1:-1] for w in abstr.split(',')]
         if len(words) != 100 or words[99] != 'END':
             raise ValdFileError(f'error parsing abundances: {abstr}')
-        pattern = [w.split(':') for w in words[:-1]]
-        pattern = OrderedDict([(el, float(ab)) for el, ab in pattern])
+        values = [w.split(':') for w in words[:-1]]
+        values = OrderedDict([(el, float(ab)) for el, ab in values])
         monh = 0.0
-        return Abund(monh, pattern, type='sme')
+        return Abund(monh, values, 'sme')
 
     def parse_isotopes(self, line):
         """Infer whether isotopic scaling was applied in VALD line data file.
