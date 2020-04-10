@@ -1,6 +1,6 @@
-astropy==4.0
-coverage==5.0.3
-cython==0.29.15
+astropy==4.0.1.post1
+coverage==5.0.4
+cython==0.29.16
 flake8==3.7.9
 pip==20.0.2
 pytest-cov==2.8.1
