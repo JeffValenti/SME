@@ -18,6 +18,7 @@ def test_continuousopacityflags():
         cof['H-'] = 1
     assert 'H-' in cof.__str__()
 
+
 def test_smeatmo():
     """Code coverage tests for SmeAtmo() class and methods.
     Demonstrate that modeltype is case insensitive ('rhox', 'RHOX').
@@ -45,6 +46,7 @@ def test_smeatmo():
     with raises(AttributeError, match='but not wavelength'):
         atmo = SmeAtmo('sph', scale, wavelength=5000)
 
+
 def test_atmofileatlas9():
     """Code coverage tests for Atlas9AtmoFile() class and methods.
     """
@@ -56,11 +58,12 @@ def test_atmofileatlas9():
     a9atmo = AtmoFileAtlas9(datadir / 'conv_off_turb_on.atlas9')
     assert 'turbulence' in str(a9atmo)
 
+
 def test_atmofileatlas9_exceptions():
     """Handle exceptions raised by AtmoFileAtlas9().
     """
     datadir = Path(__file__).parent / 'atmo' / 'atlas9'
-    af = AtmoFileAtlas9(datadir / 'complete_file.atlas9')
+    AtmoFileAtlas9(datadir / 'complete_file.atlas9')
     # header section
     with raises(AtmoFileError, match='incomplete header'):
         AtmoFileAtlas9(datadir / 'incomplete_header.atlas9')

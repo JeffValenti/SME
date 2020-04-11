@@ -2,8 +2,9 @@ from copy import copy
 
 
 class FileError(Exception):
-    """Raise when error occurs reading data from a file.
+    """Raise when SME encounters an error accessing a file.
     """
+    pass
 
 
 def change_waveunit(wave, oldunits, newunits):
@@ -70,7 +71,7 @@ def change_waveunit(wave, oldunits, newunits):
     try:
         old_to_A = factor[oldlow]
         A_to_new = factor[newlow]
-    except KeyError as e:
+    except KeyError:
         raise ValueError(
             f"invalid wavelength unit: old='{oldunits}', new='{newunits}'\n"
             f"Valid wavelength units: '" + "', '".join(factor.keys()) + "'")
@@ -102,7 +103,7 @@ def change_energyunit(energy, oldunits, newunits):
 
     oldunits : str
         Input units for `energy`. Allowed values are described
-         in the table below. Values are case insensitive.
+        in the table below. Values are case insensitive.
 
     newunits : str
         Units for returned energy or energies. Allowed values are
@@ -154,7 +155,7 @@ def change_energyunit(energy, oldunits, newunits):
     try:
         old_to_eV = 1 / factor[oldlow]
         eV_to_new = factor[newlow]
-    except KeyError as e:
+    except KeyError:
         raise ValueError(
             f"invalid energy unit: old='{oldunits}', new='{newunits}'\n"
             f"Valid energy units: '" + "', '".join(factor.keys()) + "'")
@@ -366,7 +367,7 @@ def filesection(fobj, name, nline=0):
 
     Upon entry, read/write pointer may point anywhere in the file.
     Upon exit, read/write pointer will be just beyond last character read.
-    Return values do not contain line terminators (e.g., '\n').
+    Return values do not contain line terminators.
 
     Parameters
     ----------
@@ -385,7 +386,7 @@ def filesection(fobj, name, nline=0):
     Returns
     -------
     list of str
-        Lines read from file with line terminator (e.g., '\n') removed.
+        Lines read from file with line terminator removed.
 
     Raises
     ------

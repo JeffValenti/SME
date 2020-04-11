@@ -378,8 +378,9 @@ class AtmoFileAtlas9:
             assert [int(s) for s in words[0::2]] == list(range(1, 100))
             abund = [float(s) for s in words[1::2]]
             abund[1] = log10(abund[1])
-            pattern = {el: ab for el, ab in zip(Abund._elem, abund)}
-            return Abund(monh, pattern, type='sme')
+            elements = Abund(0, 'Empty').elements
+            values = {el: ab for el, ab in zip(elements, abund)}
+            return Abund(monh, values, 'sme')
         except (AssertionError, ValueError):
             raise AtmoFileError(f'error parsing abund: {self._path}')
 

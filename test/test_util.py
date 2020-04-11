@@ -31,6 +31,7 @@ def test_change_waveunit():
     with raises(ValueError, match='invalid wavelength unit'):
         change_waveunit(5000, 'erg', 'A')
 
+
 def test_change_energyunit():
     """Test code paths and cases in util.change_energyunit().
     Test conversion from/to eV to/from all units listed in `cases`.
@@ -56,6 +57,7 @@ def test_change_energyunit():
     with raises(ValueError, match='invalid energy unit'):
         change_energyunit(5000, 'A', 'eV')
 
+
 def test_air_to_vacuum():
     """Test code paths and cases in util.air_to_vacuum().
     Test conversion for input wavelengths in Angstroms and nm.
@@ -74,6 +76,7 @@ def test_air_to_vacuum():
     for wnm in wvac_nm:
         assert abs(air_to_vacuum(vacuum_to_air(wnm, 'nm'), 'nm') - wnm) < 1e-8
 
+
 def test_vacuum_to_air():
     """Test code paths and cases in util.vacuum_to_air().
     Test conversion for input wavelengths in Angstroms and nm.
@@ -88,11 +91,12 @@ def test_vacuum_to_air():
     wair_nm = vacuum_to_air([w / 10 for w in wvac_a], 'nm')
     assert all([abs(10 * wnm - wa) < 1e-8 for wnm, wa in zip(wair_nm, wair_a)])
 
+
 def test_vacuum_angstroms():
     """Test code paths and cases in util.vacuum_angstroms().
     """
-    win  = [5000, 20000, 500]
-    uin  = ['A' , 'cm^-1', 'nm']
+    win = [5000, 20000, 500]
+    uin = ['A', 'cm^-1', 'nm']
     for w, u in zip(win, uin):
         assert vacuum_angstroms(w, u, 'vac') == 5000
         assert vacuum_angstroms(w, u, 'air') == 5001.39484863807
@@ -100,4 +104,3 @@ def test_vacuum_angstroms():
         vacuum_angstroms(5000, 'erg', 'vac')
     with raises(ValueError, match='invalid medium'):
         vacuum_angstroms(5000, 'A', 'water')
-

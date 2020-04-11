@@ -1,7 +1,7 @@
 from math import log10
 from pathlib import Path
 from pytest import raises
-from sme.dll import LibSme, _IdlString, _IdlStringArray
+from sme.dll import LibSme
 from sme.vald import LineList, ValdShortLine
 
 
@@ -9,7 +9,8 @@ def test_load_and_get_version():
     """Load SME library. Get version number of SME library.
     """
     libsme = LibSme()
-    version = libsme.SMELibraryVersion()
+    libsme.SMELibraryVersion()
+
 
 def test_basic_sequence():
     """Test basic sequence of SME library calls.
@@ -17,6 +18,7 @@ def test_basic_sequence():
     libsme = LibSme()
     libsme.InputWaveRange(6550, 6560.5)
     libsme.InputLineList(_make_linelist([0, 1]))
+
 
 def test_settings_and_properties():
     """Test SME library settings and corresponding class properties.
@@ -41,12 +43,13 @@ def test_settings_and_properties():
     assert libsme.h2broad is False
 
     # Wavelength range (wfirst, wlast).
-    assert libsme.wfirst == None
-    assert libsme.wlast == None
+    assert libsme.wfirst is None
+    assert libsme.wlast is None
     wfirst, wlast = 6550, 6560.5
     libsme.InputWaveRange(wfirst, wlast)
     assert libsme.wfirst == wfirst
     assert libsme.wlast == wlast
+
 
 def test_linelist():
     """Test line data methods and code paths.
@@ -83,6 +86,7 @@ def test_linelist():
     outlist = libsme.OutputLineList()
     _assert_outputlinelist_matches_input(outlist, libsme.linelist)
 
+
 def test_library_exceptions():
     """Handle exceptions raised by SME Library.
     """
@@ -105,6 +109,7 @@ def test_library_exceptions():
     with raises(RuntimeError, match=r'Attempt to replace .* another line'):
         libsme.UpdateLineList(linelist, [1, 0])
 
+
 def test_python_exceptions():
     """Hanlde exceptions raised by python interface to SME Library.
     """
@@ -120,11 +125,12 @@ def test_python_exceptions():
     with raises(ValueError, match=r'mismatch: .* lines, .* indexes'):
         libsme.UpdateLineList(linelist, [0])
 
-    # 
+    #
     linelist = _make_linelist([0, 1])
     libsme.InputLineList(linelist)
     with raises(ValueError, match=r'mismatch: .* lines, .* indexes'):
         libsme.UpdateLineList(linelist, [0])
+
 
 def _make_linelist(index, delta_loggf=None):
     """Make a line list for use in tests.
@@ -144,6 +150,7 @@ def _make_linelist(index, delta_loggf=None):
             vsl.loggf += delta_loggf
         linelist.append(vsl)
     return(linelist)
+
 
 def _assert_outputlinelist_matches_input(outlist, inlist):
     """Check that line data returned by libsme.UpdateLineList()
