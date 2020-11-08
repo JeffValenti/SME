@@ -1,4 +1,4 @@
-astropy==4.0.1.post1
+astropy==4.1
 coverage==5.2.1
 cython==0.29.21
 flake8==3.8.3
