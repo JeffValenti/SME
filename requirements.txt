@@ -1,5 +1,5 @@
 astropy==5.0
-coverage==5.5
+coverage==6.1.2
 cython==0.29.23
 flake8==3.9.2
 pip==21.1.2
