@@ -2,6 +2,6 @@ astropy==5.0.3
 coverage==6.3.2
 cython==0.29.28
 flake8==4.0.1
-pip==21.1.2
+pip==22.0.4
 pytest-cov==2.12.1
 scipy==1.6.3
