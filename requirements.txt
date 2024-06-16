@@ -4,4 +4,4 @@ cython==3.0.10
 flake8==7.1.0
 pip==24.0
 pytest-cov==5.0.0
-scipy==1.9.3
+scipy==1.13.1
