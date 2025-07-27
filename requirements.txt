@@ -3,5 +3,5 @@ coverage==7.10.0
 cython==3.1.2
 flake8==7.3.0
 pip==25.1.1
-pytest-cov==4.0.0
+pytest-cov==6.2.1
 scipy==1.9.3
